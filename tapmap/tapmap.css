@@ -1268,3 +1268,222 @@ a:focus-visible {
   color: var(--ink-soft);
   background: transparent;
 }
+
+/* ---------- Avatars & people ---------- */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  color: #0b0d12;
+  background: var(--avatar, var(--accent));
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.72rem;
+}
+
+.avatar-md {
+  width: 40px;
+  height: 40px;
+  font-size: 0.85rem;
+}
+
+.avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 1.35rem;
+}
+
+.account-button {
+  position: relative;
+}
+
+.account-button.is-signed-in {
+  padding: 0;
+  border-color: transparent;
+}
+
+.account-avatar .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 0.8rem;
+}
+
+.request-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  color: #0b0d12;
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #000;
+}
+
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.account-head .eyebrow {
+  margin-bottom: 4px;
+}
+
+.account-head .sheet-title {
+  margin-bottom: 2px;
+  font-size: 2rem;
+}
+
+.account-head .account-handle {
+  margin: 0;
+}
+
+.person-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.person-text .person-name,
+.person-text .person-handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-name {
+  font-weight: 500;
+}
+
+.person-handle {
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+.person-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chip-button.is-primary {
+  color: var(--primary-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.friends-list .person-link {
+  gap: 10px;
+}
+
+.person-private {
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+.person-today {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  color: var(--ink-soft);
+}
+
+.person-today-total {
+  font-family: var(--font-serif);
+  font-size: 2.2rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.person-today .of {
+  color: var(--ink-faint);
+}
+
+.person-today .friend-tiers {
+  margin-left: auto;
+  align-self: center;
+}
+
+.person-today-rounds {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+#person .primary-button,
+#person .secondary-button {
+  margin-top: 16px;
+}
+
+/* ---------- Inline field errors ---------- */
+
+.field-error {
+  margin: 6px 2px 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--t-off);
+}
+
+.field.is-invalid {
+  border-color: color-mix(in srgb, var(--t-off) 70%, transparent);
+}
+
+/* ---------- Friends' pins on the globe ---------- */
+
+.pin-friend .pin-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+}
+
+.friend-pin-badge {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0b0d12;
+  background: var(--avatar, var(--accent));
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+}
+
+.friend-pin-stem {
+  width: 2px;
+  height: 9px;
+  background: #fff;
+  border-radius: 0 0 2px 2px;
+}

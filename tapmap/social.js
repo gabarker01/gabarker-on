@@ -176,25 +176,58 @@ export async function saveGame(userId, { date, number, rounds, total }) {
   if (error && error.code !== "23505") throw error;
 }
 
-// Today's results from you and everyone you follow, best first.
+// Today's results from you and everyone who has accepted your follow, best
+// first. (Row-level security only returns results you're allowed to see.)
 export async function friendsResults(userId, date) {
-  const follows = unwrap(await client.from("follows").select("followee_id").eq("follower_id", userId));
+  const follows = unwrap(await client
+    .from("follows").select("followee_id").eq("follower_id", userId).eq("status", "accepted"));
   const ids = [userId, ...follows.map((f) => f.followee_id)];
   return unwrap(await client
     .from("games")
-    .select("user_id, total, rounds, profiles(username, display_name)")
+    .select("user_id, total, rounds, profiles(id, username, display_name)")
     .eq("game_date", date)
     .in("user_id", ids)
     .order("total", { ascending: false }));
 }
 
-// ---------- Following ----------
+// One player's result for a date, or null if none (or not visible to you).
+export async function gameFor(userId, date) {
+  return unwrap(await client
+    .from("games").select("total, rounds").eq("user_id", userId).eq("game_date", date).maybeSingle());
+}
 
+// ---------- Following (requests must be accepted) ----------
+
+const PERSON = "id, username, display_name";
+
+// Everyone you follow or have asked to follow: [{ ...profile, status }].
 export async function listFollowing(userId) {
   const rows = unwrap(await client
     .from("follows")
-    .select("followee_id, profiles!follows_followee_id_fkey(id, username, display_name)")
+    .select(`status, profiles!follows_followee_id_fkey(${PERSON})`)
     .eq("follower_id", userId)
+    .order("created_at", { ascending: false }));
+  return rows.filter((r) => r.profiles).map((r) => ({ ...r.profiles, status: r.status }));
+}
+
+// People asking to follow you.
+export async function listRequests(userId) {
+  const rows = unwrap(await client
+    .from("follows")
+    .select(`profiles!follows_follower_id_fkey(${PERSON})`)
+    .eq("followee_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false }));
+  return rows.map((r) => r.profiles).filter(Boolean);
+}
+
+// People you've accepted as followers.
+export async function listFollowers(userId) {
+  const rows = unwrap(await client
+    .from("follows")
+    .select(`profiles!follows_follower_id_fkey(${PERSON})`)
+    .eq("followee_id", userId)
+    .eq("status", "accepted")
     .order("created_at", { ascending: false }));
   return rows.map((r) => r.profiles).filter(Boolean);
 }
@@ -204,17 +237,24 @@ export async function searchProfiles(query, excludeId) {
   if (q.length < 2) return [];
   const rows = unwrap(await client
     .from("profiles")
-    .select("id, username, display_name")
+    .select(PERSON)
     .ilike("username", `${q}%`)
     .order("username")
     .limit(8));
   return rows.filter((r) => r.id !== excludeId);
 }
 
-export async function follow(userId, followeeId) {
-  unwrap(await client.from("follows").insert({ follower_id: userId, followee_id: followeeId }));
+export async function requestFollow(userId, followeeId) {
+  const { error } = await client.from("follows").insert({ follower_id: userId, followee_id: followeeId });
+  if (error && error.code !== "23505") throw error;
 }
 
-export async function unfollow(userId, followeeId) {
-  unwrap(await client.from("follows").delete().eq("follower_id", userId).eq("followee_id", followeeId));
+export async function acceptRequest(userId, followerId) {
+  unwrap(await client
+    .from("follows").update({ status: "accepted" }).eq("follower_id", followerId).eq("followee_id", userId));
+}
+
+// Unfollow, cancel a request, decline a request or remove a follower.
+export async function endFollow(followerId, followeeId) {
+  unwrap(await client.from("follows").delete().eq("follower_id", followerId).eq("followee_id", followeeId));
 }

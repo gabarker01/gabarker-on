@@ -6,9 +6,10 @@ import {
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=2";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=4";
+import * as social from "./social.js?v=5";
+import { initials, colourFor, avatarElement } from "./avatar.js";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -223,6 +224,8 @@ function showRound() {
 
   updateHeader();
   globe.reset();
+  // Friends may have finished since the last round; refresh their pins.
+  if (game.mode === "daily" && user) loadFriendGames();
 }
 
 function onGlobeTap(lnglat) {
@@ -270,7 +273,7 @@ async function confirmGuess() {
   $("next-button").disabled = true;
   result.hidden = false;
 
-  await globe.reveal(game.guess, answer, fitPadding());
+  await globe.reveal(game.guess, answer, fitPadding(), friendsForRound(game.index));
 
   const counting = animateCount($("result-points"), 0, round.score);
   const tallyStart = performance.now();
@@ -487,6 +490,7 @@ let user = null;
 let profile = null;
 let socialError = false;
 let recovering = false; // showing the "new password" form after a reset link
+let friendGames = []; // today's results from people who accepted your follow
 
 const PROVIDER_LABELS = { google: "Continue with Google", apple: "Continue with Apple" };
 const PROVIDER_ICONS = {
@@ -500,17 +504,53 @@ function accountMessage(text, isError = false) {
   el.classList.toggle("is-error", isError);
 }
 
+// Shows an error directly under a form field (and clears it when they type).
+function fieldError(id, text) {
+  const el = $(id);
+  el.textContent = text || "";
+  el.hidden = !text;
+  const input = el.previousElementSibling;
+  if (input && input.classList.contains("field")) input.classList.toggle("is-invalid", Boolean(text));
+}
+
+function clearFieldErrors(...ids) {
+  ids.forEach((id) => fieldError(id, ""));
+}
+
 const errorText = (error) => (error && error.message) || "Something went wrong. Please try again.";
+const personName = (person) => (person && (person.display_name || person.username)) || "Player";
+
+function setAvatar(slot, person, size) {
+  const el = $(slot);
+  el.replaceChildren(avatarElement(person, size));
+}
 
 function updateAccountButton() {
   const button = $("account-button");
-  const initial = $("account-initial");
-  const name = profile ? profile.display_name || profile.username : "";
-  button.setAttribute("aria-label", user ? `Account: ${name || "signed in"}` : "Sign in");
+  button.setAttribute("aria-label", user ? `Account: ${personName(profile)}` : "Sign in");
   button.classList.toggle("is-signed-in", Boolean(user));
-  initial.hidden = !user;
   button.querySelector(".icon-person").style.display = user ? "none" : "";
-  initial.textContent = name ? name.trim().charAt(0).toUpperCase() : "·";
+  const avatar = $("account-avatar");
+  avatar.hidden = !user;
+  if (user) {
+    avatar.replaceChildren(avatarElement(profile || { id: user.id, username: "?" }, "sm"));
+  } else {
+    $("request-badge").hidden = true;
+  }
+}
+
+async function refreshRequestBadge() {
+  if (!user) return;
+  try {
+    const requests = await social.listRequests(user.id);
+    const badge = $("request-badge");
+    badge.textContent = String(requests.length);
+    badge.hidden = requests.length === 0;
+    $("account-button").setAttribute("aria-label",
+      `Account: ${personName(profile)}${requests.length ? `, ${requests.length} follow request${requests.length > 1 ? "s" : ""}` : ""}`);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 // Saves today's finished daily game to the account (once; the server ignores repeats).
@@ -523,57 +563,124 @@ async function syncDaily() {
   }
 }
 
-function personRow(person, { action, label }) {
+// Today's results from people you follow, for their pins on the globe.
+async function loadFriendGames() {
+  if (!user) {
+    friendGames = [];
+    return;
+  }
+  try {
+    const rows = await social.friendsResults(user.id, today);
+    friendGames = rows.filter((row) => row.user_id !== user.id && row.profiles);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Friends who played this round, shaped for the globe.
+function friendsForRound(index) {
+  if (!game || game.mode !== "daily") return [];
+  return friendGames
+    .map((row) => ({ row, round: (row.rounds || [])[index] }))
+    .filter(({ round }) => round && round.guess && Number.isFinite(round.guess.lat) && Number.isFinite(round.guess.lng))
+    .map(({ row, round }) => ({
+      guess: round.guess,
+      initials: initials(row.profiles),
+      colour: colourFor(row.profiles),
+      name: personName(row.profiles),
+    }));
+}
+
+// ---------- People lists ----------
+
+function personRow(person, actions = [], note = "") {
   const li = document.createElement("li");
-  const who = document.createElement("div");
-  const name = document.createElement("p");
+  const who = document.createElement("button");
+  who.type = "button";
+  who.className = "person-link";
+  who.append(avatarElement(person, "sm"));
+  const text = document.createElement("span");
+  text.className = "person-text";
+  const name = document.createElement("span");
   name.className = "person-name";
-  name.textContent = person.display_name || person.username;
-  const handle = document.createElement("p");
+  name.textContent = personName(person);
+  const handle = document.createElement("span");
   handle.className = "person-handle";
-  handle.textContent = `@${person.username}`;
-  who.append(name, handle);
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "chip-button";
-  button.textContent = label;
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    try {
-      await action(person);
-    } catch (error) {
-      accountMessage(errorText(error), true);
-      button.disabled = false;
-    }
-  });
-  li.append(who, button);
+  handle.textContent = `@${person.username}${note ? ` · ${note}` : ""}`;
+  text.append(name, handle);
+  who.append(text);
+  who.addEventListener("click", () => openPerson(person));
+  const buttons = document.createElement("span");
+  buttons.className = "person-actions";
+  for (const { label, action, primary } of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = primary ? "chip-button is-primary" : "chip-button";
+    button.textContent = label;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await action(person);
+      } catch (error) {
+        accountMessage(errorText(error), true);
+        button.disabled = false;
+      }
+    });
+    buttons.append(button);
+  }
+  li.append(who, buttons);
   return li;
 }
 
-async function renderFollowing() {
-  const list = $("following-list");
-  const people = await social.listFollowing(user.id);
-  list.replaceChildren(...people.map((person) => personRow(person, {
-    label: "Unfollow",
-    action: async (p) => { await social.unfollow(user.id, p.id); await renderFollowing(); },
-  })));
-  $("following-empty").hidden = people.length > 0;
-  return people;
+async function renderPeople() {
+  const [requests, following, followers] = await Promise.all([
+    social.listRequests(user.id),
+    social.listFollowing(user.id),
+    social.listFollowers(user.id),
+  ]);
+  $("requests-section").hidden = requests.length === 0;
+  $("requests-list").replaceChildren(...requests.map((person) => personRow(person, [
+    { label: "Accept", primary: true, action: async (p) => { await social.acceptRequest(user.id, p.id); await afterPeopleChange(); } },
+    { label: "Decline", action: async (p) => { await social.endFollow(p.id, user.id); await afterPeopleChange(); } },
+  ])));
+  $("following-list").replaceChildren(...following.map((person) => personRow(person, [
+    person.status === "pending"
+      ? { label: "Cancel", action: async (p) => { await social.endFollow(user.id, p.id); await afterPeopleChange(); } }
+      : { label: "Unfollow", action: async (p) => { await social.endFollow(user.id, p.id); await afterPeopleChange(); } },
+  ], person.status === "pending" ? "requested" : "")));
+  $("following-empty").hidden = following.length > 0;
+  $("followers-list").replaceChildren(...followers.map((person) => personRow(person, [
+    { label: "Remove", action: async (p) => { await social.endFollow(p.id, user.id); await afterPeopleChange(); } },
+  ])));
+  $("followers-empty").hidden = followers.length > 0;
+  const badge = $("request-badge");
+  badge.textContent = String(requests.length);
+  badge.hidden = requests.length === 0;
+  return following;
+}
+
+async function afterPeopleChange() {
+  await Promise.all([renderPeople(), runSearch(), loadFriendGames()]);
 }
 
 let searchTimer;
 async function runSearch() {
   const query = $("people-search").value;
   const results = $("people-results");
-  if (query.trim().length < 2) {
+  if (!user || query.trim().length < 2) {
     results.replaceChildren();
     return;
   }
   const [found, following] = await Promise.all([social.searchProfiles(query, user.id), social.listFollowing(user.id)]);
-  const followingIds = new Set(following.map((p) => p.id));
-  results.replaceChildren(...found.map((person) => personRow(person, followingIds.has(person.id)
-    ? { label: "Following", action: async () => {} }
-    : { label: "Follow", action: async (p) => { await social.follow(user.id, p.id); await Promise.all([renderFollowing(), runSearch()]); } })));
+  const status = new Map(following.map((p) => [p.id, p.status]));
+  results.replaceChildren(...found.map((person) => {
+    const state = status.get(person.id);
+    if (state === "accepted") return personRow(person, [], "following");
+    if (state === "pending") return personRow(person, [], "requested");
+    return personRow(person, [
+      { label: "Follow", primary: true, action: async (p) => { await social.requestFollow(user.id, p.id); await afterPeopleChange(); } },
+    ]);
+  }));
 }
 
 async function renderAccount() {
@@ -581,18 +688,20 @@ async function renderAccount() {
   $("account-signed-out").hidden = Boolean(user);
   $("account-signed-in").hidden = !user;
   if (!user) return;
-  $("account-name").textContent = profile ? profile.display_name || profile.username : "";
+  setAvatar("account-avatar-lg", profile || { id: user.id }, "lg");
+  $("account-name").textContent = personName(profile);
   $("account-handle").textContent = profile ? `@${profile.username}` : "";
   if (profile) {
     $("display-name").value = profile.display_name || "";
     $("username").value = profile.username;
   }
+  clearFieldErrors("display-name-error", "username-field-error");
   // Username accounts sign in with their username, so it can't change.
   const locked = social.isUsernameAccount(user);
   $("username").readOnly = locked;
   $("username-lock").hidden = !locked;
   try {
-    const [stats] = await Promise.all([social.getStats(user.id), renderFollowing()]);
+    const [stats] = await Promise.all([social.getStats(user.id), renderPeople()]);
     $("acct-played").textContent = formatNumber(stats ? stats.played : 0);
     $("acct-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
     $("acct-best").textContent = formatNumber(stats ? stats.best : 0);
@@ -604,10 +713,96 @@ async function renderAccount() {
 
 function openAccount() {
   accountMessage(socialError ? "Sign-in couldn't load. Check your connection and refresh the page." : "", socialError);
+  clearFieldErrors("username-error", "password-error");
   document.querySelectorAll("#provider-buttons button, #email-form button").forEach((b) => { b.disabled = socialError; });
   renderAccount();
   openOverlay($("account"));
 }
+
+// ---------- Another player's profile ----------
+
+let personShown = null;
+
+function renderTodayCard(game) {
+  const card = $("person-today");
+  card.replaceChildren();
+  if (!game) {
+    card.textContent = "Hasn't played today yet.";
+    return;
+  }
+  if (!dailyDone()) {
+    card.textContent = "Finish today's game to see their result.";
+    return;
+  }
+  const total = document.createElement("span");
+  total.className = "person-today-total";
+  total.textContent = formatNumber(game.total);
+  const of = document.createElement("span");
+  of.className = "of";
+  of.textContent = ` / ${formatNumber(MAX_SCORE)}`;
+  const dots = document.createElement("span");
+  dots.className = "friend-tiers";
+  for (const r of game.rounds || []) if (TIERS[r.tier]) dots.append(tierDot(r.tier));
+  const scores = document.createElement("span");
+  scores.className = "person-today-rounds";
+  scores.textContent = (game.rounds || []).map((r) => r.score).join(" · ");
+  card.append(total, of, dots, scores);
+}
+
+async function renderPerson() {
+  const person = personShown;
+  if (!person || !user) return;
+  setAvatar("person-avatar", person, "lg");
+  $("person-name").textContent = personName(person);
+  $("person-handle").textContent = `@${person.username}`;
+  $("person-message").textContent = "";
+  const action = $("person-action");
+  action.disabled = true;
+  const following = await social.listFollowing(user.id);
+  const state = (following.find((p) => p.id === person.id) || {}).status;
+  action.disabled = false;
+  action.className = state ? "secondary-button" : "primary-button";
+  action.textContent = state === "accepted" ? "Unfollow" : state === "pending" ? "Cancel request" : "Follow";
+  action.onclick = async () => {
+    action.disabled = true;
+    try {
+      if (state) await social.endFollow(user.id, person.id);
+      else await social.requestFollow(user.id, person.id);
+      await afterPeopleChange();
+      await renderPerson();
+    } catch (error) {
+      $("person-message").textContent = errorText(error);
+      action.disabled = false;
+    }
+  };
+
+  const visible = state === "accepted";
+  $("person-details").hidden = !visible;
+  $("person-private").hidden = visible;
+  $("person-private").textContent = state === "pending"
+    ? "Request sent. Once they accept, you'll see their scores and stats."
+    : "Follow to request access to their scores and stats.";
+  if (!visible) return;
+  const [stats, todayGame] = await Promise.all([social.getStats(person.id), social.gameFor(person.id, today)]);
+  $("person-played").textContent = formatNumber(stats ? stats.played : 0);
+  $("person-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
+  $("person-best").textContent = formatNumber(stats ? stats.best : 0);
+  $("person-average").textContent = formatNumber(stats ? stats.average : 0);
+  renderTodayCard(todayGame);
+}
+
+function openPerson(person) {
+  if (!user || person.id === user.id) return;
+  personShown = person;
+  $("person-details").hidden = true;
+  $("person-private").hidden = true;
+  openOverlay($("person"));
+  renderPerson().catch((error) => { $("person-message").textContent = errorText(error); });
+}
+
+$("person-close").addEventListener("click", () => { $("person").hidden = true; });
+
+// ---------- Results screen: friends today ----------
 
 async function renderFriends(practice) {
   const section = $("friends");
@@ -621,22 +816,27 @@ async function renderFriends(practice) {
     const rows = await social.friendsResults(user.id, today);
     const others = rows.filter((r) => r.user_id !== user.id);
     $("friends-list").replaceChildren(...rows.map((row) => {
+      const you = row.user_id === user.id;
+      const person = you ? profile || row.profiles : row.profiles;
       const li = document.createElement("li");
-      if (row.user_id === user.id) li.className = "is-you";
+      if (you) li.className = "is-you";
+      const who = document.createElement("button");
+      who.type = "button";
+      who.className = "person-link";
+      who.append(avatarElement(person, "sm"));
       const name = document.createElement("span");
       name.className = "friend-name";
-      name.textContent = row.user_id === user.id ? "You" : (row.profiles && (row.profiles.display_name || row.profiles.username)) || "Player";
+      name.textContent = you ? "You" : personName(person);
+      who.append(name);
+      if (!you) who.addEventListener("click", () => openPerson(person));
       const tiers = document.createElement("span");
       tiers.className = "friend-tiers";
       tiers.setAttribute("aria-hidden", "true");
-      for (const r of row.rounds || []) {
-        const dot = TIERS[r.tier] ? tierDot(r.tier) : document.createElement("span");
-        tiers.append(dot);
-      }
+      for (const r of row.rounds || []) if (TIERS[r.tier]) tiers.append(tierDot(r.tier));
       const total = document.createElement("span");
       total.className = "friend-total";
       total.textContent = formatNumber(row.total);
-      li.append(name, tiers, total);
+      li.append(who, tiers, total);
       return li;
     }));
     $("friends-empty").hidden = others.length > 0;
@@ -648,6 +848,7 @@ async function renderFriends(practice) {
 async function onSignedIn(nextUser) {
   user = nextUser;
   profile = null;
+  friendGames = [];
   if (user) {
     try {
       profile = await social.getProfile(user.id);
@@ -655,6 +856,8 @@ async function onSignedIn(nextUser) {
       console.error(error);
     }
     await syncDaily();
+    loadFriendGames();
+    refreshRequestBadge();
   }
   updateAccountButton();
   if (!$("account").hidden) renderAccount();
@@ -713,42 +916,55 @@ async function bootSocial() {
 $("account-button").addEventListener("click", openAccount);
 $("friends-signin").addEventListener("click", openAccount);
 $("account-close").addEventListener("click", () => { $("account").hidden = true; });
-// ---------- Email & password ----------
 
+// ---------- Username & password ----------
+
+// Where each sign-in error belongs: under the username or the password field.
 const AUTH_ERRORS = {
-  invalid_credentials: "That username and password don't match. Try again, or create an account.",
-  user_already_exists: "That username is taken. Try another.",
-  email_not_confirmed: "Confirm your email first, using the link we sent you.",
-  weak_password: "Choose a longer password (at least 8 characters).",
-  over_email_send_rate_limit: "Too many emails sent. Please try again later.",
+  invalid_credentials: ["password-error", "That username and password don't match. Try again, or create an account."],
+  user_already_exists: ["username-error", "That username is taken. Try another."],
+  email_not_confirmed: ["username-error", "This account is waiting for email confirmation."],
+  weak_password: ["password-error", "Choose a longer password (at least 8 characters)."],
+  over_email_send_rate_limit: ["password-error", "Too many attempts. Please try again later."],
+  over_request_rate_limit: ["password-error", "Too many attempts. Please try again later."],
 };
-const authError = (error) => AUTH_ERRORS[error && error.code] || errorText(error);
+
+function showAuthError(error) {
+  const [field, text] = AUTH_ERRORS[error && error.code] || ["password-error", errorText(error)];
+  fieldError(field, text);
+}
 
 function readCredentials({ forSignUp = false } = {}) {
+  clearFieldErrors("username-error", "password-error");
+  accountMessage("");
   const identifier = $("email-input").value.trim();
   const password = $("password-input").value;
   const isEmail = identifier.includes("@");
-  if (forSignUp ? !social.USERNAME_PATTERN.test(identifier.toLowerCase()) : !(isEmail || social.USERNAME_PATTERN.test(identifier.toLowerCase()))) {
-    accountMessage(forSignUp
-      ? "Pick a username of 3–20 lowercase letters, numbers or _."
-      : "Enter your username.", true);
-    return null;
+  let ok = true;
+  if (!identifier) {
+    fieldError("username-error", "Enter a username.");
+    ok = false;
+  } else if (forSignUp ? !social.USERNAME_PATTERN.test(identifier.toLowerCase()) : !(isEmail || social.USERNAME_PATTERN.test(identifier.toLowerCase()))) {
+    fieldError("username-error", "Usernames are 3–20 lowercase letters, numbers or _.");
+    ok = false;
   }
   if (password.length < 8) {
-    accountMessage("Passwords are at least 8 characters.", true);
-    return null;
+    fieldError("password-error", password ? "Passwords are at least 8 characters." : "Enter a password.");
+    ok = false;
   }
-  return { identifier, password };
+  return ok ? { identifier, password } : null;
 }
 
-async function withBusy(button, work) {
+async function withBusy(button, work, onError = showAuthError) {
   button.disabled = true;
+  const label = button.textContent;
   try {
     await work();
   } catch (error) {
-    accountMessage(authError(error), true);
+    onError(error);
   } finally {
     button.disabled = false;
+    button.textContent = label;
   }
 }
 
@@ -756,27 +972,32 @@ $("email-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const creds = readCredentials();
   if (!creds) return;
-  accountMessage("Signing in…");
-  withBusy($("password-sign-in"), async () => {
+  const button = $("password-sign-in");
+  withBusy(button, async () => {
+    button.textContent = "Signing in…";
     await social.signInWithPassword(creds.identifier, creds.password);
     $("password-input").value = "";
-    accountMessage("");
   });
 });
 
 $("password-sign-up").addEventListener("click", () => {
   const creds = readCredentials({ forSignUp: true });
   if (!creds) return;
-  accountMessage("Creating your account…");
-  withBusy($("password-sign-up"), async () => {
+  const button = $("password-sign-up");
+  withBusy(button, async () => {
+    button.textContent = "Creating account…";
     if (await social.usernameTaken(creds.identifier)) {
-      accountMessage("That username is taken. Try another.", true);
+      fieldError("username-error", "That username is taken. Try another.");
       return;
     }
     const signedIn = await social.signUpWithUsername(creds.identifier, creds.password);
     $("password-input").value = "";
-    accountMessage(signedIn ? "" : "Account created, but sign-in is waiting for email confirmation. Turn off \"Confirm email\" in Supabase.", !signedIn);
+    if (!signedIn) fieldError("username-error", "Account created, but it's waiting for email confirmation. Turn off \"Confirm email\" in Supabase.");
   });
+});
+
+["email-input", "password-input"].forEach((id) => {
+  $(id).addEventListener("input", () => fieldError(id === "email-input" ? "username-error" : "password-error", ""));
 });
 
 // Opened from a password-reset email: ask for a new password.
@@ -794,9 +1015,10 @@ $("recovery-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const password = $("new-password").value;
   if (password.length < 8) {
-    accountMessage("Passwords are at least 8 characters.", true);
+    fieldError("new-password-error", "Passwords are at least 8 characters.");
     return;
   }
+  fieldError("new-password-error", "");
   withBusy($("recovery-form").querySelector("button"), async () => {
     await social.updatePassword(password);
     $("new-password").value = "";
@@ -804,25 +1026,36 @@ $("recovery-form").addEventListener("submit", (event) => {
     recovering = false;
     await renderAccount();
     accountMessage("Password updated. You're signed in.");
-  });
+  }, (error) => fieldError("new-password-error", errorText(error)));
 });
 
 $("profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  clearFieldErrors("display-name-error", "username-field-error");
   const username = social.isUsernameAccount(user) && profile ? profile.username : $("username").value.trim().toLowerCase();
   const displayName = $("display-name").value.trim();
-  if (!/^[a-z0-9_]{3,20}$/.test(username)) {
-    accountMessage("Usernames are 3–20 lowercase letters, numbers or _.", true);
-    return;
+  let ok = true;
+  if (!displayName) {
+    fieldError("display-name-error", "Enter a display name.");
+    ok = false;
   }
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+    fieldError("username-field-error", "Usernames are 3–20 lowercase letters, numbers or _.");
+    ok = false;
+  }
+  if (!ok) return;
   try {
     profile = await social.updateProfile(user.id, { username, displayName });
     updateAccountButton();
-    renderAccount();
+    await renderAccount();
     accountMessage("Profile saved.");
   } catch (error) {
-    accountMessage(error && error.code === "23505" ? "That username is taken." : errorText(error), true);
+    if (error && error.code === "23505") fieldError("username-field-error", "That username is taken.");
+    else fieldError("display-name-error", errorText(error));
   }
+});
+["display-name", "username"].forEach((id) => {
+  $(id).addEventListener("input", () => fieldError(id === "username" ? "username-field-error" : "display-name-error", ""));
 });
 $("people-search").addEventListener("input", () => {
   clearTimeout(searchTimer);
@@ -834,7 +1067,9 @@ $("sign-out").addEventListener("click", async () => {
   accountMessage("Signed out.");
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !$("account").hidden) $("account").hidden = true;
+  if (event.key !== "Escape") return;
+  if (!$("person").hidden) $("person").hidden = true;
+  else if (!$("account").hidden) $("account").hidden = true;
 });
 
 // ---------- Boot ----------

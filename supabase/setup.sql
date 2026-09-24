@@ -1,7 +1,7 @@
 -- TapMap: complete Supabase setup (schema.sql + locations.sql in one file).
 -- Paste ALL of this into SQL Editor → New query → Run. Safe to run again.
 
--- TapMap database: profiles, follows and daily game results.
+-- TapMap database: profiles, follow requests and daily game results.
 -- Run once in the Supabase dashboard: SQL Editor → New query → paste → Run.
 -- Safe to re-run: it drops and recreates only TapMap's own objects.
 
@@ -23,6 +23,12 @@ create table if not exists public.follows (
 );
 
 create index if not exists follows_followee_idx on public.follows (followee_id);
+
+-- Follows start as requests and count once the other player accepts.
+-- (Follows made before requests existed are kept as accepted.)
+alter table public.follows
+  add column if not exists status text not null default 'accepted' check (status in ('pending', 'accepted'));
+alter table public.follows alter column status set default 'pending';
 
 -- One row per player per daily game. Rows can't be edited or deleted by
 -- players, so a day's result can't be replayed or rewritten.
@@ -96,7 +102,8 @@ create trigger on_auth_user_created
 -- ---------- Stats ----------
 
 -- Played, best, average and streaks per player, worked out from games so they
--- never drift. A streak is a run of consecutive UTC dates; the current streak
+-- never drift. Only your own row and those of players who accepted your
+-- follow request are visible. A streak is a run of consecutive UTC dates; the current streak
 -- counts only if its last game was today or yesterday.
 drop view if exists public.profile_stats;
 create view public.profile_stats
@@ -130,6 +137,11 @@ select
   ), 0) as current_streak
 from public.profiles p
 left join public.games g on g.user_id = p.id
+where p.id = (select auth.uid())
+  or exists (
+    select 1 from public.follows f
+    where f.follower_id = (select auth.uid()) and f.followee_id = p.id and f.status = 'accepted'
+  )
 group by p.id;
 
 -- ---------- Row-level security ----------
@@ -138,7 +150,9 @@ alter table public.profiles enable row level security;
 alter table public.follows enable row level security;
 alter table public.games enable row level security;
 
--- Profiles, follows and results are public to read (it's a social game).
+-- Profiles are public (so people can be found by username). Follows are
+-- visible to the two players involved. Results and stats are visible to the
+-- player and to followers they have accepted.
 drop policy if exists "profiles are public" on public.profiles;
 create policy "profiles are public" on public.profiles
   for select to anon, authenticated using (true);
@@ -150,22 +164,40 @@ create policy "edit own profile" on public.profiles
   with check ((select auth.uid()) = id);
 
 drop policy if exists "follows are public" on public.follows;
-create policy "follows are public" on public.follows
-  for select to anon, authenticated using (true);
+drop policy if exists "see your follows" on public.follows;
+create policy "see your follows" on public.follows
+  for select to authenticated
+  using ((select auth.uid()) in (follower_id, followee_id));
 
 drop policy if exists "follow as yourself" on public.follows;
 create policy "follow as yourself" on public.follows
   for insert to authenticated
-  with check ((select auth.uid()) = follower_id);
+  with check ((select auth.uid()) = follower_id and status = 'pending');
 
+drop policy if exists "accept requests" on public.follows;
+create policy "accept requests" on public.follows
+  for update to authenticated
+  using ((select auth.uid()) = followee_id)
+  with check ((select auth.uid()) = followee_id and status = 'accepted');
+
+-- Unfollow, cancel a request, decline a request or remove a follower.
 drop policy if exists "unfollow as yourself" on public.follows;
-create policy "unfollow as yourself" on public.follows
+drop policy if exists "end a follow" on public.follows;
+create policy "end a follow" on public.follows
   for delete to authenticated
-  using ((select auth.uid()) = follower_id);
+  using ((select auth.uid()) in (follower_id, followee_id));
 
 drop policy if exists "games are public" on public.games;
-create policy "games are public" on public.games
-  for select to anon, authenticated using (true);
+drop policy if exists "see own and followed games" on public.games;
+create policy "see own and followed games" on public.games
+  for select to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or exists (
+      select 1 from public.follows f
+      where f.follower_id = (select auth.uid()) and f.followee_id = games.user_id and f.status = 'accepted'
+    )
+  );
 
 -- Only your own result, and only for today's (or yesterday's) UTC game.
 drop policy if exists "save own game" on public.games;
@@ -179,9 +211,12 @@ create policy "save own game" on public.games
 -- ---------- Privileges ----------
 
 grant usage on schema public to anon, authenticated;
-grant select on public.profiles, public.follows, public.games, public.profile_stats to anon, authenticated;
+grant select on public.profiles to anon, authenticated;
+revoke select on public.follows, public.games, public.profile_stats from anon;
+grant select on public.follows, public.games, public.profile_stats to authenticated;
 grant update (username, display_name) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
+grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;
 
 

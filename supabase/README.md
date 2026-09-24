@@ -114,10 +114,16 @@ select * from public.locations where name ilike '%peru%';
 
 | Table | Contents | Who can read | Who can write |
 | --- | --- | --- | --- |
-| `profiles` | username, display name | everyone | the owner (update only) |
-| `follows` | who follows whom | everyone | the follower (add/remove) |
+| `profiles` | username, display name | everyone (for search) | the owner (update only) |
+| `follows` | follower, followee, status (`pending` / `accepted`) | the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
-| `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | everyone | the owner, today's or yesterday's game only, once |
+| `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
+
+Following someone sends a request. Once they accept, you can see their stats,
+today's result and their pins on the globe during each round.
+
+**Re-run `setup.sql` after updating** (it's safe to run again). Follows made
+before requests existed are kept as accepted.
 
 Results can't be edited or deleted once saved. Stats (played, best, average,
 current and longest streak) are worked out from `games` by `profile_stats`.

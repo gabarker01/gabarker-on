@@ -69,6 +69,7 @@ function buildStyle(colors) {
       land: { type: "geojson", data: LAND, tolerance: 0.2 },
       satellite: { type: "raster", tiles: [IMAGERY], tileSize: 256, maxzoom: 19 },
       arcs: { type: "geojson", data: EMPTY },
+      "friend-arcs": { type: "geojson", data: EMPTY },
       dots: { type: "geojson", data: EMPTY },
     },
     layers: [
@@ -81,6 +82,17 @@ function buildStyle(colors) {
       {
         id: "satellite", type: "raster", source: "satellite",
         paint: { "raster-fade-duration": 200 },
+      },
+      {
+        // Friends' guesses: thinner lines in each friend's colour, under yours.
+        id: "friend-arc-outline", type: "line", source: "friend-arcs",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#ffffff", "line-width": 2.6, "line-opacity": 0.75 },
+      },
+      {
+        id: "friend-arcs", type: "line", source: "friend-arcs",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": ["get", "colour"], "line-width": 1.5 },
       },
       {
         id: "arc-glow", type: "line", source: "arcs",
@@ -164,6 +176,24 @@ function afterMove(map, fallbackMs) {
     const timer = setTimeout(resolve, fallbackMs);
     map.once("moveend", () => { clearTimeout(timer); resolve(); });
   });
+}
+
+// A friend's pin: their initials in a disc on a short stem, in their colour.
+function friendPinElement(friend, animate) {
+  const el = document.createElement("div");
+  el.className = "pin pin-friend";
+  const body = document.createElement("div");
+  body.className = animate ? "pin-body pin-drop" : "pin-body";
+  body.style.setProperty("--avatar", friend.colour);
+  const badge = document.createElement("span");
+  badge.className = "friend-pin-badge";
+  badge.textContent = friend.initials;
+  const stem = document.createElement("span");
+  stem.className = "friend-pin-stem";
+  body.append(badge, stem);
+  el.append(body);
+  el.title = friend.name || friend.initials;
+  return el;
 }
 
 function pinElement(kind, animate) {
@@ -269,9 +299,11 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
     });
   }
 
-  async function reveal(guess, answer, padding) {
+  // Friends: [{ guess: {lat,lng}, initials, colour, name }] who played this round.
+  async function reveal(guess, answer, padding, friends = []) {
     const coords = greatCircle(guess, answer);
-    const bounds = coords.reduce(
+    const friendLines = friends.map((f) => greatCircle(f.guess, answer));
+    const bounds = [coords, ...friendLines].flat().reduce(
       (b, c) => b.extend(c),
       new maplibregl.LngLatBounds(coords[0], coords[0]),
     );
@@ -284,6 +316,22 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
     await afterMove(map, reducedMotion ? 50 : 1600);
     await animateArc(coords, 900);
     addMarker(answer, "answer");
+    // Friends' pins go on top so they stay visible even right next to the answer.
+    if (friends.length) {
+      map.getSource("friend-arcs").setData({
+        type: "FeatureCollection",
+        features: friends.map((f, i) => ({
+          type: "Feature", properties: { colour: f.colour },
+          geometry: { type: "LineString", coordinates: friendLines[i] },
+        })),
+      });
+      friends.forEach((f) => {
+        const marker = new maplibregl.Marker({ element: friendPinElement(f, !reducedMotion), anchor: "bottom" })
+          .setLngLat([f.guess.lng, f.guess.lat])
+          .addTo(map);
+        markers.push(marker);
+      });
+    }
   }
 
   function clear() {
@@ -292,6 +340,7 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
     guessMarker = null;
     arcFeatures = [];
     setArcs();
+    map.getSource("friend-arcs").setData(EMPTY);
   }
 
   function reset() {

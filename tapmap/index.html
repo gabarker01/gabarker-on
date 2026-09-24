@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=9">
+  <link rel="stylesheet" href="tapmap.css?v=10">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -56,7 +56,8 @@
     <div class="topbar-actions">
       <button id="account-button" class="ghost-button account-button" type="button" aria-label="Sign in" hidden>
         <svg class="icon-person" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 19.5c1.2-3.4 4-5 7-5s5.8 1.6 7 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span id="account-initial" class="account-initial" hidden></span>
+        <span id="account-avatar" class="account-avatar" hidden></span>
+        <span id="request-badge" class="request-badge" hidden></span>
       </button>
       <button id="help-button" class="ghost-button" type="button" aria-label="How to play">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
@@ -177,9 +178,11 @@
         <form id="email-form" class="email-form" hidden novalidate>
           <p class="field-label or-label">Or use a username</p>
           <label for="email-input" class="field-label">Username</label>
-          <input id="email-input" class="field" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="username" required>
+          <input id="email-input" class="field" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="username" required aria-describedby="username-error">
+          <p id="username-error" class="field-error" role="alert" hidden></p>
           <label for="password-input" class="field-label">Password <span class="hint">at least 8 characters</span></label>
-          <input id="password-input" class="field" type="password" autocomplete="current-password" minlength="8" required>
+          <input id="password-input" class="field" type="password" autocomplete="current-password" minlength="8" required aria-describedby="password-error">
+          <p id="password-error" class="field-error" role="alert" hidden></p>
           <button id="password-sign-in" class="primary-button form-button" type="submit">Sign in</button>
           <button id="password-sign-up" class="secondary-button" type="button">Create account</button>
           <p class="form-note">Usernames are 3–20 lowercase letters, numbers or _. There's no email, so keep your password safe: it can't be reset.</p>
@@ -191,13 +194,19 @@
         <h2 class="sheet-title">New <em>password.</em></h2>
         <label for="new-password" class="field-label">New password <span class="hint">at least 8 characters</span></label>
         <input id="new-password" class="field" type="password" autocomplete="new-password" minlength="8" required>
+        <p id="new-password-error" class="field-error" role="alert" hidden></p>
         <button class="primary-button form-button" type="submit">Save password</button>
       </form>
 
       <div id="account-signed-in" hidden>
-        <p class="eyebrow">Signed in</p>
-        <h2 id="account-name" class="sheet-title account-name"></h2>
-        <p id="account-handle" class="account-handle"></p>
+        <div class="account-head">
+          <span id="account-avatar-lg"></span>
+          <div>
+            <p class="eyebrow">Signed in</p>
+            <h2 id="account-name" class="sheet-title account-name"></h2>
+            <p id="account-handle" class="account-handle"></p>
+          </div>
+        </div>
 
         <dl class="stats account-stats">
           <div><dt>Played</dt><dd id="acct-played">–</dd></div>
@@ -206,9 +215,18 @@
           <div><dt>Average</dt><dd id="acct-average">–</dd></div>
         </dl>
 
+        <section id="requests-section" hidden>
+          <h3 class="section-label">Follow requests</h3>
+          <ul id="requests-list" class="people-list"></ul>
+        </section>
+
         <h3 class="section-label">Following</h3>
         <ul id="following-list" class="people-list"></ul>
-        <p id="following-empty" class="friends-empty">You're not following anyone yet.</p>
+        <p id="following-empty" class="friends-empty">You're not following anyone yet. Follows start as requests: once someone accepts, you'll see their scores and stats.</p>
+
+        <h3 class="section-label">Followers</h3>
+        <ul id="followers-list" class="people-list"></ul>
+        <p id="followers-empty" class="friends-empty">Nobody follows you yet.</p>
         <label for="people-search" class="field-label">Find people by username</label>
         <input id="people-search" class="field" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="username">
         <ul id="people-results" class="people-list"></ul>
@@ -217,8 +235,10 @@
         <form id="profile-form" class="profile-form">
           <label for="display-name" class="field-label">Display name</label>
           <input id="display-name" class="field" type="text" maxlength="40" required>
+          <p id="display-name-error" class="field-error" role="alert" hidden></p>
           <label for="username" class="field-label">Username <span class="hint">3–20 letters, numbers or _</span> <span id="username-lock" class="hint" hidden>· used to sign in, so it can't change</span></label>
           <input id="username" class="field" type="text" maxlength="20" pattern="[a-z0-9_]{3,20}" autocapitalize="off" spellcheck="false" required>
+          <p id="username-field-error" class="field-error" role="alert" hidden></p>
           <button class="secondary-button" type="submit">Save profile</button>
         </form>
 
@@ -230,13 +250,42 @@
     </div>
   </div>
 
+  <!-- Another player's profile -->
+  <div id="person" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="person-name">
+      <div class="account-head">
+        <span id="person-avatar"></span>
+        <div>
+          <p class="eyebrow">Player</p>
+          <h2 id="person-name" class="sheet-title account-name"></h2>
+          <p id="person-handle" class="account-handle"></p>
+        </div>
+      </div>
+      <button id="person-action" class="primary-button" type="button"></button>
+      <p id="person-private" class="friends-empty person-private" hidden></p>
+      <div id="person-details" hidden>
+        <h3 class="section-label">Today</h3>
+        <div id="person-today" class="person-today"></div>
+        <h3 class="section-label">Statistics</h3>
+        <dl class="stats account-stats">
+          <div><dt>Played</dt><dd id="person-played">–</dd></div>
+          <div><dt>Streak</dt><dd id="person-streak">–</dd></div>
+          <div><dt>Best</dt><dd id="person-best">–</dd></div>
+          <div><dt>Average</dt><dd id="person-average">–</dd></div>
+        </dl>
+      </div>
+      <p id="person-message" class="account-message" role="status" aria-live="polite"></p>
+      <button id="person-close" class="secondary-button" type="button">Close</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <p id="load-error" class="load-error" role="alert" hidden>
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=13"></script>
+  <script type="module" src="tapmap.js?v=14"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;
