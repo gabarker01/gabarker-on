@@ -163,11 +163,30 @@ function attachHalo(map, container) {
   update();
 }
 
-function whenLoaded(map) {
+// Resolves once the style is ready to use. Tiles (e.g. satellite imagery) keep
+// loading in the background: a slow or failing tile server must never stop the
+// game from starting, so only style errors (no sourceId) are fatal, and the
+// wait for the first full render is capped.
+function whenLoaded(map, capMs = 4000) {
   return new Promise((resolve, reject) => {
-    if (map.loaded()) resolve();
-    map.once("load", resolve);
-    map.once("error", (e) => { if (!map.loaded()) reject(e.error || e); });
+    let styleReady = false;
+    let timer = null;
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const onStyle = () => {
+      styleReady = true;
+      timer = setTimeout(done, capMs);
+    };
+    if (map.loaded()) return done();
+    if (map.isStyleLoaded()) onStyle();
+    else map.once("style.load", onStyle);
+    map.once("load", done);
+    map.on("error", (e) => {
+      if (e && e.sourceId) return; // a tile or data source failed: carry on
+      if (!styleReady) reject(e.error || e);
+    });
   });
 }
 

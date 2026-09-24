@@ -6,7 +6,7 @@ import {
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=6";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=7";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
 import * as social from "./social.js?v=7";
 import { initials, colourFor, avatarElement } from "./avatar.js";
