@@ -7,7 +7,7 @@ import {
   recordDailyResult, currentStreak,
 } from "./game.js";
 import { createGlobe, createSummaryGlobe } from "./map.js";
-import { AUTH_PROVIDERS } from "./config.js";
+import { AUTH_PROVIDERS } from "./config.js?v=2";
 import * as social from "./social.js";
 
 const $ = (id) => document.getElementById(id);
