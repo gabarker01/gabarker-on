@@ -463,6 +463,7 @@ document.addEventListener("keydown", (event) => {
 
 let user = null;
 let profile = null;
+let socialError = false;
 
 const PROVIDER_LABELS = { google: "Continue with Google", apple: "Continue with Apple" };
 const PROVIDER_ICONS = {
@@ -574,7 +575,8 @@ async function renderAccount() {
 }
 
 function openAccount() {
-  accountMessage("");
+  accountMessage(socialError ? "Sign-in couldn't load. Check your connection and refresh the page." : "", socialError);
+  document.querySelectorAll("#provider-buttons button, #email-form button").forEach((b) => { b.disabled = socialError; });
   renderAccount();
   openOverlay($("account"));
 }
@@ -668,8 +670,9 @@ async function bootSocial() {
     });
     await onSignedIn(await social.currentUser());
   } catch (error) {
+    // Keep the button so the problem is visible rather than silently missing.
     console.error(error);
-    $("account-button").hidden = true;
+    socialError = true;
   }
 }
 
