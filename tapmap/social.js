@@ -65,6 +65,19 @@ export async function fetchLocations(timeoutMs = 5000) {
 
 // ---------- Auth ----------
 
+// Which sign-in methods are switched on in the Supabase dashboard, e.g.
+// { google: true, email: true, apple: false }. Null if it can't be checked.
+export async function enabledProviders() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } });
+    if (!response.ok) return null;
+    const settings = await response.json();
+    return settings && settings.external ? settings.external : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 export async function currentUser() {
   const { data } = await client.auth.getSession();
   return data.session ? data.session.user : null;

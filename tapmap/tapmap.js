@@ -8,7 +8,7 @@ import {
 } from "./game.js";
 import { createGlobe, createSummaryGlobe } from "./map.js";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js";
+import * as social from "./social.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -655,10 +655,14 @@ async function onSignedIn(nextUser) {
   if (!$("end").hidden && game) renderFriends(game.mode === "practice");
 }
 
-function buildProviderButtons() {
+// Only offers methods that are both listed in config.js and switched on in
+// Supabase, so nobody lands on a "provider is not enabled" error page.
+function buildProviderButtons(enabled) {
   const container = $("provider-buttons");
   container.replaceChildren();
+  $("email-form").hidden = true;
   for (const provider of AUTH_PROVIDERS) {
+    if (enabled && !enabled[provider]) continue;
     if (provider === "email") {
       $("email-form").hidden = false;
       continue;
@@ -685,6 +689,7 @@ async function bootSocial() {
   if (!social.socialEnabled()) return;
   $("account-button").hidden = false;
   buildProviderButtons();
+  social.enabledProviders().then(buildProviderButtons);
   try {
     await social.initSocial();
     social.onAuthChange((next) => {
