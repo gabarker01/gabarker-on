@@ -380,8 +380,8 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
 }
 
 // Small, slowly turning globe with every round's arc, for the results screen.
-// Results globe: every round's arc, turning slowly. Swipe sideways to spin it
-// (vertical swipes still scroll the page; zoom is off). A score bubble sits
+// Results globe: every round's arc, turning slowly. Drag in any direction to
+// turn it (zoom is off). A score bubble sits
 // over whichever answer faces you; tap it for that round's details.
 export async function createSummaryGlobe(container, rounds, { colors, details = [], reducedMotion = false }) {
   const answers = rounds.map((r) => r.answer);
@@ -480,6 +480,7 @@ export async function createSummaryGlobe(container, rounds, { colors, details = 
       bubbles.forEach((b, i) => {
         b.el.classList.toggle("is-visible", i === best);
         b.el.tabIndex = i === best ? 0 : -1;
+        b.marker.getElement().style.zIndex = i === best ? "2" : "";
       });
       // A bubble that turns away folds back to its small size.
       if (expanded !== -1 && expanded !== best) setExpanded(-1);
@@ -488,35 +489,46 @@ export async function createSummaryGlobe(container, rounds, { colors, details = 
   };
   updateBubbles();
 
-  // Horizontal swipes spin the globe; vertical ones are left to the page.
-  container.style.touchAction = "pan-y";
+  // Drag in any direction to turn the globe (no zoom). When left alone it
+  // spins slowly and eases back to its starting tilt.
+  container.style.touchAction = "none";
+  const homeLat = centre[1];
   let dragging = false;
   let lastX = 0;
+  let lastY = 0;
   let lastT = 0;
-  let velocity = 0; // degrees of longitude per second
+  let vLng = 0; // degrees per second, for a little momentum
+  let vLat = 0;
   let idleUntil = 0;
   const degPerPx = () => 180 / Math.max(120, container.clientWidth);
-  const shift = (dLng) => {
+  const clampLat = (lat) => Math.max(-70, Math.min(70, lat));
+  const turn = (dLng, dLat) => {
     const c = map.getCenter();
-    map.setCenter([c.lng + dLng, c.lat]);
+    map.setCenter([c.lng + dLng, clampLat(c.lat + dLat)]);
     updateBubbles();
   };
   container.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".score-bubble")) return;
     dragging = true;
     lastX = event.clientX;
+    lastY = event.clientY;
     lastT = performance.now();
-    velocity = 0;
+    vLng = 0;
+    vLat = 0;
     container.setPointerCapture(event.pointerId);
   });
   container.addEventListener("pointermove", (event) => {
     if (!dragging) return;
     const now = performance.now();
+    const dt = Math.max(0.001, (now - lastT) / 1000);
     const dLng = -(event.clientX - lastX) * degPerPx();
-    velocity = dLng / Math.max(0.001, (now - lastT) / 1000);
+    const dLat = (event.clientY - lastY) * degPerPx();
+    vLng = dLng / dt;
+    vLat = dLat / dt;
     lastX = event.clientX;
+    lastY = event.clientY;
     lastT = now;
-    shift(dLng);
+    turn(dLng, dLat);
   });
   const release = () => {
     if (!dragging) return;
@@ -529,14 +541,17 @@ export async function createSummaryGlobe(container, rounds, { colors, details = 
   let frameId = null;
   let last = performance.now();
   const tick = (now) => {
-    const dt = (now - last) / 1000;
+    const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (!dragging) {
-      if (Math.abs(velocity) > 0.5 && !reducedMotion) {
-        shift(velocity * dt);
-        velocity *= Math.exp(-dt * 3);
-      } else if (!reducedMotion && expanded === -1 && now > idleUntil) {
-        shift(6 * dt);
+    if (!dragging && !reducedMotion) {
+      if (Math.abs(vLng) > 0.5 || Math.abs(vLat) > 0.5) {
+        turn(vLng * dt, vLat * dt);
+        const decay = Math.exp(-dt * 3);
+        vLng *= decay;
+        vLat *= decay;
+      } else if (expanded === -1 && now > idleUntil) {
+        const c = map.getCenter();
+        turn(6 * dt, (homeLat - c.lat) * Math.min(1, dt * 0.8));
       }
     }
     frameId = requestAnimationFrame(tick);

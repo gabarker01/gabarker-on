@@ -1874,3 +1874,62 @@ body.profile-page {
 .h2h dt {
   font-size: 0.6rem;
 }
+
+/* ---------- Sign-in prompts (signed out) ---------- */
+
+.signin-cta {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+  text-align: center;
+}
+
+.signin-cta p {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.signin-cta strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.end-signin {
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 18px;
+}
+
+.cta-button {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+
+.cta-button:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.cta-button:active {
+  transform: scale(0.985);
+}
+
+/* Hidden score bubbles must not catch taps meant for the visible one. */
+.summary-globe .maplibregl-marker {
+  pointer-events: none;
+}
+
+.summary-globe .maplibregl-marker:has(.score-bubble.is-visible) {
+  z-index: 2;
+}

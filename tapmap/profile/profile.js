@@ -420,26 +420,28 @@ $("photo-remove").addEventListener("click", async () => {
 
 $("invite-button").addEventListener("click", async () => {
   const url = `${window.location.origin}/tapmap/?invite=${encodeURIComponent(myProfile.username)}`;
-  const text = `Play TapMap with me: guess five places on the globe each day. I'm @${myProfile.username}.`;
+  const first = personName(myProfile).trim().split(/\s+/)[0];
+  const text = `${first} has invited you to play TapMap, the daily geography game. Sign up here: ${url}`;
   if (navigator.share) {
     try {
-      await navigator.share({ title: "TapMap", text, url });
+      // The link is inside the text, so apps like WhatsApp show one message.
+      await navigator.share({ text });
       return;
     } catch (error) {
       if (error && error.name === "AbortError") return;
     }
   }
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(text);
   } catch (error) {
     const area = document.createElement("textarea");
-    area.value = url;
+    area.value = text;
     document.body.append(area);
     area.select();
     document.execCommand("copy");
     area.remove();
   }
-  toast("Invite link copied");
+  toast("Invite copied");
 });
 
 $("profile-form").addEventListener("submit", async (event) => {

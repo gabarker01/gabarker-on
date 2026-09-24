@@ -6,7 +6,7 @@ import {
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=4";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=6";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
 import * as social from "./social.js?v=7";
 import { initials, colourFor, avatarElement } from "./avatar.js";
@@ -390,6 +390,7 @@ async function showEnd(finished) {
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
 
   renderFriends(practice);
+  updateSignInPrompts();
   if (user) {
     social.getStats(user.id).then((server) => {
       if (!server) return;
@@ -465,6 +466,7 @@ function showIntro({ help = false } = {}) {
   $("play-button").hidden = help;
   $("intro-practice-button").hidden = help;
   $("intro-close").hidden = !help;
+  updateSignInPrompts();
   openOverlay($("intro"));
 }
 
@@ -759,6 +761,13 @@ async function renderFriends(practice) {
   }
 }
 
+// Signed-out players get a clear way to sign in on the intro and results screens.
+function updateSignInPrompts() {
+  const show = social.socialEnabled() && !user;
+  $("intro-signin").hidden = !show;
+  $("end-signin").hidden = !show;
+}
+
 async function onSignedIn(nextUser) {
   user = nextUser;
   profile = null;
@@ -786,6 +795,7 @@ async function onSignedIn(nextUser) {
     refreshRequestBadge();
   }
   updateAccountButton();
+  updateSignInPrompts();
   if (user) $("account").hidden = true;
   else if (!$("account").hidden) renderAccount();
   if (!$("end").hidden && game) renderFriends(game.mode === "practice");
@@ -844,6 +854,14 @@ async function bootSocial() {
 }
 
 $("account-button").addEventListener("click", openAccount);
+$("intro-signin-button").addEventListener("click", openAccount);
+$("end-signin-button").addEventListener("click", openAccount);
+
+// Keep the follow-request badge current: when the tab comes back, and every 2 minutes.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshRequestBadge();
+});
+setInterval(() => { if (document.visibilityState === "visible") refreshRequestBadge(); }, 120000);
 $("friends-signin").addEventListener("click", openAccount);
 $("account-close").addEventListener("click", () => { $("account").hidden = true; });
 
