@@ -8,7 +8,7 @@ import {
 } from "./game.js";
 import { createGlobe, createSummaryGlobe } from "./map.js";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=3";
+import * as social from "./social.js?v=4";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -587,6 +587,10 @@ async function renderAccount() {
     $("display-name").value = profile.display_name || "";
     $("username").value = profile.username;
   }
+  // Username accounts sign in with their username, so it can't change.
+  const locked = social.isUsernameAccount(user);
+  $("username").readOnly = locked;
+  $("username-lock").hidden = !locked;
   try {
     const [stats] = await Promise.all([social.getStats(user.id), renderFollowing()]);
     $("acct-played").textContent = formatNumber(stats ? stats.played : 0);
@@ -712,26 +716,29 @@ $("account-close").addEventListener("click", () => { $("account").hidden = true;
 // ---------- Email & password ----------
 
 const AUTH_ERRORS = {
-  invalid_credentials: "That email and password don't match. Try again, or create an account.",
-  user_already_exists: "There's already an account with that email. Sign in instead.",
+  invalid_credentials: "That username and password don't match. Try again, or create an account.",
+  user_already_exists: "That username is taken. Try another.",
   email_not_confirmed: "Confirm your email first, using the link we sent you.",
   weak_password: "Choose a longer password (at least 8 characters).",
   over_email_send_rate_limit: "Too many emails sent. Please try again later.",
 };
 const authError = (error) => AUTH_ERRORS[error && error.code] || errorText(error);
 
-function readCredentials({ needPassword = true } = {}) {
-  const email = $("email-input").value.trim();
+function readCredentials({ forSignUp = false } = {}) {
+  const identifier = $("email-input").value.trim();
   const password = $("password-input").value;
-  if (!$("email-input").checkValidity() || !email) {
-    accountMessage("Please enter a valid email address.", true);
+  const isEmail = identifier.includes("@");
+  if (forSignUp ? !social.USERNAME_PATTERN.test(identifier.toLowerCase()) : !(isEmail || social.USERNAME_PATTERN.test(identifier.toLowerCase()))) {
+    accountMessage(forSignUp
+      ? "Pick a username of 3–20 lowercase letters, numbers or _."
+      : "Enter your username.", true);
     return null;
   }
-  if (needPassword && password.length < 8) {
+  if (password.length < 8) {
     accountMessage("Passwords are at least 8 characters.", true);
     return null;
   }
-  return { email, password };
+  return { identifier, password };
 }
 
 async function withBusy(button, work) {
@@ -751,29 +758,24 @@ $("email-form").addEventListener("submit", (event) => {
   if (!creds) return;
   accountMessage("Signing in…");
   withBusy($("password-sign-in"), async () => {
-    await social.signInWithPassword(creds.email, creds.password);
+    await social.signInWithPassword(creds.identifier, creds.password);
     $("password-input").value = "";
     accountMessage("");
   });
 });
 
 $("password-sign-up").addEventListener("click", () => {
-  const creds = readCredentials();
+  const creds = readCredentials({ forSignUp: true });
   if (!creds) return;
   accountMessage("Creating your account…");
   withBusy($("password-sign-up"), async () => {
-    const signedIn = await social.signUp(creds.email, creds.password);
+    if (await social.usernameTaken(creds.identifier)) {
+      accountMessage("That username is taken. Try another.", true);
+      return;
+    }
+    const signedIn = await social.signUpWithUsername(creds.identifier, creds.password);
     $("password-input").value = "";
-    accountMessage(signedIn ? "" : `Almost there: confirm your email using the link sent to ${creds.email}.`);
-  });
-});
-
-$("password-forgot").addEventListener("click", () => {
-  const creds = readCredentials({ needPassword: false });
-  if (!creds) return;
-  withBusy($("password-forgot"), async () => {
-    await social.sendPasswordReset(creds.email);
-    accountMessage(`If there's an account for ${creds.email}, a reset link is on its way.`);
+    accountMessage(signedIn ? "" : "Account created, but sign-in is waiting for email confirmation. Turn off \"Confirm email\" in Supabase.", !signedIn);
   });
 });
 
@@ -807,7 +809,7 @@ $("recovery-form").addEventListener("submit", (event) => {
 
 $("profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const username = $("username").value.trim().toLowerCase();
+  const username = social.isUsernameAccount(user) && profile ? profile.username : $("username").value.trim().toLowerCase();
   const displayName = $("display-name").value.trim();
   if (!/^[a-z0-9_]{3,20}$/.test(username)) {
     accountMessage("Usernames are 3–20 lowercase letters, numbers or _.", true);

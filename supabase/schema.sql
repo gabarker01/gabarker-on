@@ -38,7 +38,8 @@ create index if not exists games_date_idx on public.games (game_date);
 
 -- ---------- New users get a profile ----------
 
--- Username comes from their name or email, made unique with a number if needed.
+-- Username: the one chosen at sign-up if valid and free, otherwise one made
+-- from their name or email, made unique with a number if needed.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -50,6 +51,13 @@ declare
   candidate text;
   n integer := 0;
 begin
+  candidate := lower(new.raw_user_meta_data ->> 'username');
+  if candidate ~ '^[a-z0-9_]{3,20}$' and not exists (select 1 from public.profiles where username = candidate) then
+    insert into public.profiles (id, username, display_name)
+    values (new.id, candidate, left(coalesce(new.raw_user_meta_data ->> 'display_name', candidate), 40));
+    return new;
+  end if;
+
   base := lower(regexp_replace(
     coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1), 'player'),
     '[^a-zA-Z0-9_]+', '', 'g'));

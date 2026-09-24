@@ -1,7 +1,7 @@
 # TapMap accounts: Supabase setup
 
 TapMap works without accounts. Once these steps are done, players can sign in
-(Google, or email and password), keep their stats across devices, follow
+(Google, or a username and password), keep their stats across devices, follow
 friends and see friends' scores for the day.
 
 Project: `https://qmgwlvjvwwrlcuupsttb.supabase.co` (free tier).
@@ -36,18 +36,22 @@ Dashboard → **Authentication** → **URL Configuration**:
 
 Dashboard → **Authentication** → **Sign In / Providers**.
 
-### Email and password (on by default)
+### Username and password (uses the Email provider)
 
-Players can create an account and sign in with an email and password.
+Players can create an account with just a username and password. Supabase
+needs an email per account, so each username is stored with a private
+placeholder address (`username@players.gabarker.com`) that never receives mail.
 
-- **Turn off "Confirm email"** (Authentication → Sign In / Providers → Email)
-  so new accounts are signed in straight away and no email is needed. With it
-  on, every sign-up waits for a confirmation email.
-- "Forgot password?" still sends an email. Supabase's built-in sender only
-  allows a few emails an hour and is meant for testing; for reliable resets,
-  add free SMTP from a provider such as Resend or Brevo under
-  **Authentication → Emails → SMTP Settings**. Reset links return to
-  `https://gabarker.com/tapmap/`, where the game asks for a new password.
+- **Required: turn off "Confirm email"** (Authentication → Sign In / Providers
+  → Email → Confirm email → off → Save). Otherwise Supabase tries to email the
+  placeholder address and the account can't sign in.
+- Keep the Email provider itself **enabled**; it's what handles passwords.
+- There's no password reset for username accounts (no real email). The
+  username can't be changed either, since it's the sign-in name; the display
+  name can.
+
+**Run `setup.sql` again** after updating: it teaches the sign-up trigger to use
+the chosen username.
 
 ### Google (free)
 

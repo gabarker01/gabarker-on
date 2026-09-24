@@ -1255,3 +1255,16 @@ a:focus-visible {
   padding-top: 0;
   border-top: none;
 }
+
+.form-note {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.field[readonly] {
+  color: var(--ink-soft);
+  background: transparent;
+}

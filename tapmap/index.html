@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=8">
+  <link rel="stylesheet" href="tapmap.css?v=9">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -175,14 +175,14 @@
         <p class="lead">Sign in to save your results, track your stats across devices and follow friends.</p>
         <div id="provider-buttons" class="provider-buttons"></div>
         <form id="email-form" class="email-form" hidden novalidate>
-          <p class="field-label or-label">Or use your email</p>
-          <label for="email-input" class="field-label">Email</label>
-          <input id="email-input" class="field" type="email" autocomplete="username" placeholder="you@example.com" required>
+          <p class="field-label or-label">Or use a username</p>
+          <label for="email-input" class="field-label">Username</label>
+          <input id="email-input" class="field" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="username" required>
           <label for="password-input" class="field-label">Password <span class="hint">at least 8 characters</span></label>
           <input id="password-input" class="field" type="password" autocomplete="current-password" minlength="8" required>
           <button id="password-sign-in" class="primary-button form-button" type="submit">Sign in</button>
           <button id="password-sign-up" class="secondary-button" type="button">Create account</button>
-          <button id="password-forgot" class="link-button centered" type="button">Forgot password?</button>
+          <p class="form-note">Usernames are 3–20 lowercase letters, numbers or _. There's no email, so keep your password safe: it can't be reset.</p>
         </form>
       </div>
 
@@ -217,7 +217,7 @@
         <form id="profile-form" class="profile-form">
           <label for="display-name" class="field-label">Display name</label>
           <input id="display-name" class="field" type="text" maxlength="40" required>
-          <label for="username" class="field-label">Username <span class="hint">3–20 letters, numbers or _</span></label>
+          <label for="username" class="field-label">Username <span class="hint">3–20 letters, numbers or _</span> <span id="username-lock" class="hint" hidden>· used to sign in, so it can't change</span></label>
           <input id="username" class="field" type="text" maxlength="20" pattern="[a-z0-9_]{3,20}" autocapitalize="off" spellcheck="false" required>
           <button class="secondary-button" type="submit">Save profile</button>
         </form>
@@ -236,7 +236,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=12"></script>
+  <script type="module" src="tapmap.js?v=13"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

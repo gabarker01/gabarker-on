@@ -92,14 +92,35 @@ export async function signInWithProvider(provider) {
   unwrap(await client.auth.signInWithOAuth({ provider, options: { redirectTo: redirectTo() } }));
 }
 
-export async function signInWithPassword(email, password) {
+// Username accounts: Supabase needs an email per account, so each username
+// maps to a private placeholder address that never receives mail. Requires
+// "Confirm email" to be off in the dashboard.
+const USERNAME_DOMAIN = "players.gabarker.com";
+export const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const usernameEmail = (username) => `${username.toLowerCase()}@${USERNAME_DOMAIN}`;
+export const isUsernameAccount = (user) => Boolean(user && user.email && user.email.endsWith(`@${USERNAME_DOMAIN}`));
+
+// Signs in with a username, or with an email for accounts made that way.
+export async function signInWithPassword(identifier, password) {
+  const id = identifier.trim();
+  const email = id.includes("@") ? id : usernameEmail(id);
   unwrap(await client.auth.signInWithPassword({ email, password }));
 }
 
-// Returns true if signed in straight away, false if Supabase wants the email
-// confirmed first ("Confirm email" is on in the dashboard).
-export async function signUp(email, password) {
-  const data = unwrap(await client.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo() } }));
+export async function usernameTaken(username) {
+  const rows = unwrap(await client.from("profiles").select("id").eq("username", username.toLowerCase()).limit(1));
+  return rows.length > 0;
+}
+
+// Returns true if signed in straight away, false if Supabase still wants an
+// email confirmation (i.e. "Confirm email" is on).
+export async function signUpWithUsername(username, password) {
+  const name = username.toLowerCase();
+  const data = unwrap(await client.auth.signUp({
+    email: usernameEmail(name),
+    password,
+    options: { data: { username: name, display_name: name } },
+  }));
   return Boolean(data.session);
 }
 
