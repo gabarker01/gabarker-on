@@ -1,9 +1,18 @@
 // Pure game logic for TapMap: no DOM, so it can be tested on its own.
 
 export const LAUNCH_DATE = "2026-09-24";
-export const ROUNDS = 5;
+
+// Rounds get harder, and are worth more, as the game goes on.
+export const ROUND_PLAN = [
+  { difficulty: "easy", multiplier: 1 },
+  { difficulty: "medium", multiplier: 1.25 },
+  { difficulty: "medium", multiplier: 1.5 },
+  { difficulty: "hard", multiplier: 1.75 },
+  { difficulty: "hard", multiplier: 2 },
+];
+export const ROUNDS = ROUND_PLAN.length;
 export const MAX_ROUND_SCORE = 1000;
-export const MAX_SCORE = ROUNDS * MAX_ROUND_SCORE;
+export const MAX_SCORE = ROUND_PLAN.reduce((sum, r) => sum + MAX_ROUND_SCORE * r.multiplier, 0);
 export const BULLSEYE_KM = 25;
 export const BULLSEYE_BONUS = 50;
 export const GAME_URL = "https://gabarker.com/tapmap";
@@ -66,18 +75,20 @@ const sample = (items, count, rng) => {
   return picked;
 };
 
-// Same five for everyone on a given UTC date: one easy, three medium, one hard.
-export const dailyLocations = (dateKey, pool) => {
-  const rng = seededRandom(`tapmap:${dateKey}`);
-  const by = (level) => pool.filter((loc) => loc.difficulty === level);
-  return [
-    ...sample(by("easy"), 1, rng),
-    ...sample(by("medium"), 3, rng),
-    ...sample(by("hard"), 1, rng),
-  ];
+// Five locations following ROUND_PLAN (easy → hard), drawn with `rng`.
+const planLocations = (pool, rng) => {
+  const picks = {};
+  for (const level of new Set(ROUND_PLAN.map((r) => r.difficulty))) {
+    const count = ROUND_PLAN.filter((r) => r.difficulty === level).length;
+    picks[level] = sample(pool.filter((loc) => loc.difficulty === level), count, rng);
+  }
+  return ROUND_PLAN.map((r) => picks[r.difficulty].shift());
 };
 
-export const practiceLocations = (pool, rng = Math.random) => sample(pool, ROUNDS, rng);
+// Same five for everyone on a given UTC date.
+export const dailyLocations = (dateKey, pool) => planLocations(pool, seededRandom(`tapmap:${dateKey}`));
+
+export const practiceLocations = (pool, rng = Math.random) => planLocations(pool, rng);
 
 // ---------- Distance & scoring ----------
 
@@ -93,12 +104,13 @@ export const haversineKm = (a, b) => {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-// round(1000 × e^(−d/2000)), plus a bullseye bonus under 25 km, capped at 1,000.
-export const scoreRound = (distanceKm) => {
+// round(1000 × e^(−d/2000)), plus a bullseye bonus under 25 km, capped at 1,000,
+// then scaled by the round's multiplier.
+export const scoreRound = (distanceKm, multiplier = 1) => {
   const base = Math.round(MAX_ROUND_SCORE * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const total = bullseye ? Math.min(MAX_ROUND_SCORE, base + BULLSEYE_BONUS) : base;
-  return { base, bonus: total - base, bullseye, total };
+  const points = bullseye ? Math.min(MAX_ROUND_SCORE, base + BULLSEYE_BONUS) : base;
+  return { base, bonus: points - base, bullseye, points, multiplier, total: Math.round(points * multiplier) };
 };
 
 export const tierFor = (distanceKm) => {
@@ -109,17 +121,23 @@ export const tierFor = (distanceKm) => {
   return "🟥";
 };
 
+// Thresholds are 90%, 70% and 40% of the maximum (4,500 / 3,500 / 2,000 out of 5,000).
+const RATINGS = [
+  { min: 0.9, label: "Cartographer", emoji: "🧭" },
+  { min: 0.7, label: "Navigator", emoji: "" },
+  { min: 0.4, label: "Tourist", emoji: "" },
+  { min: 0, label: "Lost", emoji: "🫠" },
+];
+export const rating = (total) => RATINGS.find((r) => total >= r.min * MAX_SCORE);
 export const ratingFor = (total) => {
-  if (total >= 4500) return "Cartographer 🧭";
-  if (total >= 3500) return "Navigator";
-  if (total >= 2000) return "Tourist";
-  return "Lost 🫠";
+  const r = rating(total);
+  return r.emoji ? `${r.label} ${r.emoji}` : r.label;
 };
 
 // Everything recorded about a finished round.
-export const evaluateGuess = (guess, location) => {
+export const evaluateGuess = (guess, location, multiplier = 1) => {
   const distanceKm = haversineKm(guess, location);
-  return { guess, distanceKm, ...scoreRound(distanceKm), tier: tierFor(distanceKm) };
+  return { guess, distanceKm, ...scoreRound(distanceKm, multiplier), tier: tierFor(distanceKm) };
 };
 
 export const totalScore = (rounds) => rounds.reduce((sum, r) => sum + r.total, 0);
@@ -134,17 +152,26 @@ const formatLength = (value) =>
 // "1,234 km (767 mi)"
 export const formatDistance = (km) => `${formatLength(km)} km (${formatLength(km / KM_PER_MILE)} mi)`;
 
-const KEYCAPS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
+// Figure spaces are digit-width in most fonts, so columns roughly line up in chat apps.
+const FIGURE_SPACE = "\u2007";
+const COLUMN = 4;
 
-// Spoiler-free share text: no location names.
+// Spoiler-free share text: no location names, five short lines.
+//   TapMap #1
+//   1000 1093  712 1729  352
+//     🎯   🟩   🟨   🟩   🟥
+//   3,969 / 7,500 · Tourist
+//   https://gabarker.com/tapmap
 export const shareText = ({ number, practice, rounds, url = GAME_URL }) => {
   const total = totalScore(rounds);
-  const title = practice ? "TapMap Practice 🌍" : `TapMap #${number} 🌍`;
+  const scores = rounds.map((r) => String(r.total).padStart(COLUMN, FIGURE_SPACE)).join(" ");
+  // An emoji is about two digits wide, so indent each one under the last two digits.
+  const tiers = rounds.map((r) => FIGURE_SPACE.repeat(COLUMN - 2) + r.tier).join(" ");
   return [
-    title,
-    rounds.map((r) => r.tier).join(""),
-    ...rounds.map((r, i) => `${KEYCAPS[i]} ${r.tier} ${formatNumber(r.total)}`),
-    `Total: ${formatNumber(total)} / ${formatNumber(MAX_SCORE)} · ${ratingFor(total)}`,
+    practice ? "TapMap Practice" : `TapMap #${number}`,
+    scores,
+    tiers,
+    `${formatNumber(total)} / ${formatNumber(MAX_SCORE)} · ${ratingFor(total)}`,
     url,
   ].join("\n");
 };

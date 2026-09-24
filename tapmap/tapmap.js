@@ -1,18 +1,18 @@
 import { LOCATIONS } from "./locations.js";
 import {
-  ROUNDS, MAX_SCORE, GAME_URL,
+  ROUNDS, ROUND_PLAN, MAX_SCORE, GAME_URL,
   utcDateKey, gameNumber, msUntilNextGame,
   dailyLocations, practiceLocations, evaluateGuess, totalScore,
-  ratingFor, formatNumber, formatDistance, shareText,
+  rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createMap, drawSummaryMap } from "./map.js";
+import { createGlobe, createSummaryGlobe } from "./map.js";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// ---------- Storage (never required for the game to work) ----------
+// ---------- Storage (optional: the game works without it) ----------
 
 const storage = {
   get(key) {
@@ -23,19 +23,67 @@ const storage = {
   },
 };
 
-const DAILY_KEY = "tapmap:v1:daily";
-const STATS_KEY = "tapmap:v1:stats";
+const DAILY_KEY = "tapmap:v2:daily";
+const STATS_KEY = "tapmap:v2:stats";
+
+// ---------- Formatting ----------
+
+const KM_PER_MILE = 1.609344;
+const TIERS = {
+  "🎯": { cls: "t-bullseye", label: "Within 50 km" },
+  "🟩": { cls: "t-close", label: "Within 500 km" },
+  "🟨": { cls: "t-near", label: "Within 1,500 km" },
+  "🟧": { cls: "t-far", label: "Within 3,000 km" },
+  "🟥": { cls: "t-off", label: "Over 3,000 km" },
+};
+const ROMAN = ["i", "ii", "iii", "iv", "v"];
+const formatLength = (value) => (value < 10 ? value.toFixed(1) : formatNumber(value));
+const formatMultiplier = (m) => `×${m}`;
+const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const longDate = new Date(`${utcDateKey()}T12:00:00Z`).toLocaleDateString("en-GB", {
+  weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
+});
+
+function tierDot(tier) {
+  const dot = document.createElement("span");
+  dot.className = `tier-dot ${TIERS[tier].cls}`;
+  return dot;
+}
 
 // ---------- Theme ----------
 
 const themeToggle = $("theme-toggle");
 const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 const activeTheme = () => root.getAttribute("data-theme") || (systemDark.matches ? "dark" : "light");
-const syncTheme = () => {
+
+function globeColors() {
+  const css = getComputedStyle(root);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return {
+    space: v("--space-edge"),
+    ocean: v("--globe-ocean"),
+    land: v("--globe-land"),
+    border: v("--globe-border"),
+    graticule: v("--globe-graticule"),
+    atmosphere: v("--globe-atmosphere"),
+    arc: v("--globe-arc"),
+    guess: v("--globe-guess"),
+    answer: v("--globe-answer"),
+  };
+}
+
+let globe = null;
+let summary = null;
+
+function syncTheme() {
   const theme = activeTheme();
   root.setAttribute("data-active-theme", theme);
   themeToggle.setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
-};
+  const colors = globeColors();
+  if (globe) globe.setColors(colors);
+  if (summary) summary.setColors(colors);
+}
+
 themeToggle.addEventListener("click", () => {
   const next = activeTheme() === "dark" ? "light" : "dark";
   root.setAttribute("data-theme", next);
@@ -43,11 +91,8 @@ themeToggle.addEventListener("click", () => {
   syncTheme();
 });
 systemDark.addEventListener("change", syncTheme);
-syncTheme();
 
 // ---------- Helpers ----------
-
-const toLngLat = (loc) => ({ lat: loc.lat, lng: loc.lng });
 
 function animateCount(el, from, to, duration = 700) {
   if (reducedMotion || from === to) {
@@ -58,8 +103,7 @@ function animateCount(el, from, to, duration = 700) {
     const start = performance.now();
     const step = (now) => {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - (1 - t) ** 3;
-      el.textContent = formatNumber(from + (to - from) * eased);
+      el.textContent = formatNumber(from + (to - from) * (1 - (1 - t) ** 3));
       if (t < 1) requestAnimationFrame(step);
       else resolve();
     };
@@ -117,8 +161,6 @@ function loadDaily() {
 
 let daily = loadDaily();
 let game = null; // { mode, locations, rounds, index, phase, guess }
-let map = null;
-let world = null;
 
 const dailyDone = () => daily.rounds.length >= ROUNDS;
 
@@ -132,8 +174,14 @@ function newGame(mode) {
 // ---------- Header ----------
 
 function updateHeader(totalOverride) {
-  $("game-label").textContent = game && game.mode === "practice" ? "Practice" : `Daily #${todayNumber}`;
-  if (!game || game.phase === "done") {
+  $("game-label").textContent = game && game.mode === "practice" ? "Practice" : `No. ${todayNumber}`;
+  const playing = Boolean(game) && game.phase !== "done";
+  document.querySelectorAll("#progress span").forEach((dot, i) => {
+    dot.classList.toggle("is-done", Boolean(game) && i < game.rounds.length);
+    dot.classList.toggle("is-current", playing && i === game.index && i >= game.rounds.length);
+  });
+  $("progress").hidden = !playing;
+  if (!playing) {
     $("tally").textContent = "";
     return;
   }
@@ -150,20 +198,20 @@ const result = $("result");
 
 function showRound() {
   const location = game.locations[game.index];
+  const plan = ROUND_PLAN[game.index];
   game.phase = "guessing";
   game.guess = null;
 
-  $("prompt-round").textContent = `Round ${game.index + 1} of ${ROUNDS}`;
-  const difficulty = $("prompt-difficulty");
-  difficulty.textContent = location.difficulty;
-  difficulty.className = `difficulty difficulty-${location.difficulty}`;
+  $("prompt-round").textContent = `Round ${ROMAN[game.index]}`;
+  $("prompt-difficulty").textContent = capitalise(location.difficulty);
+  $("prompt-multiplier").textContent = formatMultiplier(plan.multiplier);
   $("prompt-name").textContent = location.name;
   $("prompt-hint").textContent = location.hint;
   $("prompt-hint").hidden = true;
   $("hint-button").hidden = false;
   $("hint-button").setAttribute("aria-expanded", "false");
 
-  // Restart the card animation for each round.
+  // Replay the entrance animation each round.
   prompt.hidden = true;
   void prompt.offsetWidth;
   prompt.hidden = false;
@@ -175,27 +223,26 @@ function showRound() {
   result.hidden = true;
 
   updateHeader();
-  map.reset();
+  globe.reset();
 }
 
-function onMapTap(lnglat) {
+function onGlobeTap(lnglat) {
   if (!game || game.phase !== "guessing") return;
   game.guess = lnglat;
-  map.setGuess(lnglat);
+  globe.setGuess(lnglat);
   confirmButton.disabled = false;
   $("tap-help").hidden = true;
 }
 
-// Space the map leaves free around the floating cards, for fitting the view.
-function mapPadding() {
-  const stage = $("map").getBoundingClientRect();
+// Space the globe leaves free around the floating panels, for fitting the view.
+function fitPadding() {
   const promptRect = prompt.getBoundingClientRect();
   const barRect = actionBar.getBoundingClientRect();
   return {
-    top: Math.max(24, promptRect.bottom - stage.top + 24),
-    bottom: Math.max(24, stage.bottom - barRect.top + 24),
-    left: 32,
-    right: 84,
+    top: Math.round(promptRect.bottom + 40),
+    bottom: Math.round(window.innerHeight - barRect.top + 24),
+    left: 36,
+    right: 72,
   };
 }
 
@@ -203,27 +250,29 @@ async function confirmGuess() {
   if (!game || game.phase !== "guessing" || !game.guess) return;
   game.phase = "revealing";
   const location = game.locations[game.index];
-  const answer = toLngLat(location);
-  const round = { ...evaluateGuess(game.guess, answer), answer };
+  const { multiplier } = ROUND_PLAN[game.index];
+  const answer = { lat: location.lat, lng: location.lng };
+  const round = { ...evaluateGuess(game.guess, answer, multiplier), answer };
   const before = totalScore(game.rounds);
   game.rounds.push(round);
   if (game.mode === "daily") saveDaily();
 
-  // Swap the confirm button for the result card before fitting, so the fit
-  // leaves room for it.
+  // Show the result panel first so the fit leaves room for it.
   confirmButton.hidden = true;
   $("tap-help").hidden = true;
-  $("result-tier").textContent = round.tier;
-  $("result-distance").textContent = formatDistance(round.distanceKm);
-  $("result-answer").textContent = location.name;
+  $("hint-button").hidden = true;
+  $("result-km").textContent = formatLength(round.distanceKm);
+  $("result-mi").textContent = `${formatLength(round.distanceKm / KM_PER_MILE)} mi`;
+  $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
+  $("result-maths").textContent = `${formatNumber(round.points)} ${formatMultiplier(multiplier)}`;
   $("result-points").textContent = "0";
+  $("result-answer").textContent = location.name;
   $("result-bonus").hidden = true;
-  const isLast = game.index === ROUNDS - 1;
-  $("next-button").textContent = isLast ? "See results" : "Next round";
+  $("next-button").textContent = game.index === ROUNDS - 1 ? "See your results" : "Next round";
   $("next-button").disabled = true;
   result.hidden = false;
 
-  await map.reveal(game.guess, answer, mapPadding());
+  await globe.reveal(game.guess, answer, fitPadding());
 
   const counting = animateCount($("result-points"), 0, round.total);
   const tallyStart = performance.now();
@@ -238,8 +287,8 @@ async function confirmGuess() {
   if (round.bullseye) {
     const bonus = $("result-bonus");
     bonus.textContent = round.bonus > 0
-      ? `🎯 Bullseye! Within 25 km · +${round.bonus} bonus`
-      : "🎯 Bullseye! Within 25 km · maxed out at 1,000";
+      ? `Within 25 km. Bullseye bonus of +${round.bonus}, before the multiplier.`
+      : "Within 25 km. A perfect 1,000, before the multiplier.";
     bonus.hidden = false;
   }
 
@@ -262,12 +311,11 @@ function saveDaily() {
   daily.rounds = game.rounds;
   storage.set(DAILY_KEY, daily);
   if (dailyDone()) {
-    const stats = recordDailyResult(storage.get(STATS_KEY) || {}, today, totalScore(daily.rounds));
-    storage.set(STATS_KEY, stats);
+    storage.set(STATS_KEY, recordDailyResult(storage.get(STATS_KEY) || {}, today, totalScore(daily.rounds)));
   }
 }
 
-// ---------- End screen ----------
+// ---------- Results ----------
 
 let countdownTimer;
 
@@ -275,42 +323,47 @@ function finishGame() {
   game.phase = "done";
   prompt.hidden = true;
   actionBar.hidden = true;
+  globe.clear();
   updateHeader();
   showEnd(game);
 }
 
-function showEnd(finished) {
+function breakdownRow(round, location, i) {
+  const li = document.createElement("li");
+  const n = document.createElement("span");
+  n.className = "n";
+  n.textContent = ROMAN[i];
+
+  const info = document.createElement("div");
+  const name = document.createElement("p");
+  name.className = "name";
+  name.textContent = location.name;
+  const meta = document.createElement("p");
+  meta.className = "meta";
+  meta.append(tierDot(round.tier), `${formatLength(round.distanceKm)} km${round.bullseye ? " · bullseye" : ""}`);
+  info.append(name, meta);
+
+  const score = document.createElement("p");
+  score.className = "score";
+  score.textContent = formatNumber(round.total);
+  const small = document.createElement("small");
+  small.textContent = `${formatNumber(round.points)} ${formatMultiplier(round.multiplier)}`;
+  score.append(small);
+
+  li.append(n, info, score);
+  return li;
+}
+
+async function showEnd(finished) {
   const rounds = finished.rounds;
   const total = totalScore(rounds);
   const practice = finished.mode === "practice";
 
-  $("end-label").textContent = practice ? "Practice round" : `TapMap #${todayNumber} · ${today}`;
-  $("end-rating").textContent = ratingFor(total);
-  $("end-emoji").textContent = rounds.map((r) => r.tier).join("");
+  $("end-label").textContent = practice ? "Practice" : `TapMap No. ${todayNumber} · ${longDate}`;
+  $("end-rating").textContent = rating(total).label;
+  $("final-max").textContent = formatNumber(MAX_SCORE);
   $("final-points").textContent = "0";
-
-  const list = $("breakdown");
-  list.replaceChildren(...rounds.map((r, i) => {
-    const li = document.createElement("li");
-    const tier = document.createElement("span");
-    tier.className = "breakdown-tier";
-    tier.textContent = r.tier;
-    const info = document.createElement("div");
-    const name = document.createElement("p");
-    name.className = "breakdown-name";
-    name.textContent = finished.locations[i].name;
-    const distance = document.createElement("p");
-    distance.className = "breakdown-distance";
-    distance.textContent = formatDistance(r.distanceKm) + (r.bullseye ? " · 🎯 bonus" : "");
-    info.append(name, distance);
-    const score = document.createElement("p");
-    score.className = "breakdown-score";
-    score.textContent = formatNumber(r.total);
-    li.append(tier, info, score);
-    return li;
-  }));
-
-  drawSummaryMap($("summary-map"), world, rounds);
+  $("breakdown").replaceChildren(...rounds.map((r, i) => breakdownRow(r, finished.locations[i], i)));
 
   const stats = storage.get(STATS_KEY) || {};
   $("stat-played").textContent = formatNumber(stats.played || 0);
@@ -324,7 +377,7 @@ function showEnd(finished) {
 
   const text = shareText({ number: todayNumber, practice, rounds, url: GAME_URL });
   $("copy-button").onclick = async () => {
-    toast((await copyText(text)) ? "Copied!" : "Couldn't copy. Try again.");
+    toast((await copyText(text)) ? "Copied" : "Couldn't copy. Try again.");
   };
   const shareButton = $("share-button");
   shareButton.hidden = !navigator.share;
@@ -332,23 +385,31 @@ function showEnd(finished) {
 
   startCountdown();
   openOverlay($("end"));
-  animateCount($("final-points"), 0, total, 1000);
+  animateCount($("final-points"), 0, total, 1100);
+
+  if (summary) summary.destroy();
+  summary = null;
+  try {
+    summary = await createSummaryGlobe($("summary-globe"), rounds, { colors: globeColors(), reducedMotion });
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function startCountdown() {
   clearInterval(countdownTimer);
   const el = $("next-game");
   const tick = () => {
-    const ms = msUntilNextGame();
     if (utcDateKey() !== today) {
       el.textContent = "A new TapMap is ready. Refresh to play.";
       clearInterval(countdownTimer);
       return;
     }
+    const ms = msUntilNextGame();
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
     const s = Math.floor((ms % 60000) / 1000);
-    el.textContent = `Next TapMap in ${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+    el.textContent = `Next game in ${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
   tick();
   countdownTimer = setInterval(tick, 1000);
@@ -360,6 +421,10 @@ function start(mode) {
   $("intro").hidden = true;
   $("end").hidden = true;
   clearInterval(countdownTimer);
+  if (summary) {
+    summary.destroy();
+    summary = null;
+  }
   game = newGame(mode);
   if (mode === "daily" && dailyDone()) {
     game.phase = "done";
@@ -372,7 +437,7 @@ function start(mode) {
 
 function showIntro({ help = false } = {}) {
   const partial = daily.rounds.length > 0 && !dailyDone();
-  $("intro-number").textContent = `TapMap #${todayNumber}`;
+  $("intro-number").textContent = `No. ${todayNumber} · ${longDate}`;
   $("play-button").textContent = dailyDone()
     ? "See today's result"
     : partial ? "Continue today's game" : "Play today's game";
@@ -391,8 +456,8 @@ $("hint-button").addEventListener("click", () => {
 });
 confirmButton.addEventListener("click", confirmGuess);
 $("next-button").addEventListener("click", nextRound);
-$("zoom-in").addEventListener("click", () => map.zoomBy(2));
-$("zoom-out").addEventListener("click", () => map.zoomBy(0.5));
+$("zoom-in").addEventListener("click", () => globe.zoomIn());
+$("zoom-out").addEventListener("click", () => globe.zoomOut());
 $("play-button").addEventListener("click", () => start("daily"));
 $("intro-practice-button").addEventListener("click", () => start("practice"));
 $("practice-button").addEventListener("click", () => start("practice"));
@@ -406,15 +471,11 @@ document.addEventListener("keydown", (event) => {
 // ---------- Boot ----------
 
 async function boot() {
-  const response = await fetch("world-110m.json?v=1");
-  if (!response.ok) throw new Error(`World map failed to load (${response.status})`);
-  world = await response.json();
-  map = createMap($("map"), world, { onTap: onMapTap, reducedMotion });
+  syncTheme();
+  globe = await createGlobe($("globe"), { onTap: onGlobeTap, reducedMotion, colors: globeColors() });
   window.tapmapReady = true;
   updateHeader();
-
-  if (dailyDone()) start("daily");
-  else if (daily.rounds.length > 0) start("daily");
+  if (daily.rounds.length > 0) start("daily");
   else showIntro();
 }
 

@@ -1,310 +1,355 @@
-// Pan/zoom world map for TapMap, drawn with D3 (global `d3`) as SVG.
+// Tappable 3D globe for TapMap, built on MapLibre GL's globe projection.
 //
-// The map is a Web Mercator projection whose horizontal pan is applied as a
-// rotation, so it wraps endlessly east–west. Arcs are geodesics drawn by
-// d3.geoPath, and before a reveal the view is centred on the arc's midpoint,
-// so a guess in Alaska for Fiji arcs across the Pacific, not across the globe.
+// The globe is drawn from a self-hosted Natural Earth outline (no tiles, no
+// labels to give answers away). Arcs are true great circles; their longitudes
+// are unwrapped so a guess in Alaska for Fiji arcs across the Pacific.
 
-const MAX_ZOOM = 64;
-const FIT_MAX_ZOOM = 10;
-const MAX_LAT = 85;
-const deg = (rad) => (rad * 180) / Math.PI;
+import * as maplibregl from "https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.mjs";
+
+const WORLD_COARSE = "world-110m.geojson?v=1";
+const WORLD_DETAILED = "world-50m.geojson?v=1";
+const EMPTY = { type: "FeatureCollection", features: [] };
+
 const rad = (d) => (d * Math.PI) / 180;
+const deg = (r) => (r * 180) / Math.PI;
 const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
-const mercY = (lat) => -Math.log(Math.tan(Math.PI / 4 + rad(Math.max(-MAX_LAT, Math.min(MAX_LAT, lat))) / 2));
 
-const PIN_PATH = "M0 0C-2-7-10-11-10-19a10 10 0 0 1 20 0c0 8-8 12-10 19z";
+// Points along the great circle from a to b, with continuous (unwrapped) longitudes.
+export function greatCircle(a, b, steps = 96) {
+  const toVec = ({ lat, lng }) => [
+    Math.cos(rad(lat)) * Math.cos(rad(lng)),
+    Math.cos(rad(lat)) * Math.sin(rad(lng)),
+    Math.sin(rad(lat)),
+  ];
+  const va = toVec(a);
+  const vb = toVec(b);
+  const dot = Math.min(1, Math.max(-1, va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2]));
+  const omega = Math.acos(dot);
+  const coords = [];
+  let prevLng = null;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    let v;
+    if (omega < 1e-9) {
+      v = va;
+    } else {
+      const s = Math.sin(omega);
+      const k1 = Math.sin((1 - t) * omega) / s;
+      const k2 = Math.sin(t * omega) / s;
+      v = [k1 * va[0] + k2 * vb[0], k1 * va[1] + k2 * vb[1], k1 * va[2] + k2 * vb[2]];
+    }
+    let lng = deg(Math.atan2(v[1], v[0]));
+    const lat = deg(Math.atan2(v[2], Math.hypot(v[0], v[1])));
+    if (prevLng !== null) lng += 360 * Math.round((prevLng - lng) / 360);
+    prevLng = lng;
+    coords.push([lng, lat]);
+  }
+  return coords;
+}
 
-export function createMap(svgElement, world, { onTap, reducedMotion = false } = {}) {
-  const svg = d3.select(svgElement);
-  const land = topojson.feature(world, world.objects.land || world.objects.countries);
-  const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+function graticule(step = 30) {
+  const lines = [];
+  for (let lng = -180; lng < 180; lng += step) {
+    lines.push(Array.from({ length: 33 }, (_, i) => [lng, -80 + i * 5]));
+  }
+  for (let lat = -60; lat <= 60; lat += step) {
+    lines.push(Array.from({ length: 73 }, (_, i) => [-180 + i * 5, lat]));
+  }
+  return { type: "Feature", geometry: { type: "MultiLineString", coordinates: lines } };
+}
 
-  const projection = d3.geoMercator();
-  const path = d3.geoPath(projection);
+function skyFor(colors) {
+  return {
+    "sky-color": colors.space,
+    "horizon-color": colors.atmosphere,
+    "fog-color": colors.atmosphere,
+    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 4, 0.7, 7, 0],
+  };
+}
 
-  const graticulePath = svg.append("path").attr("class", "graticule").datum(d3.geoGraticule10());
-  const landPath = svg.append("path").attr("class", "land").datum(land);
-  const borderPath = svg.append("path").attr("class", "borders").datum(borders);
-  const arcLayer = svg.append("g").attr("class", "arcs");
-  const pinLayer = svg.append("g").attr("class", "pins");
+function buildStyle(colors) {
+  return {
+    version: 8,
+    projection: { type: "globe" },
+    sky: skyFor(colors),
+    sources: {
+      world: { type: "geojson", data: WORLD_COARSE, tolerance: 0.2 },
+      graticule: { type: "geojson", data: graticule() },
+      arcs: { type: "geojson", data: EMPTY },
+      dots: { type: "geojson", data: EMPTY },
+    },
+    layers: [
+      { id: "ocean", type: "background", paint: { "background-color": colors.ocean } },
+      {
+        id: "graticule", type: "line", source: "graticule",
+        paint: { "line-color": colors.graticule, "line-width": 0.6 },
+      },
+      {
+        id: "land", type: "fill", source: "world",
+        filter: ["==", ["get", "kind"], "land"],
+        // Antialiasing outlines tile edges on the globe, leaving faint seams.
+        paint: { "fill-color": colors.land, "fill-antialias": false },
+      },
+      {
+        id: "borders", type: "line", source: "world",
+        filter: ["==", ["get", "kind"], "border"],
+        paint: {
+          "line-color": colors.border,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.3, 4, 0.8, 8, 1.4],
+        },
+      },
+      {
+        id: "arc-glow", type: "line", source: "arcs",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": colors.arc, "line-width": 8, "line-opacity": 0.18, "line-blur": 4 },
+      },
+      {
+        id: "arcs", type: "line", source: "arcs",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": colors.arc, "line-width": 2.25 },
+      },
+      {
+        id: "dots", type: "circle", source: "dots",
+        paint: {
+          "circle-radius": ["match", ["get", "kind"], "answer", 4.5, 3.5],
+          "circle-color": ["match", ["get", "kind"], "answer", colors.answer, colors.guess],
+          "circle-stroke-width": 1.5,
+          "circle-stroke-color": colors.ocean,
+        },
+      },
+    ],
+  };
+}
 
-  let width = 0;
-  let height = 0;
-  let baseScale = 1; // world width = viewport width at zoom 1
-  let transform = d3.zoomIdentity;
-  let arcs = []; // { from, to, progress, el }
-  let pins = []; // { lnglat, el }
+function applyColors(map, colors) {
+  map.setPaintProperty("ocean", "background-color", colors.ocean);
+  map.setPaintProperty("graticule", "line-color", colors.graticule);
+  map.setPaintProperty("land", "fill-color", colors.land);
+  map.setPaintProperty("borders", "line-color", colors.border);
+  map.setPaintProperty("arc-glow", "line-color", colors.arc);
+  map.setPaintProperty("arcs", "line-color", colors.arc);
+  map.setPaintProperty("dots", "circle-color", ["match", ["get", "kind"], "answer", colors.answer, colors.guess]);
+  map.setPaintProperty("dots", "circle-stroke-color", colors.ocean);
+  map.setSky(skyFor(colors));
+}
 
-  const zoom = d3.zoom()
-    .scaleExtent([1, MAX_ZOOM])
-    .clickDistance(8)
-    .tapDistance(12)
-    .on("zoom", (event) => {
-      transform = event.transform;
-      render();
-    });
+// Zoom at which the whole globe fills `fraction` of the smaller side.
+function globeZoom(container, fraction = 0.86) {
+  const size = Math.min(container.clientWidth, container.clientHeight) || 360;
+  return Math.log2((fraction * size * Math.PI) / 512);
+}
 
-  svg.call(zoom).on("dblclick.zoom", null);
+function whenLoaded(map) {
+  return new Promise((resolve, reject) => {
+    if (map.loaded()) resolve();
+    map.once("load", resolve);
+    map.once("error", (e) => { if (!map.loaded()) reject(e.error || e); });
+  });
+}
 
-  // A click or tap that wasn't a drag places a pin.
-  svg.on("click", (event) => {
-    if (event.defaultPrevented || !onTap) return;
-    const [x, y] = d3.pointer(event, svgElement);
-    const topY = transform.y - Math.PI * baseScale * transform.k;
-    const bottomY = transform.y + Math.PI * baseScale * transform.k;
-    if (y < topY || y > bottomY) return;
-    const [lng, lat] = projection.invert([x, y]);
-    onTap({ lng: wrapLng(lng), lat: Math.max(-MAX_LAT, Math.min(MAX_LAT, lat)) });
+function afterMove(map, fallbackMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, fallbackMs);
+    map.once("moveend", () => { clearTimeout(timer); resolve(); });
+  });
+}
+
+function pinElement(kind, animate) {
+  const el = document.createElement("div");
+  el.className = `pin pin-${kind}`;
+  el.innerHTML =
+    `<div class="pin-body${animate ? " pin-drop" : ""}">` +
+    '<svg viewBox="-12 -30 24 32" width="26" height="34" aria-hidden="true">' +
+    '<ellipse class="pin-shadow" cx="0" cy="0" rx="4.5" ry="1.6"/>' +
+    '<path class="pin-shape" d="M0 0C-1.6-6-9-10-9-17a9 9 0 0 1 18 0c0 7-7.4 11-9 17z"/>' +
+    '<circle class="pin-eye" cx="0" cy="-17" r="3.2"/></svg></div>';
+  return el;
+}
+
+export async function createGlobe(container, { onTap, reducedMotion = false, colors }) {
+  const homeZoom = () => globeZoom(container);
+  const map = new maplibregl.Map({
+    container,
+    style: buildStyle(colors),
+    center: [15, 22],
+    zoom: homeZoom(),
+    minZoom: homeZoom() - 0.6,
+    maxZoom: 11,
+    maxPitch: 0,
+    clickTolerance: 6,
+    doubleClickZoom: false,
+    dragRotate: false,
+    pitchWithRotate: false,
+    attributionControl: false,
+    fadeDuration: 0,
+  });
+  map.touchZoomRotate.disableRotation();
+  map.keyboard.disableRotation();
+
+  await whenLoaded(map);
+
+  // Swap in the detailed outline once the first frame is up.
+  map.once("idle", () => map.getSource("world").setData(WORLD_DETAILED));
+
+  map.on("click", (event) => {
+    if (!onTap) return;
+    // Ignore taps in space: a point on the globe projects back onto itself.
+    const back = map.project(event.lngLat);
+    if (Math.hypot(back.x - event.point.x, back.y - event.point.y) > 4) return;
+    onTap({ lng: wrapLng(event.lngLat.lng), lat: event.lngLat.lat });
   });
 
-  // ---------- Rendering ----------
+  new ResizeObserver(() => {
+    map.resize();
+    map.setMinZoom(homeZoom() - 0.6);
+  }).observe(container);
 
-  function applyTransform() {
-    const scale = baseScale * transform.k;
-    const rotation = wrapLng(deg((transform.x - width / 2) / scale));
-    projection.scale(scale).translate([width / 2, transform.y]).rotate([rotation, 0]);
+  let markers = [];
+  let guessMarker = null;
+  let arcFeatures = [];
+
+  const setArcs = () => map.getSource("arcs").setData({ type: "FeatureCollection", features: arcFeatures });
+
+  function addMarker(lnglat, kind) {
+    const marker = new maplibregl.Marker({ element: pinElement(kind, !reducedMotion), anchor: "bottom" })
+      .setLngLat([lnglat.lng, lnglat.lat])
+      .addTo(map);
+    markers.push(marker);
+    return marker;
   }
-
-  function arcCoordinates(arc) {
-    if (arc.progress >= 1) return [[arc.from.lng, arc.from.lat], [arc.to.lng, arc.to.lat]];
-    const interpolate = d3.geoInterpolate([arc.from.lng, arc.from.lat], [arc.to.lng, arc.to.lat]);
-    return [[arc.from.lng, arc.from.lat], interpolate(Math.max(0.0001, arc.progress))];
-  }
-
-  function render() {
-    if (!width) return;
-    applyTransform();
-    graticulePath.attr("d", path);
-    landPath.attr("d", path);
-    borderPath.attr("d", path);
-    for (const arc of arcs) {
-      arc.el.attr("d", path({ type: "LineString", coordinates: arcCoordinates(arc) }));
-    }
-    for (const pin of pins) {
-      const [x, y] = projection([pin.lnglat.lng, pin.lnglat.lat]);
-      pin.el.attr("transform", `translate(${x},${y})`);
-    }
-  }
-
-  function resize() {
-    const rect = svgElement.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    // Resetting the transform interrupts any running fit, so only do it on a real change.
-    if (rect.width === width && rect.height === height) return;
-    const centre = width ? centreLngLat() : null;
-    width = rect.width;
-    height = rect.height;
-    baseScale = width / (2 * Math.PI);
-    zoom
-      .extent([[0, 0], [width, height]])
-      .translateExtent([[-Infinity, -Math.PI * baseScale], [Infinity, Math.PI * baseScale]]);
-    const target = centre ? viewFor(centre, transform.k) : initialTransform();
-    svg.call(zoom.transform, target);
-  }
-
-  // ---------- View helpers ----------
-
-  function centreLngLat() {
-    const scale = baseScale * transform.k;
-    return {
-      lng: deg((width / 2 - transform.x) / scale),
-      lat: deg(2 * Math.atan(Math.exp(-(height / 2 - transform.y) / scale)) - Math.PI / 2),
-    };
-  }
-
-  // Transform that puts `lnglat` at screen point (cx, cy) at zoom k.
-  function viewFor(lnglat, k, cx = width / 2, cy = height / 2) {
-    return d3.zoomIdentity
-      .translate(cx - k * baseScale * rad(lnglat.lng), cy - k * baseScale * mercY(lnglat.lat))
-      .scale(k);
-  }
-
-  function initialTransform() {
-    // Whole world width on narrow screens; a little closer on wide ones.
-    const k = Math.max(1, Math.min(1.6, height / width));
-    return viewFor({ lng: 10, lat: 25 }, k);
-  }
-
-  function transition(target, duration = 750) {
-    if (reducedMotion || !duration) {
-      svg.interrupt().call(zoom.transform, target);
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => {
-      svg.interrupt()
-        .transition()
-        .duration(duration)
-        .ease(d3.easeCubicInOut)
-        .call(zoom.transform, target)
-        .on("end interrupt", resolve);
-    });
-  }
-
-  // Fit the view around a set of arcs (and their end points).
-  function fitArcs(pairs, padding) {
-    const samples = [];
-    for (const [a, b] of pairs) {
-      const interpolate = d3.geoInterpolate([a.lng, a.lat], [b.lng, b.lat]);
-      for (let i = 0; i <= 32; i++) samples.push(interpolate(i / 32));
-    }
-    // Measure longitudes relative to the first arc's midpoint so the fit never
-    // straddles the antimeridian the wrong way.
-    const [a0, b0] = pairs[0];
-    const refLng = d3.geoInterpolate([a0.lng, a0.lat], [b0.lng, b0.lat])(0.5)[0];
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const [lng, lat] of samples) {
-      const x = rad(wrapLng(lng - refLng));
-      const y = mercY(lat);
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-    }
-    const availW = Math.max(40, width - padding.left - padding.right);
-    const availH = Math.max(40, height - padding.top - padding.bottom);
-    const spanX = (maxX - minX) * baseScale;
-    const spanY = (maxY - minY) * baseScale;
-    const k = Math.max(1, Math.min(
-      FIT_MAX_ZOOM,
-      spanX ? availW / spanX : FIT_MAX_ZOOM,
-      spanY ? availH / spanY : FIT_MAX_ZOOM,
-    ));
-
-    // Centre, in absolute longitude, nearest to the current view to avoid long spins.
-    let centreLng = refLng + deg((minX + maxX) / 2);
-    const currentLng = centreLngLat().lng;
-    centreLng += 360 * Math.round((currentLng - centreLng) / 360);
-    const centreLat = deg(2 * Math.atan(Math.exp(-(minY + maxY) / 2)) - Math.PI / 2);
-
-    const cx = padding.left + availW / 2;
-    const cy = padding.top + availH / 2;
-    return transition(viewFor({ lng: centreLng, lat: centreLat }, k, cx, cy), 900);
-  }
-
-  // ---------- Pins & arcs ----------
-
-  function addPin(lnglat, kind) {
-    const el = pinLayer.append("g").attr("class", `pin pin-${kind}`);
-    const drop = el.append("g").attr("class", reducedMotion ? "pin-body" : "pin-body pin-drop");
-    drop.append("ellipse").attr("class", "pin-shadow").attr("rx", 5).attr("ry", 2);
-    drop.append("path").attr("d", PIN_PATH);
-    drop.append("circle").attr("cy", -19).attr("r", 4).attr("class", "pin-dot");
-    const pin = { lnglat, el };
-    pins.push(pin);
-    render();
-    return pin;
-  }
-
-  let guessPin = null;
 
   function setGuess(lnglat) {
-    if (guessPin) {
-      guessPin.lnglat = lnglat;
-      // Replay the drop animation when the pin moves.
-      const body = guessPin.el.select(".pin-body");
-      body.classed("pin-drop", false);
-      void body.node().getBBox();
-      body.classed("pin-drop", !reducedMotion);
-      render();
-    } else {
-      guessPin = addPin(lnglat, "guess");
+    if (!guessMarker) {
+      guessMarker = addMarker(lnglat, "guess");
+      return;
+    }
+    guessMarker.setLngLat([lnglat.lng, lnglat.lat]);
+    if (!reducedMotion) {
+      const body = guessMarker.getElement().querySelector(".pin-body");
+      body.classList.remove("pin-drop");
+      void body.offsetWidth;
+      body.classList.add("pin-drop");
     }
   }
 
-  function animateArc(arc, duration) {
+  function animateArc(coords, duration) {
+    const feature = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords.slice(0, 2) } };
+    arcFeatures.push(feature);
     if (reducedMotion) {
-      arc.progress = 1;
-      render();
+      feature.geometry.coordinates = coords;
+      setArcs();
       return Promise.resolve();
     }
     return new Promise((resolve) => {
-      const timer = d3.timer((elapsed) => {
-        arc.progress = d3.easeCubicOut(Math.min(1, elapsed / duration));
-        render();
-        if (elapsed >= duration) {
-          timer.stop();
-          resolve();
-        }
-      });
+      const start = performance.now();
+      const frame = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - (1 - t) ** 3;
+        const count = Math.max(2, Math.round(eased * (coords.length - 1)) + 1);
+        feature.geometry.coordinates = coords.slice(0, count);
+        setArcs();
+        if (t < 1) requestAnimationFrame(frame);
+        else resolve();
+      };
+      requestAnimationFrame(frame);
     });
   }
 
   async function reveal(guess, answer, padding) {
-    const arc = { from: guess, to: answer, progress: 0, el: arcLayer.append("path").attr("class", "arc") };
-    arcs.push(arc);
-    await fitArcs([[guess, answer]], padding);
-    await animateArc(arc, 900);
-    addPin(answer, "answer");
+    const coords = greatCircle(guess, answer);
+    const bounds = coords.reduce(
+      (b, c) => b.extend(c),
+      new maplibregl.LngLatBounds(coords[0], coords[0]),
+    );
+    map.fitBounds(bounds, {
+      padding,
+      maxZoom: 5.5,
+      duration: reducedMotion ? 0 : 1100,
+      essential: true,
+    });
+    await afterMove(map, reducedMotion ? 50 : 1600);
+    await animateArc(coords, 900);
+    addMarker(answer, "answer");
   }
 
   function clear() {
-    arcLayer.selectAll("*").remove();
-    pinLayer.selectAll("*").remove();
-    arcs = [];
-    pins = [];
-    guessPin = null;
+    markers.forEach((m) => m.remove());
+    markers = [];
+    guessMarker = null;
+    arcFeatures = [];
+    setArcs();
   }
 
   function reset() {
     clear();
-    return transition(initialTransform(), 600);
+    map.easeTo({ zoom: homeZoom(), duration: reducedMotion ? 0 : 900, essential: true });
   }
 
-  function zoomBy(factor) {
-    svg.interrupt().transition().duration(reducedMotion ? 0 : 250).call(zoom.scaleBy, factor);
-  }
-
-  new ResizeObserver(resize).observe(svgElement);
-  resize();
-
-  return { setGuess, reveal, reset, clear, zoomBy, resize };
+  return {
+    setGuess,
+    reveal,
+    reset,
+    clear,
+    zoomIn: () => map.zoomIn({ duration: reducedMotion ? 0 : 250 }),
+    zoomOut: () => map.zoomOut({ duration: reducedMotion ? 0 : 250 }),
+    setColors: (next) => applyColors(map, next),
+  };
 }
 
-// Static overview map of every round's arc, for the results screen.
-export function drawSummaryMap(svgElement, world, rounds) {
-  const svg = d3.select(svgElement);
-  svg.selectAll("*").remove();
-  const width = 360;
-  const height = 190;
-  svg.attr("viewBox", `0 0 ${width} ${height}`);
+// Small, slowly turning globe with every round's arc, for the results screen.
+export async function createSummaryGlobe(container, rounds, { colors, reducedMotion = false }) {
+  const answers = rounds.map((r) => r.answer);
+  // Centre on the average answer direction.
+  const v = answers.reduce((acc, { lat, lng }) => [
+    acc[0] + Math.cos(rad(lat)) * Math.cos(rad(lng)),
+    acc[1] + Math.cos(rad(lat)) * Math.sin(rad(lng)),
+    acc[2] + Math.sin(rad(lat)),
+  ], [0, 0, 0]);
+  const centre = [deg(Math.atan2(v[1], v[0])), Math.max(-50, Math.min(50, deg(Math.atan2(v[2], Math.hypot(v[0], v[1])))))];
 
-  // Choose the rotation that splits the fewest arcs at the map edge.
-  const lines = rounds.map((r) => [[r.guess.lng, r.guess.lat], [r.answer.lng, r.answer.lat]]);
-  const crossings = (rotation) => lines.reduce((count, [a, b]) => {
-    const interpolate = d3.geoInterpolate(a, b);
-    let prev = wrapLng(a[0] + rotation);
-    for (let i = 1; i <= 24; i++) {
-      const lng = wrapLng(interpolate(i / 24)[0] + rotation);
-      if (Math.abs(lng - prev) > 180) return count + 1;
-      prev = lng;
-    }
-    return count;
-  }, 0);
-  let bestRotation = 0;
-  let bestCount = crossings(0);
-  for (let r = 10; r <= 180 && bestCount; r += 10) {
-    for (const candidate of [r, -r]) {
-      const c = crossings(candidate);
-      if (c < bestCount) { bestCount = c; bestRotation = candidate; }
-    }
-  }
-
-  const projection = d3.geoNaturalEarth1().rotate([bestRotation, 0]).fitSize([width, height], { type: "Sphere" });
-  const path = d3.geoPath(projection);
-  const land = topojson.feature(world, world.objects.land || world.objects.countries);
-
-  svg.append("path").attr("class", "sphere").attr("d", path({ type: "Sphere" }));
-  svg.append("path").attr("class", "land").attr("d", path(land));
-  lines.forEach((line, i) => {
-    svg.append("path")
-      .attr("class", "arc")
-      .attr("pathLength", 1)
-      .style("animation-delay", `${i * 150}ms`)
-      .attr("d", path({ type: "LineString", coordinates: line }));
+  const map = new maplibregl.Map({
+    container,
+    style: buildStyle(colors),
+    center: centre,
+    zoom: globeZoom(container, 0.92),
+    interactive: false,
+    attributionControl: false,
+    fadeDuration: 0,
   });
-  for (const [guess, answer] of lines) {
-    const [gx, gy] = projection(guess);
-    const [ax, ay] = projection(answer);
-    svg.append("circle").attr("class", "dot-guess").attr("cx", gx).attr("cy", gy).attr("r", 2.5);
-    svg.append("circle").attr("class", "dot-answer").attr("cx", ax).attr("cy", ay).attr("r", 3);
+  await whenLoaded(map);
+
+  map.getSource("arcs").setData({
+    type: "FeatureCollection",
+    features: rounds.map((r) => ({
+      type: "Feature", properties: {},
+      geometry: { type: "LineString", coordinates: greatCircle(r.guess, r.answer) },
+    })),
+  });
+  map.getSource("dots").setData({
+    type: "FeatureCollection",
+    features: rounds.flatMap((r) => [
+      { type: "Feature", properties: { kind: "guess" }, geometry: { type: "Point", coordinates: [r.guess.lng, r.guess.lat] } },
+      { type: "Feature", properties: { kind: "answer" }, geometry: { type: "Point", coordinates: [r.answer.lng, r.answer.lat] } },
+    ]),
+  });
+
+  let frameId = null;
+  if (!reducedMotion) {
+    let last = performance.now();
+    const spin = (now) => {
+      const c = map.getCenter();
+      map.setCenter([c.lng + ((now - last) / 1000) * 4, c.lat]);
+      last = now;
+      frameId = requestAnimationFrame(spin);
+    };
+    frameId = requestAnimationFrame(spin);
   }
+
+  return {
+    setColors: (next) => applyColors(map, next),
+    destroy() {
+      if (frameId) cancelAnimationFrame(frameId);
+      map.remove();
+    },
+  };
 }
