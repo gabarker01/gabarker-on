@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=10">
+  <link rel="stylesheet" href="tapmap.css?v=11">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -174,6 +174,7 @@
         <p class="eyebrow">Account</p>
         <h2 id="account-title" class="sheet-title">Keep your<br><em>streak.</em></h2>
         <p class="lead">Sign in to save your results, track your stats across devices and follow friends.</p>
+        <p id="invite-note" class="invite-note" hidden></p>
         <div id="provider-buttons" class="provider-buttons"></div>
         <form id="email-form" class="email-form" hidden novalidate>
           <p class="field-label or-label">Or use a username</p>
@@ -198,84 +199,26 @@
         <button class="primary-button form-button" type="submit">Save password</button>
       </form>
 
-      <div id="account-signed-in" hidden>
-        <div class="account-head">
-          <span id="account-avatar-lg"></span>
-          <div>
-            <p class="eyebrow">Signed in</p>
-            <h2 id="account-name" class="sheet-title account-name"></h2>
-            <p id="account-handle" class="account-handle"></p>
-          </div>
-        </div>
-
-        <dl class="stats account-stats">
-          <div><dt>Played</dt><dd id="acct-played">–</dd></div>
-          <div><dt>Streak</dt><dd id="acct-streak">–</dd></div>
-          <div><dt>Best</dt><dd id="acct-best">–</dd></div>
-          <div><dt>Average</dt><dd id="acct-average">–</dd></div>
-        </dl>
-
-        <section id="requests-section" hidden>
-          <h3 class="section-label">Follow requests</h3>
-          <ul id="requests-list" class="people-list"></ul>
-        </section>
-
-        <h3 class="section-label">Following</h3>
-        <ul id="following-list" class="people-list"></ul>
-        <p id="following-empty" class="friends-empty">You're not following anyone yet. Follows start as requests: once someone accepts, you'll see their scores and stats.</p>
-
-        <h3 class="section-label">Followers</h3>
-        <ul id="followers-list" class="people-list"></ul>
-        <p id="followers-empty" class="friends-empty">Nobody follows you yet.</p>
-        <label for="people-search" class="field-label">Find people by username</label>
-        <input id="people-search" class="field" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="username">
-        <ul id="people-results" class="people-list"></ul>
-
-        <h3 class="section-label">Profile</h3>
-        <form id="profile-form" class="profile-form">
-          <label for="display-name" class="field-label">Display name</label>
-          <input id="display-name" class="field" type="text" maxlength="40" required>
-          <p id="display-name-error" class="field-error" role="alert" hidden></p>
-          <label for="username" class="field-label">Username <span class="hint">3–20 letters, numbers or _</span> <span id="username-lock" class="hint" hidden>· used to sign in, so it can't change</span></label>
-          <input id="username" class="field" type="text" maxlength="20" pattern="[a-z0-9_]{3,20}" autocapitalize="off" spellcheck="false" required>
-          <p id="username-field-error" class="field-error" role="alert" hidden></p>
-          <button class="secondary-button" type="submit">Save profile</button>
-        </form>
-
-        <button id="sign-out" class="link-button centered" type="button">Sign out</button>
-      </div>
-
       <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
       <button id="account-close" class="secondary-button" type="button">Close</button>
     </div>
   </div>
 
-  <!-- Another player's profile -->
-  <div id="person" class="overlay" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="person-name">
+  <!-- Invite: follow the person who shared the link -->
+  <div id="invite-prompt" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="invite-title">
       <div class="account-head">
-        <span id="person-avatar"></span>
+        <span id="invite-avatar"></span>
         <div>
-          <p class="eyebrow">Player</p>
-          <h2 id="person-name" class="sheet-title account-name"></h2>
-          <p id="person-handle" class="account-handle"></p>
+          <p class="eyebrow">Invitation</p>
+          <h2 id="invite-title" class="sheet-title account-name"></h2>
+          <p id="invite-handle" class="account-handle"></p>
         </div>
       </div>
-      <button id="person-action" class="primary-button" type="button"></button>
-      <p id="person-private" class="friends-empty person-private" hidden></p>
-      <div id="person-details" hidden>
-        <h3 class="section-label">Today</h3>
-        <div id="person-today" class="person-today"></div>
-        <h3 class="section-label">Statistics</h3>
-        <dl class="stats account-stats">
-          <div><dt>Played</dt><dd id="person-played">–</dd></div>
-          <div><dt>Streak</dt><dd id="person-streak">–</dd></div>
-          <div><dt>Best</dt><dd id="person-best">–</dd></div>
-          <div><dt>Average</dt><dd id="person-average">–</dd></div>
-        </dl>
-      </div>
-      <p id="person-message" class="account-message" role="status" aria-live="polite"></p>
-      <button id="person-close" class="secondary-button" type="button">Close</button>
+      <p id="invite-text" class="lead"></p>
+      <button id="invite-follow" class="primary-button" type="button">Send follow request</button>
+      <button id="invite-skip" class="secondary-button" type="button">Not now</button>
+      <p id="invite-message" class="account-message" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -285,7 +228,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=14"></script>
+  <script type="module" src="tapmap.js?v=15"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

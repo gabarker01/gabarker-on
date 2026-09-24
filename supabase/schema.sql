@@ -42,6 +42,16 @@ create table if not exists public.games (
 
 create index if not exists games_date_idx on public.games (game_date);
 
+-- The TapMap number always matches the UTC date: No. 1 is 2026-09-24.
+-- (NOT VALID: checks every new result without re-checking old rows.)
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'games_number_matches_date') then
+    alter table public.games add constraint games_number_matches_date
+      check (game_number = (game_date - date '2026-09-24') + 1) not valid;
+  end if;
+end $$;
+
 -- ---------- New users get a profile ----------
 
 -- Username: the one chosen at sign-up if valid and free, otherwise one made
@@ -141,6 +151,20 @@ where p.id = (select auth.uid())
   )
 group by p.id;
 
+-- One row per daily game (date and TapMap number) with player count, average
+-- and best. In the dashboard it covers everyone; in the app, what you can see.
+create or replace view public.daily_summary
+with (security_invoker = true)
+as
+select
+  game_date,
+  game_number,
+  count(*)::integer as players,
+  round(avg(total))::integer as average,
+  max(total) as best
+from public.games
+group by game_date, game_number;
+
 -- ---------- Row-level security ----------
 
 alter table public.profiles enable row level security;
@@ -210,7 +234,7 @@ create policy "save own game" on public.games
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
 revoke select on public.follows, public.games, public.profile_stats from anon;
-grant select on public.follows, public.games, public.profile_stats to authenticated;
+grant select on public.follows, public.games, public.profile_stats, public.daily_summary to authenticated;
 grant update (username, display_name) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;

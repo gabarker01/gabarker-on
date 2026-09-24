@@ -110,6 +110,34 @@ select id, name, difficulty, added_on from public.locations order by id desc lim
 select * from public.locations where name ilike '%peru%';
 ```
 
+## Profiles and invites
+
+- Every player has a page at `https://gabarker.com/tapmap/profile/{username}`
+  (and `/tapmap/profile/` goes to your own). GitHub Pages serves `/404.html`
+  for these addresses, which renders the profile.
+- Your own profile shows your stats and history, follow requests, following,
+  followers, people search, profile editing, sign out and **Invite a friend**.
+- Other players' scores, stats and history show only if they've accepted your
+  follow request.
+- **Invite a friend** shares or copies `https://gabarker.com/tapmap/?invite={you}`.
+  Whoever opens it is asked to sign up (or sign in) and then whether to send
+  you a follow request.
+
+## Deleting all players
+
+`reset-users.sql` deletes every account, profile, follow and saved result
+(locations are kept). It can't be undone. Paste it into the SQL Editor and run.
+
+## Games by date and number
+
+Each saved result has `game_date` (UTC) and `game_number` (TapMap No., where
+No. 1 is 2026-09-24); the database rejects results where they don't match.
+Each round also stores the place `name`. For a quick overview:
+
+```sql
+select * from public.daily_summary order by game_date desc;
+```
+
 ## What's stored
 
 | Table | Contents | Who can read | Who can write |

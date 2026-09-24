@@ -6,9 +6,9 @@ import {
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=2";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=3";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=5";
+import * as social from "./social.js?v=6";
 import { initials, colourFor, avatarElement } from "./avatar.js";
 
 const $ = (id) => document.getElementById(id);
@@ -491,6 +491,15 @@ let profile = null;
 let socialError = false;
 let recovering = false; // showing the "new password" form after a reset link
 let friendGames = []; // today's results from people who accepted your follow
+const INVITE_KEY = "tapmap:invite"; // username from an invite link, until answered
+const NEXT_KEY = "tapmap:next"; // page to return to after signing in
+
+const store = {
+  get: (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } },
+  set: (key, value) => { try { localStorage.setItem(key, value); } catch (e) {} },
+  remove: (key) => { try { localStorage.removeItem(key); } catch (e) {} },
+};
+const profileUrl = (username) => `/tapmap/profile/${encodeURIComponent(username)}`;
 
 const PROVIDER_LABELS = { google: "Continue with Google", apple: "Continue with Apple" };
 const PROVIDER_ICONS = {
@@ -520,14 +529,9 @@ function clearFieldErrors(...ids) {
 const errorText = (error) => (error && error.message) || "Something went wrong. Please try again.";
 const personName = (person) => (person && (person.display_name || person.username)) || "Player";
 
-function setAvatar(slot, person, size) {
-  const el = $(slot);
-  el.replaceChildren(avatarElement(person, size));
-}
-
 function updateAccountButton() {
   const button = $("account-button");
-  button.setAttribute("aria-label", user ? `Account: ${personName(profile)}` : "Sign in");
+  button.setAttribute("aria-label", user ? `Your profile: ${personName(profile)}` : "Sign in");
   button.classList.toggle("is-signed-in", Boolean(user));
   button.querySelector(".icon-person").style.display = user ? "none" : "";
   const avatar = $("account-avatar");
@@ -547,7 +551,7 @@ async function refreshRequestBadge() {
     badge.textContent = String(requests.length);
     badge.hidden = requests.length === 0;
     $("account-button").setAttribute("aria-label",
-      `Account: ${personName(profile)}${requests.length ? `, ${requests.length} follow request${requests.length > 1 ? "s" : ""}` : ""}`);
+      `Your profile: ${personName(profile)}${requests.length ? `, ${requests.length} follow request${requests.length > 1 ? "s" : ""}` : ""}`);
   } catch (error) {
     console.error(error);
   }
@@ -557,7 +561,10 @@ async function refreshRequestBadge() {
 async function syncDaily() {
   if (!user || !dailyDone()) return;
   try {
-    await social.saveGame(user.id, { date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds) });
+    await social.saveGame(user.id, {
+      date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds),
+      names: todaysLocations.map((l) => l.name),
+    });
   } catch (error) {
     console.error(error);
   }
@@ -591,127 +598,21 @@ function friendsForRound(index) {
     }));
 }
 
-// ---------- People lists ----------
+// ---------- Sign-in sheet ----------
 
-function personRow(person, actions = [], note = "") {
-  const li = document.createElement("li");
-  const who = document.createElement("button");
-  who.type = "button";
-  who.className = "person-link";
-  who.append(avatarElement(person, "sm"));
-  const text = document.createElement("span");
-  text.className = "person-text";
-  const name = document.createElement("span");
-  name.className = "person-name";
-  name.textContent = personName(person);
-  const handle = document.createElement("span");
-  handle.className = "person-handle";
-  handle.textContent = `@${person.username}${note ? ` · ${note}` : ""}`;
-  text.append(name, handle);
-  who.append(text);
-  who.addEventListener("click", () => openPerson(person));
-  const buttons = document.createElement("span");
-  buttons.className = "person-actions";
-  for (const { label, action, primary } of actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = primary ? "chip-button is-primary" : "chip-button";
-    button.textContent = label;
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      try {
-        await action(person);
-      } catch (error) {
-        accountMessage(errorText(error), true);
-        button.disabled = false;
-      }
-    });
-    buttons.append(button);
-  }
-  li.append(who, buttons);
-  return li;
-}
-
-async function renderPeople() {
-  const [requests, following, followers] = await Promise.all([
-    social.listRequests(user.id),
-    social.listFollowing(user.id),
-    social.listFollowers(user.id),
-  ]);
-  $("requests-section").hidden = requests.length === 0;
-  $("requests-list").replaceChildren(...requests.map((person) => personRow(person, [
-    { label: "Accept", primary: true, action: async (p) => { await social.acceptRequest(user.id, p.id); await afterPeopleChange(); } },
-    { label: "Decline", action: async (p) => { await social.endFollow(p.id, user.id); await afterPeopleChange(); } },
-  ])));
-  $("following-list").replaceChildren(...following.map((person) => personRow(person, [
-    person.status === "pending"
-      ? { label: "Cancel", action: async (p) => { await social.endFollow(user.id, p.id); await afterPeopleChange(); } }
-      : { label: "Unfollow", action: async (p) => { await social.endFollow(user.id, p.id); await afterPeopleChange(); } },
-  ], person.status === "pending" ? "requested" : "")));
-  $("following-empty").hidden = following.length > 0;
-  $("followers-list").replaceChildren(...followers.map((person) => personRow(person, [
-    { label: "Remove", action: async (p) => { await social.endFollow(p.id, user.id); await afterPeopleChange(); } },
-  ])));
-  $("followers-empty").hidden = followers.length > 0;
-  const badge = $("request-badge");
-  badge.textContent = String(requests.length);
-  badge.hidden = requests.length === 0;
-  return following;
-}
-
-async function afterPeopleChange() {
-  await Promise.all([renderPeople(), runSearch(), loadFriendGames()]);
-}
-
-let searchTimer;
-async function runSearch() {
-  const query = $("people-search").value;
-  const results = $("people-results");
-  if (!user || query.trim().length < 2) {
-    results.replaceChildren();
-    return;
-  }
-  const [found, following] = await Promise.all([social.searchProfiles(query, user.id), social.listFollowing(user.id)]);
-  const status = new Map(following.map((p) => [p.id, p.status]));
-  results.replaceChildren(...found.map((person) => {
-    const state = status.get(person.id);
-    if (state === "accepted") return personRow(person, [], "following");
-    if (state === "pending") return personRow(person, [], "requested");
-    return personRow(person, [
-      { label: "Follow", primary: true, action: async (p) => { await social.requestFollow(user.id, p.id); await afterPeopleChange(); } },
-    ]);
-  }));
-}
-
-async function renderAccount() {
+function renderAccount() {
   if (recovering) return;
   $("account-signed-out").hidden = Boolean(user);
-  $("account-signed-in").hidden = !user;
-  if (!user) return;
-  setAvatar("account-avatar-lg", profile || { id: user.id }, "lg");
-  $("account-name").textContent = personName(profile);
-  $("account-handle").textContent = profile ? `@${profile.username}` : "";
-  if (profile) {
-    $("display-name").value = profile.display_name || "";
-    $("username").value = profile.username;
-  }
-  clearFieldErrors("display-name-error", "username-field-error");
-  // Username accounts sign in with their username, so it can't change.
-  const locked = social.isUsernameAccount(user);
-  $("username").readOnly = locked;
-  $("username-lock").hidden = !locked;
-  try {
-    const [stats] = await Promise.all([social.getStats(user.id), renderPeople()]);
-    $("acct-played").textContent = formatNumber(stats ? stats.played : 0);
-    $("acct-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
-    $("acct-best").textContent = formatNumber(stats ? stats.best : 0);
-    $("acct-average").textContent = formatNumber(stats ? stats.average : 0);
-  } catch (error) {
-    accountMessage(errorText(error), true);
-  }
+  const invite = store.get(INVITE_KEY);
+  $("invite-note").hidden = !invite || Boolean(user);
+  $("invite-note").textContent = invite ? `@${invite} invited you. Create an account (or sign in) and you can follow them straight away.` : "";
 }
 
 function openAccount() {
+  if (user && profile) {
+    window.location.href = profileUrl(profile.username);
+    return;
+  }
   accountMessage(socialError ? "Sign-in couldn't load. Check your connection and refresh the page." : "", socialError);
   clearFieldErrors("username-error", "password-error");
   document.querySelectorAll("#provider-buttons button, #email-form button").forEach((b) => { b.disabled = socialError; });
@@ -719,88 +620,64 @@ function openAccount() {
   openOverlay($("account"));
 }
 
-// ---------- Another player's profile ----------
+// ---------- Invites ----------
 
-let personShown = null;
-
-function renderTodayCard(game) {
-  const card = $("person-today");
-  card.replaceChildren();
-  if (!game) {
-    card.textContent = "Hasn't played today yet.";
-    return;
+// Called once signed in: offer to follow whoever shared the invite link.
+async function offerInvite() {
+  const username = store.get(INVITE_KEY);
+  if (!username || !user) return false;
+  let inviter = null;
+  try {
+    inviter = await social.getProfileByUsername(username);
+  } catch (error) {
+    console.error(error);
   }
-  if (!dailyDone()) {
-    card.textContent = "Finish today's game to see their result.";
-    return;
+  if (!inviter || inviter.id === user.id) {
+    store.remove(INVITE_KEY);
+    return false;
   }
-  const total = document.createElement("span");
-  total.className = "person-today-total";
-  total.textContent = formatNumber(game.total);
-  const of = document.createElement("span");
-  of.className = "of";
-  of.textContent = ` / ${formatNumber(MAX_SCORE)}`;
-  const dots = document.createElement("span");
-  dots.className = "friend-tiers";
-  for (const r of game.rounds || []) if (TIERS[r.tier]) dots.append(tierDot(r.tier));
-  const scores = document.createElement("span");
-  scores.className = "person-today-rounds";
-  scores.textContent = (game.rounds || []).map((r) => r.score).join(" · ");
-  card.append(total, of, dots, scores);
-}
-
-async function renderPerson() {
-  const person = personShown;
-  if (!person || !user) return;
-  setAvatar("person-avatar", person, "lg");
-  $("person-name").textContent = personName(person);
-  $("person-handle").textContent = `@${person.username}`;
-  $("person-message").textContent = "";
-  const action = $("person-action");
-  action.disabled = true;
-  const following = await social.listFollowing(user.id);
-  const state = (following.find((p) => p.id === person.id) || {}).status;
-  action.disabled = false;
-  action.className = state ? "secondary-button" : "primary-button";
-  action.textContent = state === "accepted" ? "Unfollow" : state === "pending" ? "Cancel request" : "Follow";
-  action.onclick = async () => {
-    action.disabled = true;
+  const state = await social.followStatus(user.id, inviter.id).catch(() => null);
+  if (state) {
+    store.remove(INVITE_KEY);
+    return false;
+  }
+  $("account").hidden = true;
+  $("invite-avatar").replaceChildren(avatarElement(inviter, "lg"));
+  $("invite-title").textContent = personName(inviter);
+  $("invite-handle").textContent = `@${inviter.username}`;
+  $("invite-text").textContent = `${personName(inviter)} invited you to TapMap. Send them a follow request? Once they accept, you'll see each other's scores.`;
+  $("invite-message").textContent = "";
+  $("invite-follow").onclick = async () => {
+    $("invite-follow").disabled = true;
     try {
-      if (state) await social.endFollow(user.id, person.id);
-      else await social.requestFollow(user.id, person.id);
-      await afterPeopleChange();
-      await renderPerson();
+      await social.requestFollow(user.id, inviter.id);
+      store.remove(INVITE_KEY);
+      $("invite-prompt").hidden = true;
+      toast(`Follow request sent to @${inviter.username}`);
+      afterInvite();
     } catch (error) {
-      $("person-message").textContent = errorText(error);
-      action.disabled = false;
+      $("invite-message").textContent = errorText(error);
+    } finally {
+      $("invite-follow").disabled = false;
     }
   };
-
-  const visible = state === "accepted";
-  $("person-details").hidden = !visible;
-  $("person-private").hidden = visible;
-  $("person-private").textContent = state === "pending"
-    ? "Request sent. Once they accept, you'll see their scores and stats."
-    : "Follow to request access to their scores and stats.";
-  if (!visible) return;
-  const [stats, todayGame] = await Promise.all([social.getStats(person.id), social.gameFor(person.id, today)]);
-  $("person-played").textContent = formatNumber(stats ? stats.played : 0);
-  $("person-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
-  $("person-best").textContent = formatNumber(stats ? stats.best : 0);
-  $("person-average").textContent = formatNumber(stats ? stats.average : 0);
-  renderTodayCard(todayGame);
+  $("invite-skip").onclick = () => {
+    store.remove(INVITE_KEY);
+    $("invite-prompt").hidden = true;
+    afterInvite();
+  };
+  openOverlay($("invite-prompt"));
+  return true;
 }
 
-function openPerson(person) {
-  if (!user || person.id === user.id) return;
-  personShown = person;
-  $("person-details").hidden = true;
-  $("person-private").hidden = true;
-  openOverlay($("person"));
-  renderPerson().catch((error) => { $("person-message").textContent = errorText(error); });
+// After signing in (and any invite), return to the page that asked for it.
+function afterInvite() {
+  const next = store.get(NEXT_KEY);
+  if (next && user) {
+    store.remove(NEXT_KEY);
+    if (next.startsWith("/tapmap/profile/")) window.location.href = next;
+  }
 }
-
-$("person-close").addEventListener("click", () => { $("person").hidden = true; });
 
 // ---------- Results screen: friends today ----------
 
@@ -820,15 +697,14 @@ async function renderFriends(practice) {
       const person = you ? profile || row.profiles : row.profiles;
       const li = document.createElement("li");
       if (you) li.className = "is-you";
-      const who = document.createElement("button");
-      who.type = "button";
+      const who = document.createElement("a");
       who.className = "person-link";
+      if (person && person.username) who.href = profileUrl(person.username);
       who.append(avatarElement(person, "sm"));
       const name = document.createElement("span");
       name.className = "friend-name";
       name.textContent = you ? "You" : personName(person);
       who.append(name);
-      if (!you) who.addEventListener("click", () => openPerson(person));
       const tiers = document.createElement("span");
       tiers.className = "friend-tiers";
       tiers.setAttribute("aria-hidden", "true");
@@ -860,8 +736,10 @@ async function onSignedIn(nextUser) {
     refreshRequestBadge();
   }
   updateAccountButton();
-  if (!$("account").hidden) renderAccount();
+  if (user) $("account").hidden = true;
+  else if (!$("account").hidden) renderAccount();
   if (!$("end").hidden && game) renderFriends(game.mode === "practice");
+  if (user && !(await offerInvite())) afterInvite();
 }
 
 // Only offers methods that are both listed in config.js and switched on in
@@ -906,6 +784,8 @@ async function bootSocial() {
       if ((next && next.id) !== (user && user.id)) onSignedIn(next);
     });
     await onSignedIn(await social.currentUser());
+    // An invite link or "?signin=1" opens the sign-in sheet for signed-out players.
+    if (!user && (pendingSignIn || store.get(INVITE_KEY))) openAccount();
   } catch (error) {
     // Keep the button so the problem is visible rather than silently missing.
     console.error(error);
@@ -1029,48 +909,21 @@ $("recovery-form").addEventListener("submit", (event) => {
   }, (error) => fieldError("new-password-error", errorText(error)));
 });
 
-$("profile-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  clearFieldErrors("display-name-error", "username-field-error");
-  const username = social.isUsernameAccount(user) && profile ? profile.username : $("username").value.trim().toLowerCase();
-  const displayName = $("display-name").value.trim();
-  let ok = true;
-  if (!displayName) {
-    fieldError("display-name-error", "Enter a display name.");
-    ok = false;
-  }
-  if (!/^[a-z0-9_]{3,20}$/.test(username)) {
-    fieldError("username-field-error", "Usernames are 3–20 lowercase letters, numbers or _.");
-    ok = false;
-  }
-  if (!ok) return;
-  try {
-    profile = await social.updateProfile(user.id, { username, displayName });
-    updateAccountButton();
-    await renderAccount();
-    accountMessage("Profile saved.");
-  } catch (error) {
-    if (error && error.code === "23505") fieldError("username-field-error", "That username is taken.");
-    else fieldError("display-name-error", errorText(error));
-  }
-});
-["display-name", "username"].forEach((id) => {
-  $(id).addEventListener("input", () => fieldError(id === "username" ? "username-field-error" : "display-name-error", ""));
-});
-$("people-search").addEventListener("input", () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => runSearch().catch((e) => accountMessage(errorText(e), true)), 250);
-});
-$("sign-out").addEventListener("click", async () => {
-  await social.signOut();
-  await onSignedIn(null);
-  accountMessage("Signed out.");
-});
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  if (!$("person").hidden) $("person").hidden = true;
-  else if (!$("account").hidden) $("account").hidden = true;
+  if (event.key === "Escape" && !$("account").hidden) $("account").hidden = true;
 });
+
+// Read ?invite= and ?signin= once, then tidy the address bar.
+const params = new URLSearchParams(window.location.search);
+const pendingSignIn = params.has("signin");
+if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
+  store.set(INVITE_KEY, params.get("invite").toLowerCase());
+}
+if (params.has("invite") || params.has("signin")) {
+  window.history.replaceState(null, "", window.location.pathname);
+}
+// The profile button is always there (it opens sign-in until you're signed in).
+if (social.socialEnabled()) $("account-button").hidden = false;
 
 // ---------- Boot ----------
 

@@ -84,15 +84,15 @@ function buildStyle(colors) {
         paint: { "raster-fade-duration": 200 },
       },
       {
-        // Friends' guesses: thinner lines in each friend's colour, under yours.
+        // Friends' guesses: dark green with a white outline, under your gold line.
         id: "friend-arc-outline", type: "line", source: "friend-arcs",
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#ffffff", "line-width": 2.6, "line-opacity": 0.75 },
+        paint: { "line-color": "#ffffff", "line-width": 3.6, "line-opacity": 0.95 },
       },
       {
         id: "friend-arcs", type: "line", source: "friend-arcs",
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": ["get", "colour"], "line-width": 1.5 },
+        paint: { "line-color": "#1f6b45", "line-width": 2 },
       },
       {
         id: "arc-glow", type: "line", source: "arcs",

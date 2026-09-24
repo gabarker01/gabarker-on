@@ -161,8 +161,9 @@ export async function getStats(userId) {
 
 // ---------- Games ----------
 
-export async function saveGame(userId, { date, number, rounds, total }) {
-  const payload = rounds.map((r) => ({
+export async function saveGame(userId, { date, number, rounds, total, names }) {
+  const payload = rounds.map((r, i) => ({
+    name: names ? names[i] : undefined,
     score: r.score,
     tier: r.tier,
     km: Math.round(r.distanceKm * 10) / 10,
@@ -232,16 +233,40 @@ export async function listFollowers(userId) {
   return rows.map((r) => r.profiles).filter(Boolean);
 }
 
+// Players whose username or display name contains the query.
 export async function searchProfiles(query, excludeId) {
-  const q = query.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  // Strip characters that have meaning in PostgREST filters.
+  const q = query.replace(/[%,()*\\"]/g, " ").replace(/\s+/g, " ").trim();
   if (q.length < 2) return [];
   const rows = unwrap(await client
     .from("profiles")
     .select(PERSON)
-    .ilike("username", `${q}%`)
+    .or(`username.ilike."*${q}*",display_name.ilike."*${q}*"`)
     .order("username")
-    .limit(8));
+    .limit(10));
   return rows.filter((r) => r.id !== excludeId);
+}
+
+export async function getProfileByUsername(username) {
+  return unwrap(await client
+    .from("profiles").select(PERSON).eq("username", username.toLowerCase()).maybeSingle());
+}
+
+// Your relationship with another player: null, "pending" or "accepted".
+export async function followStatus(userId, otherId) {
+  const row = unwrap(await client
+    .from("follows").select("status").eq("follower_id", userId).eq("followee_id", otherId).maybeSingle());
+  return row ? row.status : null;
+}
+
+// Recent daily results for a player (only returned if you may see them).
+export async function recentGames(userId, limit = 30) {
+  return unwrap(await client
+    .from("games")
+    .select("game_date, game_number, total, rounds")
+    .eq("user_id", userId)
+    .order("game_date", { ascending: false })
+    .limit(limit));
 }
 
 export async function requestFollow(userId, followeeId) {
