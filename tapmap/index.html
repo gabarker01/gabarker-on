@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Tap Map: explore the Earth. Drag to spin the globe, scroll or pinch to zoom.">
+  <meta name="author" content="George Barker">
+  <meta property="og:title" content="Tap Map · gabarker.com">
+  <meta property="og:description" content="Explore the Earth. Drag to spin the globe, scroll or pinch to zoom.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gabarker.com/tapmap/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b5bdb'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='16' font-weight='700' fill='%23fff' text-anchor='middle'%3EGB%3C/text%3E%3C/svg%3E">
+  <title>Tap Map · gabarker.com</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="tapmap.css?v=1">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Back to gabarker.com">
+      <span class="brand-mark" aria-hidden="true">GB</span>
+      <span class="brand-name">gabarker.com</span>
+    </a>
+    <h1 class="page-title">Tap Map</h1>
+  </header>
+
+  <main id="map" class="map" aria-label="Interactive globe. Drag to move, scroll or pinch to zoom, arrow keys to pan."></main>
+
+  <div class="panel" role="group" aria-label="Map tools">
+    <div class="places" role="group" aria-label="Fly to a place">
+      <button type="button" data-place="world" aria-pressed="true">Globe</button>
+      <button type="button" data-place="london">London</button>
+      <button type="button" data-place="newyork">New York</button>
+      <button type="button" data-place="grandcanyon">Grand Canyon</button>
+      <button type="button" data-place="everest">Everest</button>
+      <button type="button" data-place="sydney">Sydney</button>
+    </div>
+    <div class="toggles">
+      <button type="button" id="spin-toggle" aria-pressed="true">Spin</button>
+      <button type="button" id="labels-toggle" aria-pressed="false">Labels</button>
+    </div>
+  </div>
+
+  <p id="readout" class="readout" aria-live="off"></p>
+
+  <p id="map-error" class="map-error" role="alert" hidden>
+    The map couldn't load. Check your connection and refresh the page.
+  </p>
+
+  <script type="module" src="tapmap.js?v=1"></script>
+  <script>
+    // If the map library never loads (offline, blocked CDN), say so instead of showing a blank page.
+    setTimeout(() => {
+      if (!window.tapmapReady) document.getElementById("map-error").hidden = false;
+    }, 10000);
+  </script>
+</body>
+</html>
