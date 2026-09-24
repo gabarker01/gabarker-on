@@ -2,56 +2,153 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Tap Map: explore the Earth. Drag to spin the globe, scroll or pinch to zoom.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="TapMap: a daily geography game. Five places, one map. Tap where you think each one is.">
   <meta name="author" content="George Barker">
-  <meta property="og:title" content="Tap Map · gabarker.com">
-  <meta property="og:description" content="Explore the Earth. Drag to spin the globe, scroll or pinch to zoom.">
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
+  <meta property="og:title" content="TapMap: the daily geography game">
+  <meta property="og:description" content="Five places, one map. Tap where you think each one is.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://gabarker.com/tapmap/">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b5bdb'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='16' font-weight='700' fill='%23fff' text-anchor='middle'%3EGB%3C/text%3E%3C/svg%3E">
-  <title>Tap Map · gabarker.com</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b5bdb'/%3E%3Cpath d='M16 26c-1-4-7-7-7-12a7 7 0 0 1 14 0c0 5-6 8-7 12z' fill='%23fff'/%3E%3Ccircle cx='16' cy='14' r='2.6' fill='%233b5bdb'/%3E%3C/svg%3E">
+  <title>TapMap · Daily geography game</title>
+  <script>
+    document.documentElement.classList.add("js");
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="tapmap.css?v=2">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Back to gabarker.com">
-      <span class="brand-mark" aria-hidden="true">GB</span>
-      <span class="brand-name">gabarker.com</span>
+    <a class="brand" href="/tapmap/" aria-label="TapMap home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M16 26c-1-4-7-7-7-12a7 7 0 0 1 14 0c0 5-6 8-7 12z" fill="#fff"/><circle cx="16" cy="14" r="2.6"/></svg>
+      <span class="brand-text">
+        <span class="brand-name">TapMap</span>
+        <span id="game-label" class="game-label"></span>
+      </span>
     </a>
-    <h1 class="page-title">Tap Map</h1>
+    <p id="tally" class="tally" aria-live="polite"></p>
+    <div class="topbar-actions">
+      <button id="help-button" class="icon-button" type="button" aria-label="How to play">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6V14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.2" fill="currentColor"/></svg>
+      </button>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+      </button>
+    </div>
   </header>
 
-  <main id="map" class="map" aria-label="Interactive globe. Drag to move, scroll or pinch to zoom, arrow keys to pan."></main>
+  <main class="stage">
+    <svg id="map" class="map" role="application" aria-label="World map. Tap to place your guess, drag to move, pinch or scroll to zoom."></svg>
 
-  <div class="panel" role="group" aria-label="Map tools">
-    <div class="places" role="group" aria-label="Fly to a place">
-      <button type="button" data-place="world" aria-pressed="true">Globe</button>
-      <button type="button" data-place="london">London</button>
-      <button type="button" data-place="newyork">New York</button>
-      <button type="button" data-place="grandcanyon">Grand Canyon</button>
-      <button type="button" data-place="everest">Everest</button>
-      <button type="button" data-place="sydney">Sydney</button>
+    <section id="prompt" class="prompt" aria-live="polite" hidden>
+      <p class="prompt-meta"><span id="prompt-round"></span> · <span id="prompt-difficulty" class="difficulty"></span></p>
+      <h1 id="prompt-name" class="prompt-name"></h1>
+      <button id="hint-button" class="hint-button" type="button" aria-expanded="false">Show hint</button>
+      <p id="prompt-hint" class="prompt-hint" hidden></p>
+    </section>
+
+    <div class="zoom-controls" role="group" aria-label="Zoom">
+      <button id="zoom-in" class="icon-button" type="button" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <button id="zoom-out" class="icon-button" type="button" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
     </div>
-    <div class="toggles">
-      <button type="button" id="spin-toggle" aria-pressed="true">Spin</button>
-      <button type="button" id="labels-toggle" aria-pressed="false">Labels</button>
+
+    <section id="action-bar" class="action-bar" hidden>
+      <p id="tap-help" class="tap-help">Tap the map to drop your pin. Tap again to move it.</p>
+      <button id="confirm-button" class="primary-button" type="button" disabled>Confirm guess</button>
+
+      <div id="result" class="result" hidden>
+        <div class="result-main">
+          <span id="result-tier" class="result-tier" aria-hidden="true"></span>
+          <div>
+            <p id="result-distance" class="result-distance"></p>
+            <p class="result-answer">Answer: <span id="result-answer"></span></p>
+          </div>
+          <p class="result-score"><span id="result-points">0</span><span class="result-unit">pts</span></p>
+        </div>
+        <p id="result-bonus" class="result-bonus" hidden></p>
+        <button id="next-button" class="primary-button" type="button">Next round</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Intro -->
+  <div id="intro" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+      <p class="sheet-eyebrow" id="intro-number"></p>
+      <h2 id="intro-title" class="sheet-title">Five places. One map.</h2>
+      <ol class="how-to">
+        <li><span aria-hidden="true">📍</span> Tap the map where you think the place is. Tap again to move your pin.</li>
+        <li><span aria-hidden="true">✅</span> Confirm to see how far off you were. Closer means more points, up to 1,000 a round.</li>
+        <li><span aria-hidden="true">🎯</span> Land within 25 km for a bullseye bonus.</li>
+        <li><span aria-hidden="true">🌍</span> Everyone gets the same five places each day. A new game starts at midnight UTC.</li>
+      </ol>
+      <div class="tiers" aria-label="Scoring tiers">
+        <span>🎯 &lt;50 km</span><span>🟩 &lt;500</span><span>🟨 &lt;1,500</span><span>🟧 &lt;3,000</span><span>🟥 3,000+</span>
+      </div>
+      <button id="play-button" class="primary-button" type="button">Play today's game</button>
+      <button id="intro-practice-button" class="secondary-button" type="button">Practice</button>
+      <button id="intro-close" class="text-button" type="button" hidden>Close</button>
+      <p class="credit">© George Barker · <a href="/">gabarker.com</a></p>
     </div>
   </div>
 
-  <p id="readout" class="readout" aria-live="off"></p>
+  <!-- End screen -->
+  <div id="end" class="overlay" hidden>
+    <div class="sheet sheet-scroll" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <p class="sheet-eyebrow" id="end-label"></p>
+      <h2 id="end-title" class="final-score"><span id="final-points">0</span><span class="final-max"> / 5,000</span></h2>
+      <p id="end-rating" class="rating"></p>
+      <p id="end-emoji" class="emoji-row" aria-hidden="true"></p>
 
-  <p id="map-error" class="map-error" role="alert" hidden>
-    The map couldn't load. Check your connection and refresh the page.
+      <svg id="summary-map" class="summary-map" role="img" aria-label="Map of all five guesses and answers"></svg>
+
+      <ol id="breakdown" class="breakdown"></ol>
+
+      <div class="share-row">
+        <button id="copy-button" class="primary-button" type="button">Copy result</button>
+        <button id="share-button" class="secondary-button" type="button" hidden>Share</button>
+      </div>
+
+      <dl id="stats" class="stats">
+        <div><dt>Played</dt><dd id="stat-played">0</dd></div>
+        <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
+        <div><dt>Best</dt><dd id="stat-best">0</dd></div>
+      </dl>
+      <p id="next-game" class="next-game"></p>
+
+      <div class="end-actions">
+        <button id="practice-button" class="secondary-button" type="button">Practice</button>
+        <button id="daily-results-button" class="text-button" type="button" hidden>Back to today's result</button>
+      </div>
+      <p class="credit">© George Barker · <a href="/">gabarker.com</a></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <p id="load-error" class="load-error" role="alert" hidden>
+    TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="tapmap.js?v=2"></script>
   <script>
-    // If the map library never loads (offline, blocked CDN), say so instead of showing a blank page.
     setTimeout(() => {
-      if (!window.tapmapReady) document.getElementById("map-error").hidden = false;
-    }, 10000);
+      if (!window.tapmapReady) document.getElementById("load-error").hidden = false;
+    }, 12000);
   </script>
 </body>
 </html>

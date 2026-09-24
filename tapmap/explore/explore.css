@@ -1,0 +1,263 @@
+:root {
+  --space: #05070d;
+  --text: #ececef;
+  --muted: #a0a0a8;
+  --accent: #748ffc;
+  --accent-strong: #3b5bdb;
+  --glass: rgba(18, 18, 22, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --error: #ff8787;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--space);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.map {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, #0d1424 0%, var(--space) 70%);
+}
+
+/* Floating glass surfaces */
+
+.topbar,
+.panel,
+.readout,
+.map-error {
+  position: fixed;
+  z-index: 2;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.topbar {
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px 8px 8px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.page-title {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--glass-border);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel {
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+}
+
+.places,
+.toggles {
+  display: flex;
+  gap: 4px;
+}
+
+.places {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.places::-webkit-scrollbar {
+  display: none;
+}
+
+.toggles {
+  padding-left: 8px;
+  border-left: 1px solid var(--glass-border);
+}
+
+.panel button {
+  flex: none;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.panel button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panel button[aria-pressed="true"] {
+  background: rgba(116, 143, 252, 0.2);
+  border-color: rgba(116, 143, 252, 0.5);
+  color: #fff;
+}
+
+.panel button:focus-visible,
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  right: 12px;
+  bottom: 44px;
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.readout:empty {
+  display: none;
+}
+
+.map-error {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 16px 20px;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  color: var(--error);
+}
+
+.map-error[hidden] {
+  display: none;
+}
+
+/* MapLibre control overrides to match the site */
+
+.maplibregl-ctrl-top-right {
+  top: 4px;
+  right: 4px;
+}
+
+.maplibregl-ctrl-group {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--glass-border) !important;
+}
+
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+
+.maplibregl-ctrl-scale {
+  color: var(--text);
+  background: var(--glass);
+  border-color: var(--muted);
+}
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib-inner {
+  background: rgba(18, 18, 22, 0.6) !important;
+  color: var(--muted);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--text);
+}
+
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+
+/* Phones: stack the panel above the attribution and hide the readout */
+
+@media (max-width: 640px) {
+  .topbar {
+    left: 8px;
+    top: 8px;
+  }
+
+  .panel {
+    bottom: 36px;
+    flex-direction: column;
+    align-items: stretch;
+    width: calc(100% - 16px);
+  }
+
+  .toggles {
+    justify-content: center;
+    padding-left: 0;
+    padding-top: 6px;
+    border-left: none;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .readout {
+    display: none;
+  }
+
+  .maplibregl-ctrl-bottom-left {
+    display: none;
+  }
+}
