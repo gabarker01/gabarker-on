@@ -20,9 +20,10 @@
 
   --globe-ocean: #c8d3dc;
   --globe-land: #f8f6f0;
-  --globe-border: rgba(40, 50, 65, 0.22);
-  --globe-graticule: rgba(40, 60, 90, 0.09);
-  --globe-atmosphere: #ffffff;
+  --globe-atmosphere: #bcd3ee;
+  --mark-light: #33455e;
+  --mark-deep: #0f1826;
+  --mark-line: rgba(241, 236, 226, 0.28);
   --globe-arc: #b0843a;
   --globe-guess: #16181d;
   --globe-answer: #b0843a;
@@ -55,9 +56,10 @@
 
     --globe-ocean: #0f1a28;
     --globe-land: #273140;
-    --globe-border: rgba(241, 236, 226, 0.14);
-    --globe-graticule: rgba(241, 236, 226, 0.05);
-    --globe-atmosphere: #5d7fb0;
+    --globe-atmosphere: #4f73a8;
+    --mark-light: #34496a;
+    --mark-deep: #101a2a;
+    --mark-line: rgba(241, 236, 226, 0.3);
     --globe-arc: #d9b26a;
     --globe-guess: #f1ece2;
     --globe-answer: #d9b26a;
@@ -90,9 +92,10 @@
 
   --globe-ocean: #0f1a28;
   --globe-land: #273140;
-  --globe-border: rgba(241, 236, 226, 0.14);
-  --globe-graticule: rgba(241, 236, 226, 0.05);
-  --globe-atmosphere: #5d7fb0;
+  --globe-atmosphere: #4f73a8;
+  --mark-light: #34496a;
+  --mark-deep: #101a2a;
+  --mark-line: rgba(241, 236, 226, 0.3);
   --globe-arc: #d9b26a;
   --globe-guess: #f1ece2;
   --globe-answer: #d9b26a;
@@ -228,17 +231,42 @@ a:focus-visible {
 
 .wordmark {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 9px;
   justify-self: start;
   color: var(--ink);
   text-decoration: none;
   line-height: 1;
 }
 
+.mark {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+}
+
+.mark-arc {
+  animation: mark-flow 6s linear infinite;
+}
+
+@keyframes mark-flow {
+  to { stroke-dashoffset: -38; }
+}
+
+.wordmark-text {
+  display: flex;
+  flex-direction: column;
+}
+
 .wordmark-name {
   font-family: var(--font-serif);
-  font-size: 1.65rem;
+  font-size: 1.6rem;
   letter-spacing: -0.01em;
+}
+
+.wordmark-name em {
+  color: var(--accent);
 }
 
 .wordmark-edition {
@@ -407,15 +435,6 @@ a:focus-visible {
 .link-button.centered {
   display: block;
   margin: 10px auto 0;
-}
-
-.prompt-hint {
-  margin: 8px 0 2px;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 1.1rem;
-  line-height: 1.3;
-  color: var(--ink-soft);
 }
 
 .zoom-controls {
@@ -704,6 +723,13 @@ a:focus-visible {
   color: var(--ink-faint);
 }
 
+.colophon .credit {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
 .colophon a {
   color: inherit;
   text-underline-offset: 3px;
@@ -910,7 +936,12 @@ a:focus-visible {
 
 @media (max-width: 370px) {
   .wordmark-name {
-    font-size: 1.4rem;
+    font-size: 1.35rem;
+  }
+
+  .mark {
+    width: 32px;
+    height: 32px;
   }
 
   .prompt-name {
@@ -930,4 +961,23 @@ a:focus-visible {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+
+.share-row {
+  margin: 0 0 18px;
+}
+
+/* Soft, even glow around the globe (sized by map.js) */
+.globe-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 24px 4px color-mix(in srgb, var(--globe-atmosphere) 45%, transparent),
+    0 0 90px 24px color-mix(in srgb, var(--globe-atmosphere) 18%, transparent);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }

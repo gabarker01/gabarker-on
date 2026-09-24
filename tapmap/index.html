@@ -11,7 +11,7 @@
   <meta property="og:description" content="Five places, one globe. Tap where you think each one is.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://gabarker.com/tapmap/">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2307090e'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%23d9b26a' stroke-width='1.6'/%3E%3Cpath d='M6.5 16h19M16 6.5c3 3 3 16 0 19M16 6.5c-3 3-3 16 0 19' fill='none' stroke='%23d9b26a' stroke-width='1.1'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b0d12'/%3E%3Ccircle cx='18' cy='22' r='12' fill='%231c2a3d'/%3E%3Cellipse cx='18' cy='22' rx='5' ry='12' fill='none' stroke='%23f1ece2' stroke-opacity='.3' stroke-width='.8'/%3E%3Cpath d='M6 22h24' stroke='%23f1ece2' stroke-opacity='.3' stroke-width='.8'/%3E%3Cpath d='M10 27C13 15 23 10 28.5 11.5' fill='none' stroke='%23d9b26a' stroke-width='1.6' stroke-linecap='round' stroke-dasharray='1.4 2.6'/%3E%3Cpath d='M29 14.5c-.6-2.1-3.4-3.3-3.4-6a3.4 3.4 0 0 1 6.8 0c0 2.7-2.8 3.9-3.4 6z' fill='%23d9b26a'/%3E%3C/svg%3E">
   <title>TapMap · A daily geography game</title>
   <script>
     document.documentElement.classList.add("js");
@@ -26,15 +26,35 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=3">
+  <link rel="stylesheet" href="tapmap.css?v=4">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
 
   <header class="topbar">
     <a class="wordmark" href="/tapmap/" aria-label="TapMap home">
-      <span class="wordmark-name">TapMap</span>
-      <span id="game-label" class="wordmark-edition"></span>
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <radialGradient id="mark-sphere" cx="38%" cy="32%" r="75%">
+            <stop offset="0" stop-color="var(--mark-light)"/>
+            <stop offset="1" stop-color="var(--mark-deep)"/>
+          </radialGradient>
+          <clipPath id="mark-clip"><circle cx="18" cy="21" r="14"/></clipPath>
+        </defs>
+        <circle cx="18" cy="21" r="16.5" fill="none" stroke="var(--accent)" stroke-opacity="0.35" stroke-width="0.8"/>
+        <circle cx="18" cy="21" r="14" fill="url(#mark-sphere)"/>
+        <g clip-path="url(#mark-clip)" fill="none" stroke="var(--mark-line)" stroke-width="0.7">
+          <ellipse cx="18" cy="21" rx="6" ry="14"/>
+          <path d="M4 21h28M5.8 14.5c7.4 2.2 17 2.2 24.4 0M5.8 27.5c7.4-2.2 17-2.2 24.4 0"/>
+        </g>
+        <path class="mark-arc" d="M9 27C13 13 24 9 29.5 10.5" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1.2 2.6"/>
+        <path d="M30 13.2c-.5-1.9-3.1-3-3.1-5.5a3.1 3.1 0 0 1 6.2 0c0 2.5-2.6 3.6-3.1 5.5z" fill="var(--accent)"/>
+        <circle cx="30" cy="7.7" r="1.1" fill="var(--paper)"/>
+      </svg>
+      <span class="wordmark-text">
+        <span class="wordmark-name">Tap<em>Map</em></span>
+        <span id="game-label" class="wordmark-edition"></span>
+      </span>
     </a>
     <div class="status">
       <div id="progress" class="progress" aria-hidden="true">
@@ -62,8 +82,6 @@
       <span id="prompt-multiplier" class="multiplier"></span>
     </p>
     <h1 id="prompt-name" class="prompt-name"></h1>
-    <button id="hint-button" class="link-button" type="button" aria-expanded="false">Reveal a hint</button>
-    <p id="prompt-hint" class="prompt-hint" hidden></p>
   </section>
 
   <div class="zoom-controls" role="group" aria-label="Zoom">
@@ -103,8 +121,8 @@
       <h2 id="intro-title" class="sheet-title">Five places.<br><em>One globe.</em></h2>
       <ol class="steps">
         <li><span class="step-n">i</span><p>Tap the globe where you think the place is. Tap again to move your pin, then confirm.</p></li>
-        <li><span class="step-n">ii</span><p>The closer you land, the more you score, up to 1,000 a round, plus a small bonus inside 25&nbsp;km.</p></li>
-        <li><span class="step-n">iii</span><p>Rounds grow harder and count for more, from <strong>×1</strong> in the first to <strong>×2</strong> in the last.</p></li>
+        <li><span class="step-n">ii</span><p>The closer you land, the more you score, with a small bonus inside 25&nbsp;km. A perfect game scores <strong>1,000</strong>.</p></li>
+        <li><span class="step-n">iii</span><p>Rounds grow harder and count for more: <strong>×1.5</strong> in rounds three and four, <strong>×2</strong> in the last.</p></li>
         <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight UTC.</p></li>
       </ol>
       <ul class="legend" aria-label="Distance bands">
@@ -117,7 +135,7 @@
       <button id="play-button" class="primary-button" type="button">Play today's game</button>
       <button id="intro-practice-button" class="secondary-button" type="button">Practice</button>
       <button id="intro-close" class="secondary-button" type="button" hidden>Back to the game</button>
-      <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
+      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
     </div>
   </div>
 
@@ -125,17 +143,17 @@
   <div id="end" class="overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
       <p class="eyebrow" id="end-label"></p>
-      <h2 id="end-title" class="final"><span id="final-points">0</span> <span class="final-of">of <span id="final-max">7,500</span></span></h2>
+      <h2 id="end-title" class="final"><span id="final-points">0</span> <span class="final-of">of <span id="final-max">1,000</span></span></h2>
       <p id="end-rating" class="rating"></p>
-
-      <div id="summary-globe" class="summary-globe" role="img" aria-label="Globe showing all five guesses and answers"></div>
-
-      <ol id="breakdown" class="breakdown"></ol>
 
       <div class="share-row">
         <button id="copy-button" class="primary-button" type="button">Copy result</button>
         <button id="share-button" class="secondary-button" type="button" hidden>Share</button>
       </div>
+
+      <div id="summary-globe" class="summary-globe" role="img" aria-label="Globe showing all five guesses and answers"></div>
+
+      <ol id="breakdown" class="breakdown"></ol>
 
       <dl class="stats">
         <div><dt>Played</dt><dd id="stat-played">0</dd></div>
@@ -146,7 +164,7 @@
 
       <button id="practice-button" class="secondary-button" type="button">Practice</button>
       <button id="daily-results-button" class="link-button centered" type="button" hidden>Back to today's result</button>
-      <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
+      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
     </div>
   </div>
 
@@ -156,7 +174,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=3"></script>
+  <script type="module" src="tapmap.js?v=4"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

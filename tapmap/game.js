@@ -5,14 +5,18 @@ export const LAUNCH_DATE = "2026-09-24";
 // Rounds get harder, and are worth more, as the game goes on.
 export const ROUND_PLAN = [
   { difficulty: "easy", multiplier: 1 },
-  { difficulty: "medium", multiplier: 1.25 },
+  { difficulty: "medium", multiplier: 1 },
   { difficulty: "medium", multiplier: 1.5 },
-  { difficulty: "hard", multiplier: 1.75 },
+  { difficulty: "hard", multiplier: 1.5 },
   { difficulty: "hard", multiplier: 2 },
 ];
 export const ROUNDS = ROUND_PLAN.length;
-export const MAX_ROUND_SCORE = 1000;
-export const MAX_SCORE = ROUND_PLAN.reduce((sum, r) => sum + MAX_ROUND_SCORE * r.multiplier, 0);
+// A perfect game scores exactly MAX_SCORE, shared between rounds by multiplier.
+export const MAX_SCORE = 1000;
+// Accuracy is scored out of 1,000 per round, then scaled to the round's share.
+export const ACCURACY_MAX = 1000;
+const MULTIPLIER_SUM = ROUND_PLAN.reduce((sum, r) => sum + r.multiplier, 0);
+export const roundMax = (multiplier) => Math.round((MAX_SCORE * multiplier) / MULTIPLIER_SUM);
 export const BULLSEYE_KM = 25;
 export const BULLSEYE_BONUS = 50;
 export const GAME_URL = "https://gabarker.com/tapmap";
@@ -104,13 +108,18 @@ export const haversineKm = (a, b) => {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-// round(1000 × e^(−d/2000)), plus a bullseye bonus under 25 km, capped at 1,000,
-// then scaled by the round's multiplier.
+// Accuracy: round(1000 × e^(−d/2000)), plus a bullseye bonus under 25 km, capped
+// at 1,000. The round score is that accuracy share of the round's maximum
+// (143, 143, 214, 214, 286), so five perfect rounds make exactly 1,000.
 export const scoreRound = (distanceKm, multiplier = 1) => {
-  const base = Math.round(MAX_ROUND_SCORE * Math.exp(-distanceKm / 2000));
+  const base = Math.round(ACCURACY_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const points = bullseye ? Math.min(MAX_ROUND_SCORE, base + BULLSEYE_BONUS) : base;
-  return { base, bonus: points - base, bullseye, points, multiplier, total: Math.round(points * multiplier) };
+  const accuracy = bullseye ? Math.min(ACCURACY_MAX, base + BULLSEYE_BONUS) : base;
+  const max = roundMax(multiplier);
+  return {
+    base, bonus: accuracy - base, bullseye, accuracy, multiplier, max,
+    total: Math.round((accuracy / ACCURACY_MAX) * max),
+  };
 };
 
 export const tierFor = (distanceKm) => {
@@ -121,7 +130,7 @@ export const tierFor = (distanceKm) => {
   return "🟥";
 };
 
-// Thresholds are 90%, 70% and 40% of the maximum (4,500 / 3,500 / 2,000 out of 5,000).
+// Thresholds are 90%, 70% and 40% of the maximum (900 / 700 / 400 out of 1,000).
 const RATINGS = [
   { min: 0.9, label: "Cartographer", emoji: "🧭" },
   { min: 0.7, label: "Navigator", emoji: "" },
@@ -152,25 +161,16 @@ const formatLength = (value) =>
 // "1,234 km (767 mi)"
 export const formatDistance = (km) => `${formatLength(km)} km (${formatLength(km / KM_PER_MILE)} mi)`;
 
-// Figure spaces are digit-width in most fonts, so columns roughly line up in chat apps.
-const FIGURE_SPACE = "\u2007";
-const COLUMN = 4;
-
-// Spoiler-free share text: no location names, five short lines.
+// Spoiler-free share text: no location names, four short lines.
 //   TapMap #1
-//   1000 1093  712 1729  352
-//     🎯   🟩   🟨   🟩   🟥
-//   3,969 / 7,500 · Tourist
+//   🎯 143 🟩 121 🟨 150 🟩 187 🟥 42
+//   643 / 1,000 · Tourist
 //   https://gabarker.com/tapmap
 export const shareText = ({ number, practice, rounds, url = GAME_URL }) => {
   const total = totalScore(rounds);
-  const scores = rounds.map((r) => String(r.total).padStart(COLUMN, FIGURE_SPACE)).join(" ");
-  // An emoji is about two digits wide, so indent each one under the last two digits.
-  const tiers = rounds.map((r) => FIGURE_SPACE.repeat(COLUMN - 2) + r.tier).join(" ");
   return [
     practice ? "TapMap Practice" : `TapMap #${number}`,
-    scores,
-    tiers,
+    rounds.map((r) => `${r.tier} ${r.total}`).join(" "),
     `${formatNumber(total)} / ${formatNumber(MAX_SCORE)} · ${ratingFor(total)}`,
     url,
   ].join("\n");

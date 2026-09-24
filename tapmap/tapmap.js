@@ -23,8 +23,8 @@ const storage = {
   },
 };
 
-const DAILY_KEY = "tapmap:v2:daily";
-const STATS_KEY = "tapmap:v2:stats";
+const DAILY_KEY = "tapmap:v3:daily";
+const STATS_KEY = "tapmap:v3:stats";
 
 // ---------- Formatting ----------
 
@@ -63,8 +63,6 @@ function globeColors() {
     space: v("--space-edge"),
     ocean: v("--globe-ocean"),
     land: v("--globe-land"),
-    border: v("--globe-border"),
-    graticule: v("--globe-graticule"),
     atmosphere: v("--globe-atmosphere"),
     arc: v("--globe-arc"),
     guess: v("--globe-guess"),
@@ -206,10 +204,6 @@ function showRound() {
   $("prompt-difficulty").textContent = capitalise(location.difficulty);
   $("prompt-multiplier").textContent = formatMultiplier(plan.multiplier);
   $("prompt-name").textContent = location.name;
-  $("prompt-hint").textContent = location.hint;
-  $("prompt-hint").hidden = true;
-  $("hint-button").hidden = false;
-  $("hint-button").setAttribute("aria-expanded", "false");
 
   // Replay the entrance animation each round.
   prompt.hidden = true;
@@ -260,11 +254,10 @@ async function confirmGuess() {
   // Show the result panel first so the fit leaves room for it.
   confirmButton.hidden = true;
   $("tap-help").hidden = true;
-  $("hint-button").hidden = true;
   $("result-km").textContent = formatLength(round.distanceKm);
   $("result-mi").textContent = `${formatLength(round.distanceKm / KM_PER_MILE)} mi`;
   $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
-  $("result-maths").textContent = `${formatNumber(round.points)} ${formatMultiplier(multiplier)}`;
+  $("result-maths").textContent = `of ${round.max} · ${formatMultiplier(multiplier)}`;
   $("result-points").textContent = "0";
   $("result-answer").textContent = location.name;
   $("result-bonus").hidden = true;
@@ -287,8 +280,8 @@ async function confirmGuess() {
   if (round.bullseye) {
     const bonus = $("result-bonus");
     bonus.textContent = round.bonus > 0
-      ? `Within 25 km. Bullseye bonus of +${round.bonus}, before the multiplier.`
-      : "Within 25 km. A perfect 1,000, before the multiplier.";
+      ? `Within 25 km. Bullseye bonus applied.`
+      : "Within 25 km. Full marks.";
     bonus.hidden = false;
   }
 
@@ -347,7 +340,7 @@ function breakdownRow(round, location, i) {
   score.className = "score";
   score.textContent = formatNumber(round.total);
   const small = document.createElement("small");
-  small.textContent = `${formatNumber(round.points)} ${formatMultiplier(round.multiplier)}`;
+  small.textContent = `of ${round.max}`;
   score.append(small);
 
   li.append(n, info, score);
@@ -449,11 +442,6 @@ function showIntro({ help = false } = {}) {
 
 // ---------- Wiring ----------
 
-$("hint-button").addEventListener("click", () => {
-  $("prompt-hint").hidden = false;
-  $("hint-button").hidden = true;
-  $("hint-button").setAttribute("aria-expanded", "true");
-});
 confirmButton.addEventListener("click", confirmGuess);
 $("next-button").addEventListener("click", nextRound);
 $("zoom-in").addEventListener("click", () => globe.zoomIn());

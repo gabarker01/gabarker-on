@@ -1,13 +1,15 @@
 // Tappable 3D globe for TapMap, built on MapLibre GL's globe projection.
 //
-// The globe is drawn from a self-hosted Natural Earth outline (no tiles, no
-// labels to give answers away). Arcs are true great circles; their longitudes
-// are unwrapped so a guess in Alaska for Fiji arcs across the Pacific.
+// Satellite imagery with no labels or borders (nothing to give answers away),
+// over a plain self-hosted land outline that shows if the imagery can't load.
+// Arcs are true great circles; their longitudes are unwrapped so a guess in
+// Alaska for Fiji arcs across the Pacific.
 
 import * as maplibregl from "https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.mjs";
 
-const WORLD_COARSE = "world-110m.geojson?v=1";
-const WORLD_DETAILED = "world-50m.geojson?v=1";
+const LAND = "land-110m.geojson?v=1";
+const IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+export const IMAGERY_CREDIT = "Imagery © Esri, Maxar, Earthstar Geographics";
 const EMPTY = { type: "FeatureCollection", features: [] };
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -47,23 +49,13 @@ export function greatCircle(a, b, steps = 96) {
   return coords;
 }
 
-function graticule(step = 30) {
-  const lines = [];
-  for (let lng = -180; lng < 180; lng += step) {
-    lines.push(Array.from({ length: 33 }, (_, i) => [lng, -80 + i * 5]));
-  }
-  for (let lat = -60; lat <= 60; lat += step) {
-    lines.push(Array.from({ length: 73 }, (_, i) => [-180 + i * 5, lat]));
-  }
-  return { type: "Feature", geometry: { type: "MultiLineString", coordinates: lines } };
-}
-
+// A soft atmospheric glow around the globe that fades as you zoom in.
 function skyFor(colors) {
   return {
     "sky-color": colors.space,
     "horizon-color": colors.atmosphere,
     "fog-color": colors.atmosphere,
-    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 4, 0.7, 7, 0],
+    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.3, 4, 0.2, 7, 0],
   };
 }
 
@@ -73,30 +65,21 @@ function buildStyle(colors) {
     projection: { type: "globe" },
     sky: skyFor(colors),
     sources: {
-      world: { type: "geojson", data: WORLD_COARSE, tolerance: 0.2 },
-      graticule: { type: "geojson", data: graticule() },
+      land: { type: "geojson", data: LAND, tolerance: 0.2 },
+      satellite: { type: "raster", tiles: [IMAGERY], tileSize: 256, maxzoom: 19 },
       arcs: { type: "geojson", data: EMPTY },
       dots: { type: "geojson", data: EMPTY },
     },
     layers: [
       { id: "ocean", type: "background", paint: { "background-color": colors.ocean } },
       {
-        id: "graticule", type: "line", source: "graticule",
-        paint: { "line-color": colors.graticule, "line-width": 0.6 },
-      },
-      {
-        id: "land", type: "fill", source: "world",
-        filter: ["==", ["get", "kind"], "land"],
+        id: "land", type: "fill", source: "land",
         // Antialiasing outlines tile edges on the globe, leaving faint seams.
         paint: { "fill-color": colors.land, "fill-antialias": false },
       },
       {
-        id: "borders", type: "line", source: "world",
-        filter: ["==", ["get", "kind"], "border"],
-        paint: {
-          "line-color": colors.border,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.3, 4, 0.8, 8, 1.4],
-        },
+        id: "satellite", type: "raster", source: "satellite",
+        paint: { "raster-fade-duration": 200 },
       },
       {
         id: "arc-glow", type: "line", source: "arcs",
@@ -123,9 +106,7 @@ function buildStyle(colors) {
 
 function applyColors(map, colors) {
   map.setPaintProperty("ocean", "background-color", colors.ocean);
-  map.setPaintProperty("graticule", "line-color", colors.graticule);
   map.setPaintProperty("land", "fill-color", colors.land);
-  map.setPaintProperty("borders", "line-color", colors.border);
   map.setPaintProperty("arc-glow", "line-color", colors.arc);
   map.setPaintProperty("arcs", "line-color", colors.arc);
   map.setPaintProperty("dots", "circle-color", ["match", ["get", "kind"], "answer", colors.answer, colors.guess]);
@@ -137,6 +118,21 @@ function applyColors(map, colors) {
 function globeZoom(container, fraction = 0.86) {
   const size = Math.min(container.clientWidth, container.clientHeight) || 360;
   return Math.log2((fraction * size * Math.PI) / 512);
+}
+
+// An even halo behind the globe. With no pitch the globe's centre is always the
+// container's centre, and its on-screen radius follows from the zoom level.
+function attachHalo(map, container) {
+  const halo = document.createElement("div");
+  halo.className = "globe-halo";
+  container.prepend(halo);
+  const update = () => {
+    const radius = (512 * 2 ** map.getZoom()) / (2 * Math.PI);
+    halo.style.width = halo.style.height = `${radius * 1.9}px`;
+    halo.style.opacity = String(Math.max(0, Math.min(1, 1 - (map.getZoom() - 2.5) / 2)));
+  };
+  map.on("zoom", update);
+  update();
 }
 
 function whenLoaded(map) {
@@ -174,7 +170,7 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
     center: [15, 22],
     zoom: homeZoom(),
     minZoom: homeZoom() - 0.6,
-    maxZoom: 11,
+    maxZoom: 14,
     maxPitch: 0,
     clickTolerance: 6,
     doubleClickZoom: false,
@@ -185,11 +181,9 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
   });
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
+  attachHalo(map, container);
 
   await whenLoaded(map);
-
-  // Swap in the detailed outline once the first frame is up.
-  map.once("idle", () => map.getSource("world").setData(WORLD_DETAILED));
 
   map.on("click", (event) => {
     if (!onTap) return;
@@ -316,6 +310,7 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
     attributionControl: false,
     fadeDuration: 0,
   });
+  attachHalo(map, container);
   await whenLoaded(map);
 
   map.getSource("arcs").setData({
