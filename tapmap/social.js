@@ -43,6 +43,26 @@ const unwrap = ({ data, error }) => {
   return data;
 };
 
+// ---------- Locations ----------
+
+// The location pool from the database, oldest first (the daily picks depend on
+// this order). Plain REST so the game doesn't wait for the auth library.
+export async function fetchLocations(timeoutMs = 5000) {
+  if (!socialEnabled()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/locations?select=name,lat,lng,difficulty,added_on,retired_on&order=id.asc`,
+      { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
+    );
+    if (!response.ok) throw new Error(`Locations request failed (${response.status})`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---------- Auth ----------
 
 export async function currentUser() {

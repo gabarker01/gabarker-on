@@ -76,6 +76,12 @@ const sample = (items, count, rng) => {
   return picked;
 };
 
+// The pool for a given day: places added before that UTC date and not yet
+// retired. Adding a place mid-day therefore never changes a game in progress.
+export const poolFor = (dateKey, locations) =>
+  locations.filter((loc) =>
+    (!loc.added_on || loc.added_on < dateKey) && (!loc.retired_on || loc.retired_on > dateKey));
+
 // Five locations following ROUND_PLAN (easy → hard), drawn with `rng`.
 const planLocations = (pool, rng) => {
   const picks = {};

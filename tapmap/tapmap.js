@@ -2,7 +2,7 @@ import { LOCATIONS } from "./locations.js";
 import {
   ROUNDS, ROUND_PLAN, MAX_SCORE, GAME_URL,
   utcDateKey, gameNumber, msUntilNextGame,
-  dailyLocations, practiceLocations, evaluateGuess, totalScore,
+  dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore,
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
@@ -131,7 +131,29 @@ function openOverlay(el) {
 
 const today = utcDateKey();
 const todayNumber = gameNumber(today);
-const todaysLocations = dailyLocations(today, LOCATIONS);
+// Today's pool comes from the database when it can be reached, otherwise from
+// the built-in list (the database's launch set, in the same order).
+let pool = poolFor(today, LOCATIONS);
+let todaysLocations = dailyLocations(today, pool);
+
+const hasEnoughFor = (locations) =>
+  ["easy", "medium", "hard"].every((level) =>
+    locations.filter((l) => l.difficulty === level).length >= ROUND_PLAN.filter((r) => r.difficulty === level).length);
+
+async function loadPool() {
+  try {
+    const rows = await social.fetchLocations();
+    const valid = (rows || []).filter((r) =>
+      r && typeof r.name === "string" && Number.isFinite(r.lat) && Number.isFinite(r.lng) && ["easy", "medium", "hard"].includes(r.difficulty));
+    const todays = poolFor(today, valid);
+    if (hasEnoughFor(todays)) {
+      pool = todays;
+      todaysLocations = dailyLocations(today, pool);
+    }
+  } catch (error) {
+    console.warn("Using the built-in location list:", error);
+  }
+}
 
 function loadDaily() {
   const saved = storage.get(DAILY_KEY);
@@ -149,7 +171,7 @@ function newGame(mode) {
   if (mode === "daily") {
     return { mode, locations: todaysLocations, rounds: daily.rounds, index: daily.rounds.length, phase: "guessing", guess: null };
   }
-  return { mode, locations: practiceLocations(LOCATIONS), rounds: [], index: 0, phase: "guessing", guess: null };
+  return { mode, locations: practiceLocations(pool), rounds: [], index: 0, phase: "guessing", guess: null };
 }
 
 // ---------- Header ----------
@@ -727,7 +749,9 @@ document.addEventListener("keydown", (event) => {
 // ---------- Boot ----------
 
 async function boot() {
+  const poolReady = loadPool();
   globe = await createGlobe($("globe"), { onTap: onGlobeTap, reducedMotion, colors: globeColors() });
+  await poolReady;
   window.tapmapReady = true;
   updateHeader();
   bootSocial();
