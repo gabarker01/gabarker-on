@@ -6,10 +6,10 @@
 import * as social from "/tapmap/social.js?v=7";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
-import { utcDateKey, formatNumber, MAX_SCORE } from "/tapmap/game.js";
+import { todayKey, formatNumber, MAX_SCORE } from "/tapmap/game.js";
 
 const $ = (id) => document.getElementById(id);
-const today = utcDateKey();
+const today = todayKey();
 const DAILY_KEY = "tapmap:v4:daily";
 const TIER_CLASS = { "🎯": "t-bullseye", "🟩": "t-close", "🟨": "t-near", "🟧": "t-far", "🟥": "t-off" };
 

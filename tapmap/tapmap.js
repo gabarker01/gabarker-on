@@ -1,7 +1,7 @@
 import { LOCATIONS } from "./locations.js";
 import {
   ROUNDS, ROUND_PLAN, MAX_SCORE, GAME_URL,
-  utcDateKey, gameNumber, msUntilNextGame,
+  todayKey, gameNumber, msUntilNextGame,
   dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore,
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
@@ -45,7 +45,7 @@ const formatMultiplier = (m) => `×${m}`;
 // Weighted round points can end in .5 (e.g. 91 × 1.5 = 136.5).
 const formatPoints = (n) => (Number.isInteger(n) ? formatNumber(n) : n.toFixed(1));
 const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const longDate = new Date(`${utcDateKey()}T12:00:00Z`).toLocaleDateString("en-GB", {
+const longDate = new Date(`${todayKey()}T12:00:00Z`).toLocaleDateString("en-GB", {
   weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
 });
 
@@ -130,7 +130,7 @@ function openOverlay(el) {
 
 // ---------- Game state ----------
 
-const today = utcDateKey();
+const today = todayKey();
 const todayNumber = gameNumber(today);
 // Today's pool comes from the database when it can be reached, otherwise from
 // the built-in list (the database's launch set, in the same order).
@@ -422,7 +422,7 @@ function startCountdown() {
   clearInterval(countdownTimer);
   const el = $("next-game");
   const tick = () => {
-    if (utcDateKey() !== today) {
+    if (todayKey() !== today) {
       el.textContent = "A new TapMap is ready. Refresh to play.";
       clearInterval(countdownTimer);
       return;

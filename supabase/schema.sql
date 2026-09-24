@@ -172,7 +172,8 @@ select
   coalesce((select max(r.length) from runs r where r.user_id = p.id), 0) as max_streak,
   coalesce((
     select r.length from runs r
-    where r.user_id = p.id and r.last_date >= (now() at time zone 'utc')::date - 1
+    -- (dates are each player's local day, so allow for time zones)
+    where r.user_id = p.id and r.last_date >= (now() at time zone 'utc')::date - 2
     order by r.last_date desc
     limit 1
   ), 0) as current_streak
@@ -254,13 +255,15 @@ create policy "see own and followed games" on public.games
     )
   );
 
--- Only your own result, and only for today's (or yesterday's) UTC game.
+-- Only your own result, and only for (roughly) today's game.
 drop policy if exists "save own game" on public.games;
 create policy "save own game" on public.games
   for insert to authenticated
   with check (
     (select auth.uid()) = user_id
-    and game_date between (now() at time zone 'utc')::date - 1 and (now() at time zone 'utc')::date
+    -- Game dates are the player's local day (UTC-12 to UTC+14), so accept
+    -- anything from two days before to one day after today's UTC date.
+    and game_date between (now() at time zone 'utc')::date - 2 and (now() at time zone 'utc')::date + 1
   );
 
 -- ---------- Privileges ----------

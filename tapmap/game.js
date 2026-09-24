@@ -24,21 +24,24 @@ const KM_PER_MILE = 1.609344;
 
 // ---------- Dates ----------
 
-// "YYYY-MM-DD" for the current UTC day.
-export const utcDateKey = (date = new Date()) => date.toISOString().slice(0, 10);
+const pad = (n) => String(n).padStart(2, "0");
 
-// Game #1 is the launch day.
+// "YYYY-MM-DD" for the player's own calendar day (their device's time zone),
+// so a new game starts at their local midnight. Everyone on the same date
+// gets the same five places.
+export const todayKey = (date = new Date()) =>
+  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+// Game #1 is the launch day. (Keys are compared as calendar dates.)
 export const gameNumber = (dateKey) =>
   Math.round((Date.parse(dateKey) - Date.parse(LAUNCH_DATE)) / DAY_MS) + 1;
 
 export const previousDateKey = (dateKey) =>
-  utcDateKey(new Date(Date.parse(dateKey) - DAY_MS));
+  new Date(Date.parse(dateKey) - DAY_MS).toISOString().slice(0, 10);
 
-// Milliseconds until the next UTC midnight.
-export const msUntilNextGame = (now = new Date()) => {
-  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
-  return next - now.getTime();
-};
+// Milliseconds until the player's next local midnight.
+export const msUntilNextGame = (now = new Date()) =>
+  new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
 
 // ---------- Seeded randomness ----------
 
@@ -76,7 +79,7 @@ const sample = (items, count, rng) => {
   return picked;
 };
 
-// The pool for a given day: places added before that UTC date and not yet
+// The pool for a given day: places added before that date and not yet
 // retired. Adding a place mid-day therefore never changes a game in progress.
 export const poolFor = (dateKey, locations) =>
   locations.filter((loc) =>
@@ -92,7 +95,7 @@ const planLocations = (pool, rng) => {
   return ROUND_PLAN.map((r) => picks[r.difficulty].shift());
 };
 
-// Same five for everyone on a given UTC date.
+// Same five for everyone on a given (local) date.
 export const dailyLocations = (dateKey, pool) => planLocations(pool, seededRandom(`tapmap:${dateKey}`));
 
 export const practiceLocations = (pool, rng = Math.random) => planLocations(pool, rng);
