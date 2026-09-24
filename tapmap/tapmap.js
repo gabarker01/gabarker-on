@@ -52,11 +52,7 @@ function tierDot(tier) {
   return dot;
 }
 
-// ---------- Theme ----------
-
-const themeToggle = $("theme-toggle");
-const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
-const activeTheme = () => root.getAttribute("data-theme") || (systemDark.matches ? "dark" : "light");
+// ---------- Globe colours (from CSS tokens) ----------
 
 function globeColors() {
   const css = getComputedStyle(root);
@@ -74,23 +70,6 @@ function globeColors() {
 
 let globe = null;
 let summary = null;
-
-function syncTheme() {
-  const theme = activeTheme();
-  root.setAttribute("data-active-theme", theme);
-  themeToggle.setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
-  const colors = globeColors();
-  if (globe) globe.setColors(colors);
-  if (summary) summary.setColors(colors);
-}
-
-themeToggle.addEventListener("click", () => {
-  const next = activeTheme() === "dark" ? "light" : "dark";
-  root.setAttribute("data-theme", next);
-  try { localStorage.setItem("theme", next); } catch (e) {}
-  syncTheme();
-});
-systemDark.addEventListener("change", syncTheme);
 
 // ---------- Helpers ----------
 
@@ -389,7 +368,12 @@ async function showEnd(finished) {
   if (summary) summary.destroy();
   summary = null;
   try {
-    summary = await createSummaryGlobe($("summary-globe"), rounds, { colors: globeColors(), reducedMotion });
+    const details = rounds.map((r, i) => ({
+      round: `Round ${i + 1} · ${capitalise(finished.locations[i].difficulty)}`,
+      name: finished.locations[i].name,
+      meta: `${formatLength(r.distanceKm)} km · ${formatMultiplier(r.multiplier)} · ${formatPoints(r.weighted)} pts`,
+    }));
+    summary = await createSummaryGlobe($("summary-globe"), rounds, { colors: globeColors(), details, reducedMotion });
   } catch (error) {
     console.error(error);
   }
@@ -465,7 +449,6 @@ document.addEventListener("keydown", (event) => {
 // ---------- Boot ----------
 
 async function boot() {
-  syncTheme();
   globe = await createGlobe($("globe"), { onTap: onGlobeTap, reducedMotion, colors: globeColors() });
   window.tapmapReady = true;
   updateHeader();

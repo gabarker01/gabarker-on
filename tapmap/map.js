@@ -15,7 +15,6 @@ const EMPTY = { type: "FeatureCollection", features: [] };
 
 const rad = (d) => (d * Math.PI) / 180;
 const deg = (r) => (r * 180) / Math.PI;
-const ROMAN = ["i", "ii", "iii", "iv", "v"];
 const toVec = ({ lat, lng }) => [
   Math.cos(rad(lat)) * Math.cos(rad(lng)),
   Math.cos(rad(lat)) * Math.sin(rad(lng)),
@@ -87,6 +86,12 @@ function buildStyle(colors) {
         id: "arc-glow", type: "line", source: "arcs",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: { "line-color": colors.arc, "line-width": 8, "line-opacity": 0.18, "line-blur": 4 },
+      },
+      {
+        // Thin white edge either side of the arc so it reads over any imagery.
+        id: "arc-outline", type: "line", source: "arcs",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#ffffff", "line-width": 3.75, "line-opacity": 0.95 },
       },
       {
         id: "arcs", type: "line", source: "arcs",
@@ -306,7 +311,10 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
 }
 
 // Small, slowly turning globe with every round's arc, for the results screen.
-export async function createSummaryGlobe(container, rounds, { colors, reducedMotion = false }) {
+// Results globe: every round's arc, turning slowly. Swipe sideways to spin it
+// (vertical swipes still scroll the page; zoom is off). A score bubble sits
+// over whichever answer faces you; tap it for that round's details.
+export async function createSummaryGlobe(container, rounds, { colors, details = [], reducedMotion = false }) {
   const answers = rounds.map((r) => r.answer);
   // Centre on the average answer direction.
   const v = answers.reduce((acc, { lat, lng }) => [
@@ -344,19 +352,51 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
     ]),
   });
 
-  // A score bubble over whichever answer faces the viewer most.
+  const span = (cls, text) => {
+    const el = document.createElement("span");
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  };
+
+  // MapLibre controls the marker element's own opacity, so fade an inner bubble.
+  let expanded = -1;
   const bubbles = rounds.map((r, i) => {
-    // MapLibre controls the marker element's own opacity, so fade an inner bubble.
     const holder = document.createElement("div");
-    const el = document.createElement("div");
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "score-bubble";
-    el.innerHTML = `<span class="bubble-n">${ROMAN[i]}</span><strong>${r.score}</strong><small>/100</small>`;
+    el.setAttribute("aria-expanded", "false");
+    const score = document.createElement("span");
+    score.className = "bubble-score";
+    score.append(span("bubble-value", String(r.score)), span("bubble-of", "/100"));
+    el.append(score);
+    const d = details[i];
+    if (d) {
+      const more = document.createElement("span");
+      more.className = "bubble-more";
+      more.append(span("bubble-round", d.round), span("bubble-name", d.name), span("bubble-meta", d.meta));
+      el.append(more);
+    }
+    el.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setExpanded(expanded === i ? -1 : i);
+    });
     holder.append(el);
     const marker = new maplibregl.Marker({ element: holder, anchor: "bottom", offset: [0, -8] })
       .setLngLat([r.answer.lng, r.answer.lat])
       .addTo(map);
     return { el, marker, v: toVec(r.answer) };
   });
+
+  function setExpanded(i) {
+    expanded = i;
+    bubbles.forEach((b, j) => {
+      b.el.classList.toggle("is-expanded", j === i);
+      b.el.setAttribute("aria-expanded", String(j === i));
+    });
+  }
+
   let shown = -1;
   const updateBubbles = () => {
     const c = map.getCenter();
@@ -368,24 +408,71 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
       if (d > bestDot) { bestDot = d; best = i; }
     });
     if (best !== shown) {
-      bubbles.forEach((b, i) => b.el.classList.toggle("is-visible", i === best));
+      bubbles.forEach((b, i) => {
+        b.el.classList.toggle("is-visible", i === best);
+        b.el.tabIndex = i === best ? 0 : -1;
+      });
+      // A bubble that turns away folds back to its small size.
+      if (expanded !== -1 && expanded !== best) setExpanded(-1);
       shown = best;
     }
   };
   updateBubbles();
 
+  // Horizontal swipes spin the globe; vertical ones are left to the page.
+  container.style.touchAction = "pan-y";
+  let dragging = false;
+  let lastX = 0;
+  let lastT = 0;
+  let velocity = 0; // degrees of longitude per second
+  let idleUntil = 0;
+  const degPerPx = () => 180 / Math.max(120, container.clientWidth);
+  const shift = (dLng) => {
+    const c = map.getCenter();
+    map.setCenter([c.lng + dLng, c.lat]);
+    updateBubbles();
+  };
+  container.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".score-bubble")) return;
+    dragging = true;
+    lastX = event.clientX;
+    lastT = performance.now();
+    velocity = 0;
+    container.setPointerCapture(event.pointerId);
+  });
+  container.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    const now = performance.now();
+    const dLng = -(event.clientX - lastX) * degPerPx();
+    velocity = dLng / Math.max(0.001, (now - lastT) / 1000);
+    lastX = event.clientX;
+    lastT = now;
+    shift(dLng);
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging = false;
+    idleUntil = performance.now() + 2500;
+  };
+  container.addEventListener("pointerup", release);
+  container.addEventListener("pointercancel", release);
+
   let frameId = null;
-  if (!reducedMotion) {
-    let last = performance.now();
-    const spin = (now) => {
-      const c = map.getCenter();
-      map.setCenter([c.lng + ((now - last) / 1000) * 6, c.lat]);
-      last = now;
-      updateBubbles();
-      frameId = requestAnimationFrame(spin);
-    };
-    frameId = requestAnimationFrame(spin);
-  }
+  let last = performance.now();
+  const tick = (now) => {
+    const dt = (now - last) / 1000;
+    last = now;
+    if (!dragging) {
+      if (Math.abs(velocity) > 0.5 && !reducedMotion) {
+        shift(velocity * dt);
+        velocity *= Math.exp(-dt * 3);
+      } else if (!reducedMotion && expanded === -1 && now > idleUntil) {
+        shift(6 * dt);
+      }
+    }
+    frameId = requestAnimationFrame(tick);
+  };
+  frameId = requestAnimationFrame(tick);
 
   return {
     setColors: (next) => applyColors(map, next),

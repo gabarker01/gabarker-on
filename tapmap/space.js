@@ -1,8 +1,9 @@
 // The sky behind TapMap's globe: stars, a faint Milky Way and the Moon, drawn on
 // a canvas behind the map. The sky is fixed relative to the Earth and projected
-// from the globe's camera, so it turns with you as you navigate. Now and then a
-// shooting star, satellite, comet or something stranger drifts past, and tapping
-// the Moon sends a rocket its way.
+// from the globe's camera, so it turns with you as you navigate. Every few
+// seconds something passes: shooting stars and meteor showers, satellites and
+// the ISS, comets, star flares, and rarer visitors (a UFO, a drifting
+// astronaut, a red roadster). Tapping the Moon sends a rocket its way.
 
 const rad = (d) => (d * Math.PI) / 180;
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -104,12 +105,19 @@ function drawMoon(ctx, x, y, r) {
 
 // ---------- Easter eggs (screen space) ----------
 
+const EGG_WEIGHTS = [
+  ["shooting", 34], ["shower", 8], ["satellite", 18], ["iss", 8], ["flare", 10],
+  ["comet", 8], ["ufo", 5], ["astronaut", 5], ["roadster", 4],
+];
+const EGG_TOTAL = EGG_WEIGHTS.reduce((sum, [, w]) => sum + w, 0);
+
 function pickEgg(rng) {
-  const roll = rng();
-  if (roll < 0.52) return "shooting";
-  if (roll < 0.82) return "satellite";
-  if (roll < 0.95) return "comet";
-  return "ufo";
+  let roll = rng() * EGG_TOTAL;
+  for (const [type, weight] of EGG_WEIGHTS) {
+    roll -= weight;
+    if (roll < 0) return type;
+  }
+  return "shooting";
 }
 
 export function makeEgg(type, w, h, rng) {
@@ -132,6 +140,26 @@ export function makeEgg(type, w, h, rng) {
     case "comet": {
       const y0 = edgeY();
       return { type, x0: w + 40, y0, x1: w * 0.2, y1: y0 + h * 0.25, duration: 22000 };
+    }
+    case "iss": {
+      const leftToRight = rng() < 0.5;
+      const y0 = edgeY();
+      return {
+        type, x0: leftToRight ? -20 : w + 20, y0, x1: leftToRight ? w + 20 : -20, y1: y0 + (rng() - 0.5) * h * 0.3,
+        duration: 11000 + rng() * 4000,
+      };
+    }
+    case "flare": {
+      return { type, x: w * (0.08 + rng() * 0.84), y: h * (0.06 + rng() * 0.5), duration: 2400 };
+    }
+    case "astronaut": {
+      const y0 = h * (0.12 + rng() * 0.45);
+      const leftToRight = rng() < 0.5;
+      return { type, x0: leftToRight ? -20 : w + 20, y0, x1: leftToRight ? w + 20 : -20, y1: y0 + (rng() - 0.5) * 60, duration: 16000, spin: (rng() < 0.5 ? -1 : 1) * (0.6 + rng()) };
+    }
+    case "roadster": {
+      const y0 = h * (0.1 + rng() * 0.4);
+      return { type, x0: w + 30, y0, x1: -30, y1: y0 + 30, duration: 14000 };
     }
     default: {
       const y0 = h * (0.15 + rng() * 0.4);
@@ -208,6 +236,81 @@ export function drawEgg(ctx, egg, t) {
       ctx.arc(lx, 0.4, 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
+  } else if (egg.type === "iss") {
+    const x = egg.x0 + (egg.x1 - egg.x0) * p;
+    const y = egg.y0 + (egg.y1 - egg.y0) * p;
+    ctx.globalAlpha = Math.min(1, p * 8, (1 - p) * 8);
+    ctx.translate(x, y);
+    ctx.rotate(Math.atan2(egg.y1 - egg.y0, egg.x1 - egg.x0));
+    ctx.fillStyle = "rgba(150,170,210,0.9)";
+    ctx.fillRect(-7, -3.2, 5, 2.2);
+    ctx.fillRect(-7, 1, 5, 2.2);
+    ctx.fillRect(2, -3.2, 5, 2.2);
+    ctx.fillRect(2, 1, 5, 2.2);
+    ctx.fillStyle = "rgba(245,245,240,0.95)";
+    ctx.fillRect(-2, -1, 4, 2);
+    ctx.fillRect(-0.4, -3.4, 0.8, 6.8);
+    ctx.fillStyle = `rgba(255,90,80,${0.5 + 0.5 * Math.sin(t / 160)})`;
+    ctx.beginPath();
+    ctx.arc(2.3, 0, 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (egg.type === "flare") {
+    const a = Math.sin(Math.PI * p) ** 2;
+    const r = 1.2 + a * 3;
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = "rgba(220,235,255,0.8)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(egg.x - r * 3.5, egg.y); ctx.lineTo(egg.x + r * 3.5, egg.y);
+    ctx.moveTo(egg.x, egg.y - r * 3.5); ctx.lineTo(egg.x, egg.y + r * 3.5);
+    ctx.stroke();
+    const g = ctx.createRadialGradient(egg.x, egg.y, 0, egg.x, egg.y, r * 2.5);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(1, "rgba(200,220,255,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(egg.x, egg.y, r * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (egg.type === "astronaut") {
+    const x = egg.x0 + (egg.x1 - egg.x0) * p;
+    const y = egg.y0 + (egg.y1 - egg.y0) * p + Math.sin(p * Math.PI * 2) * 10;
+    ctx.globalAlpha = Math.min(1, p * 10, (1 - p) * 10);
+    ctx.translate(x, y);
+    ctx.rotate((t / 1000) * egg.spin);
+    ctx.fillStyle = "#e9e6de";
+    ctx.beginPath();
+    ctx.arc(0, -4.2, 2.6, 0, Math.PI * 2); // helmet
+    ctx.fill();
+    ctx.fillRect(-2.4, -2, 4.8, 5); // body
+    ctx.fillRect(-4.2, -1.4, 1.8, 3.6); // arms
+    ctx.fillRect(2.4, -1.4, 1.8, 3.6);
+    ctx.fillRect(-2.2, 3, 1.8, 3.2); // legs
+    ctx.fillRect(0.4, 3, 1.8, 3.2);
+    ctx.fillStyle = "#d9b26a";
+    ctx.beginPath();
+    ctx.arc(0.5, -4.4, 1.5, 0, Math.PI * 2); // visor
+    ctx.fill();
+  } else if (egg.type === "roadster") {
+    const x = egg.x0 + (egg.x1 - egg.x0) * p;
+    const y = egg.y0 + (egg.y1 - egg.y0) * p;
+    ctx.globalAlpha = Math.min(1, p * 10, (1 - p) * 10);
+    ctx.translate(x, y);
+    ctx.rotate(-0.25 + Math.sin(t / 900) * 0.15);
+    ctx.fillStyle = "#c8323a";
+    ctx.beginPath();
+    ctx.moveTo(-8, 1); ctx.lineTo(-7, -1.5); ctx.lineTo(-2, -2.2); ctx.lineTo(1, -4); ctx.lineTo(5, -4);
+    ctx.lineTo(8, -1.2); ctx.lineTo(8, 1); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#1b1d22";
+    for (const wx of [-5, 5]) {
+      ctx.beginPath();
+      ctx.arc(wx, 1.4, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#f1ece2"; // Starman
+    ctx.beginPath();
+    ctx.arc(2.6, -5.6, 1.2, 0, Math.PI * 2);
+    ctx.fill();
   } else if (egg.type === "rocket") {
     const e = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
     const x = egg.x0 + (egg.x1 - egg.x0) * e;
@@ -297,7 +400,7 @@ export function createSpace(container, map, { reducedMotion = false, eggs = true
 
   let moonScreen = null;
   let active = [];
-  let nextEggAt = performance.now() + 5000 + rng() * 6000;
+  let nextEggAt = performance.now() + 2500 + rng() * 3000;
 
   function frame(now) {
     const cam = camera();
@@ -326,11 +429,26 @@ export function createSpace(container, map, { reducedMotion = false, eggs = true
     if (m) drawMoon(ctx, m[0], m[1], moonR);
 
     if (eggs && !reducedMotion) {
-      if (now >= nextEggAt && active.length < 2) {
-        active.push({ ...makeEgg(pickEgg(rng), width, height, rng), start: now });
-        nextEggAt = now + 7000 + rng() * 12000;
+      if (now >= nextEggAt && active.length < 3) {
+        const type = pickEgg(rng);
+        if (type === "shower") {
+          // A little meteor shower: several shooting stars from one direction.
+          const lead = makeEgg("shooting", width, height, rng);
+          for (let k = 0; k < 4 + Math.floor(rng() * 3); k++) {
+            active.push({
+              ...lead,
+              x: lead.x + (rng() - 0.5) * width * 0.5,
+              y: lead.y + (rng() - 0.5) * height * 0.2,
+              dist: lead.dist * (0.6 + rng() * 0.5),
+              start: now + k * (180 + rng() * 260),
+            });
+          }
+        } else {
+          active.push({ ...makeEgg(type, width, height, rng), start: now });
+        }
+        nextEggAt = now + 3000 + rng() * 6000;
       }
-      active = active.filter((egg) => !drawEgg(ctx, egg, now - egg.start));
+      active = active.filter((egg) => now < egg.start || !drawEgg(ctx, egg, now - egg.start));
     }
 
     raf = requestAnimationFrame(frame);

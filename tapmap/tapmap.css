@@ -1,82 +1,10 @@
-/* TapMap: quiet, editorial styling over a full-bleed globe.
-   Globe colours are read from these tokens by tapmap.js. */
+/* TapMap: quiet, editorial styling over a full-bleed globe in space.
+   Dark only. Globe colours are read from these tokens by tapmap.js. */
 
 :root {
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 
-  --paper: #f4f1ea;
-  --space: #efebe2;
-  --space-edge: #e2ddd1;
-  --ink: #16181d;
-  --ink-soft: #5b6069;
-  --ink-faint: #8b9099;
-  --hairline: rgba(22, 24, 29, 0.1);
-  --panel: rgba(250, 248, 243, 0.95);
-  --panel-edge: rgba(22, 24, 29, 0.08);
-  --primary: #16181d;
-  --primary-ink: #f4f1ea;
-  --accent: #9a7432;
-
-  --globe-ocean: #c8d3dc;
-  --globe-land: #f8f6f0;
-  --globe-atmosphere: #bcd3ee;
-  --mark-light: #33455e;
-  --mark-deep: #0f1826;
-  --mark-line: rgba(241, 236, 226, 0.28);
-  --globe-arc: #b0843a;
-  --globe-guess: #16181d;
-  --globe-answer: #b0843a;
-
-  --t-bullseye: #b0843a;
-  --t-close: #4f8f6f;
-  --t-near: #c9a646;
-  --t-far: #cf7f4b;
-  --t-off: #b9574f;
-
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 10px 40px -12px rgba(30, 30, 40, 0.25);
-  --backdrop: rgba(22, 20, 16, 0.32);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #0b0d12;
-    --space: #0b0f18;
-    --space-edge: #040509;
-    --ink: #f1ece2;
-    --ink-soft: #a7abb3;
-    --ink-faint: #71767f;
-    --hairline: rgba(241, 236, 226, 0.1);
-    --panel: rgba(14, 17, 24, 0.74);
-    --panel-edge: rgba(241, 236, 226, 0.08);
-    --primary: #f1ece2;
-    --primary-ink: #0b0d12;
-    --accent: #d9b26a;
-
-    --globe-ocean: #0f1a28;
-    --globe-land: #273140;
-    --globe-atmosphere: #4f73a8;
-    --mark-light: #34496a;
-    --mark-deep: #101a2a;
-    --mark-line: rgba(241, 236, 226, 0.3);
-    --globe-arc: #d9b26a;
-    --globe-guess: #f1ece2;
-    --globe-answer: #d9b26a;
-
-    --t-bullseye: #d9b26a;
-    --t-close: #6fb592;
-    --t-near: #e0c46a;
-    --t-far: #e3925d;
-    --t-off: #d8716a;
-
-    --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 48px -16px rgba(0, 0, 0, 0.7);
-    --backdrop: rgba(0, 0, 0, 0.55);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
   --paper: #0b0d12;
   --space: #0b0f18;
   --space-edge: #040509;
@@ -369,15 +297,6 @@ a:focus-visible {
 
 .ghost-button:active {
   transform: scale(0.94);
-}
-
-.icon-sun,
-[data-active-theme="dark"] .icon-moon {
-  display: none;
-}
-
-[data-active-theme="dark"] .icon-sun {
-  display: block;
 }
 
 /* ---------- Panels ---------- */
@@ -798,6 +717,7 @@ a:focus-visible {
 
 /* Score bubble on the results globe */
 .score-bubble {
+  font: inherit;
   display: flex;
   align-items: baseline;
   gap: 4px;
@@ -820,22 +740,67 @@ a:focus-visible {
 .score-bubble.is-visible {
   opacity: 1;
   transform: none;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.score-bubble .bubble-n {
+.bubble-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.bubble-value {
   font-family: var(--font-serif);
-  font-style: italic;
+  font-size: 1.25rem;
+}
+
+.bubble-of {
+  font-size: 0.7rem;
+  color: #a7abb3;
+}
+
+.bubble-more {
+  display: none;
+}
+
+.score-bubble.is-expanded {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 220px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  white-space: normal;
+  text-align: left;
+}
+
+.score-bubble.is-expanded .bubble-value {
+  font-size: 1.6rem;
+}
+
+.score-bubble.is-expanded .bubble-more {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: rise 240ms ease both;
+}
+
+.bubble-round {
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: #d9b26a;
 }
 
-.score-bubble strong {
+.bubble-name {
   font-family: var(--font-serif);
-  font-size: 1.25rem;
-  font-weight: 400;
+  font-size: 1.05rem;
+  line-height: 1.2;
 }
 
-.score-bubble small {
-  font-size: 0.7rem;
+.bubble-meta {
+  font-size: 0.72rem;
   color: #a7abb3;
 }
 
