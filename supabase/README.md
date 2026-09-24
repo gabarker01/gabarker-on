@@ -1,7 +1,7 @@
 # TapMap accounts: Supabase setup
 
 TapMap works without accounts. Once these steps are done, players can sign in
-(Google, Apple or an email link), keep their stats across devices, follow
+(Google, or email and password), keep their stats across devices, follow
 friends and see friends' scores for the day.
 
 Project: `https://qmgwlvjvwwrlcuupsttb.supabase.co` (free tier).
@@ -36,11 +36,18 @@ Dashboard → **Authentication** → **URL Configuration**:
 
 Dashboard → **Authentication** → **Sign In / Providers**.
 
-### Email link (on by default)
+### Email and password (on by default)
 
-Supabase's built-in email sender is limited to a few emails an hour and is
-meant for testing. For real use, add free SMTP from a provider such as
-Resend or Brevo under **Authentication → Emails → SMTP Settings**.
+Players can create an account and sign in with an email and password.
+
+- **Turn off "Confirm email"** (Authentication → Sign In / Providers → Email)
+  so new accounts are signed in straight away and no email is needed. With it
+  on, every sign-up waits for a confirmation email.
+- "Forgot password?" still sends an email. Supabase's built-in sender only
+  allows a few emails an hour and is meant for testing; for reliable resets,
+  add free SMTP from a provider such as Resend or Brevo under
+  **Authentication → Emails → SMTP Settings**. Reset links return to
+  `https://gabarker.com/tapmap/`, where the game asks for a new password.
 
 ### Google (free)
 

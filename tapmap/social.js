@@ -83,16 +83,32 @@ export async function currentUser() {
   return data.session ? data.session.user : null;
 }
 
+// callback(user, event); event is e.g. "SIGNED_IN" or "PASSWORD_RECOVERY".
 export function onAuthChange(callback) {
-  client.auth.onAuthStateChange((_event, session) => callback(session ? session.user : null));
+  client.auth.onAuthStateChange((event, session) => callback(session ? session.user : null, event));
 }
 
 export async function signInWithProvider(provider) {
   unwrap(await client.auth.signInWithOAuth({ provider, options: { redirectTo: redirectTo() } }));
 }
 
-export async function signInWithEmail(email) {
-  unwrap(await client.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo() } }));
+export async function signInWithPassword(email, password) {
+  unwrap(await client.auth.signInWithPassword({ email, password }));
+}
+
+// Returns true if signed in straight away, false if Supabase wants the email
+// confirmed first ("Confirm email" is on in the dashboard).
+export async function signUp(email, password) {
+  const data = unwrap(await client.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo() } }));
+  return Boolean(data.session);
+}
+
+export async function sendPasswordReset(email) {
+  unwrap(await client.auth.resetPasswordForEmail(email, { redirectTo: redirectTo() }));
+}
+
+export async function updatePassword(password) {
+  unwrap(await client.auth.updateUser({ password }));
 }
 
 export async function signOut() {

@@ -8,7 +8,7 @@ import {
 } from "./game.js";
 import { createGlobe, createSummaryGlobe } from "./map.js";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=2";
+import * as social from "./social.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -486,6 +486,7 @@ document.addEventListener("keydown", (event) => {
 let user = null;
 let profile = null;
 let socialError = false;
+let recovering = false; // showing the "new password" form after a reset link
 
 const PROVIDER_LABELS = { google: "Continue with Google", apple: "Continue with Apple" };
 const PROVIDER_ICONS = {
@@ -576,6 +577,7 @@ async function runSearch() {
 }
 
 async function renderAccount() {
+  if (recovering) return;
   $("account-signed-out").hidden = Boolean(user);
   $("account-signed-in").hidden = !user;
   if (!user) return;
@@ -692,7 +694,8 @@ async function bootSocial() {
   social.enabledProviders().then(buildProviderButtons);
   try {
     await social.initSocial();
-    social.onAuthChange((next) => {
+    social.onAuthChange((next, event) => {
+      if (event === "PASSWORD_RECOVERY") showRecovery();
       if ((next && next.id) !== (user && user.id)) onSignedIn(next);
     });
     await onSignedIn(await social.currentUser());
@@ -706,21 +709,102 @@ async function bootSocial() {
 $("account-button").addEventListener("click", openAccount);
 $("friends-signin").addEventListener("click", openAccount);
 $("account-close").addEventListener("click", () => { $("account").hidden = true; });
-$("email-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+// ---------- Email & password ----------
+
+const AUTH_ERRORS = {
+  invalid_credentials: "That email and password don't match. Try again, or create an account.",
+  user_already_exists: "There's already an account with that email. Sign in instead.",
+  email_not_confirmed: "Confirm your email first, using the link we sent you.",
+  weak_password: "Choose a longer password (at least 8 characters).",
+  over_email_send_rate_limit: "Too many emails sent. Please try again later.",
+};
+const authError = (error) => AUTH_ERRORS[error && error.code] || errorText(error);
+
+function readCredentials({ needPassword = true } = {}) {
   const email = $("email-input").value.trim();
-  if (!$("email-input").checkValidity()) {
+  const password = $("password-input").value;
+  if (!$("email-input").checkValidity() || !email) {
     accountMessage("Please enter a valid email address.", true);
+    return null;
+  }
+  if (needPassword && password.length < 8) {
+    accountMessage("Passwords are at least 8 characters.", true);
+    return null;
+  }
+  return { email, password };
+}
+
+async function withBusy(button, work) {
+  button.disabled = true;
+  try {
+    await work();
+  } catch (error) {
+    accountMessage(authError(error), true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("email-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const creds = readCredentials();
+  if (!creds) return;
+  accountMessage("Signing in…");
+  withBusy($("password-sign-in"), async () => {
+    await social.signInWithPassword(creds.email, creds.password);
+    $("password-input").value = "";
+    accountMessage("");
+  });
+});
+
+$("password-sign-up").addEventListener("click", () => {
+  const creds = readCredentials();
+  if (!creds) return;
+  accountMessage("Creating your account…");
+  withBusy($("password-sign-up"), async () => {
+    const signedIn = await social.signUp(creds.email, creds.password);
+    $("password-input").value = "";
+    accountMessage(signedIn ? "" : `Almost there: confirm your email using the link sent to ${creds.email}.`);
+  });
+});
+
+$("password-forgot").addEventListener("click", () => {
+  const creds = readCredentials({ needPassword: false });
+  if (!creds) return;
+  withBusy($("password-forgot"), async () => {
+    await social.sendPasswordReset(creds.email);
+    accountMessage(`If there's an account for ${creds.email}, a reset link is on its way.`);
+  });
+});
+
+// Opened from a password-reset email: ask for a new password.
+function showRecovery() {
+  recovering = true;
+  $("account-signed-out").hidden = true;
+  $("account-signed-in").hidden = true;
+  $("recovery-form").hidden = false;
+  accountMessage("");
+  openOverlay($("account"));
+  $("new-password").focus();
+}
+
+$("recovery-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const password = $("new-password").value;
+  if (password.length < 8) {
+    accountMessage("Passwords are at least 8 characters.", true);
     return;
   }
-  accountMessage("Sending…");
-  try {
-    await social.signInWithEmail(email);
-    accountMessage(`Check ${email} for a sign-in link.`);
-  } catch (error) {
-    accountMessage(errorText(error), true);
-  }
+  withBusy($("recovery-form").querySelector("button"), async () => {
+    await social.updatePassword(password);
+    $("new-password").value = "";
+    $("recovery-form").hidden = true;
+    recovering = false;
+    await renderAccount();
+    accountMessage("Password updated. You're signed in.");
+  });
 });
+
 $("profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const username = $("username").value.trim().toLowerCase();

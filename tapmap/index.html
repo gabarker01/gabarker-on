@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=7">
+  <link rel="stylesheet" href="tapmap.css?v=8">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -174,12 +174,25 @@
         <h2 id="account-title" class="sheet-title">Keep your<br><em>streak.</em></h2>
         <p class="lead">Sign in to save your results, track your stats across devices and follow friends.</p>
         <div id="provider-buttons" class="provider-buttons"></div>
-        <form id="email-form" class="email-form" hidden>
-          <label for="email-input" class="field-label">Or get a sign-in link by email</label>
-          <input id="email-input" class="field" type="email" autocomplete="email" placeholder="you@example.com" required>
-          <button class="secondary-button" type="submit">Email me a link</button>
+        <form id="email-form" class="email-form" hidden novalidate>
+          <p class="field-label or-label">Or use your email</p>
+          <label for="email-input" class="field-label">Email</label>
+          <input id="email-input" class="field" type="email" autocomplete="username" placeholder="you@example.com" required>
+          <label for="password-input" class="field-label">Password <span class="hint">at least 8 characters</span></label>
+          <input id="password-input" class="field" type="password" autocomplete="current-password" minlength="8" required>
+          <button id="password-sign-in" class="primary-button form-button" type="submit">Sign in</button>
+          <button id="password-sign-up" class="secondary-button" type="button">Create account</button>
+          <button id="password-forgot" class="link-button centered" type="button">Forgot password?</button>
         </form>
       </div>
+
+      <form id="recovery-form" class="email-form recovery-form" hidden novalidate>
+        <p class="eyebrow">Account</p>
+        <h2 class="sheet-title">New <em>password.</em></h2>
+        <label for="new-password" class="field-label">New password <span class="hint">at least 8 characters</span></label>
+        <input id="new-password" class="field" type="password" autocomplete="new-password" minlength="8" required>
+        <button class="primary-button form-button" type="submit">Save password</button>
+      </form>
 
       <div id="account-signed-in" hidden>
         <p class="eyebrow">Signed in</p>
@@ -223,7 +236,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=11"></script>
+  <script type="module" src="tapmap.js?v=12"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;
