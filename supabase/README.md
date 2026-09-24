@@ -147,8 +147,13 @@ select * from public.daily_summary order by game_date desc;
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
 | `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
 
-Following someone sends a request. Once they accept, you can see their stats,
-today's result and their pins on the globe during each round.
+Following someone sends a request. When they accept, you follow each other
+(the database adds the follow back automatically), and you can both see each
+other's stats, history, charts and pins on the globe during each round.
+
+Profile photos are stored in the public `avatars` storage bucket (created by
+`setup.sql`), one folder per player; players can only change their own. The
+app crops photos to a small square before uploading (1 MB limit).
 
 **Re-run `setup.sql` after updating** (it's safe to run again). Follows made
 before requests existed are kept as accepted.

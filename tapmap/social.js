@@ -78,6 +78,17 @@ export async function enabledProviders() {
   }
 }
 
+// Checks a saved sign-in with the server. If the account no longer exists
+// (e.g. it was deleted), the stale sign-in is cleared and null returned.
+export async function verifiedUser() {
+  const { data, error } = await client.auth.getUser();
+  if (error || !data || !data.user) {
+    await client.auth.signOut({ scope: "local" });
+    return null;
+  }
+  return data.user;
+}
+
 export async function currentUser() {
   const { data } = await client.auth.getSession();
   return data.session ? data.session.user : null;
@@ -139,7 +150,7 @@ export async function signOut() {
 // ---------- Profiles & stats ----------
 
 export async function getProfile(userId) {
-  return unwrap(await client.from("profiles").select("id, username, display_name").eq("id", userId).maybeSingle());
+  return unwrap(await client.from("profiles").select("id, username, display_name, avatar_url").eq("id", userId).maybeSingle());
 }
 
 export async function updateProfile(userId, { username, displayName }) {
@@ -147,7 +158,7 @@ export async function updateProfile(userId, { username, displayName }) {
     .from("profiles")
     .update({ username, display_name: displayName })
     .eq("id", userId)
-    .select("id, username, display_name")
+    .select("id, username, display_name, avatar_url")
     .single());
 }
 
@@ -185,7 +196,7 @@ export async function friendsResults(userId, date) {
   const ids = [userId, ...follows.map((f) => f.followee_id)];
   return unwrap(await client
     .from("games")
-    .select("user_id, total, rounds, profiles(id, username, display_name)")
+    .select("user_id, total, rounds, profiles(id, username, display_name, avatar_url)")
     .eq("game_date", date)
     .in("user_id", ids)
     .order("total", { ascending: false }));
@@ -199,7 +210,7 @@ export async function gameFor(userId, date) {
 
 // ---------- Following (requests must be accepted) ----------
 
-const PERSON = "id, username, display_name";
+const PERSON = "id, username, display_name, avatar_url";
 
 // Everyone you follow or have asked to follow: [{ ...profile, status }].
 export async function listFollowing(userId) {
@@ -282,4 +293,25 @@ export async function acceptRequest(userId, followerId) {
 // Unfollow, cancel a request, decline a request or remove a follower.
 export async function endFollow(followerId, followeeId) {
   unwrap(await client.from("follows").delete().eq("follower_id", followerId).eq("followee_id", followeeId));
+}
+
+// ---------- Profile photos ----------
+
+const AVATAR_BUCKET = "avatars";
+
+// Uploads a square image blob as the player's photo and saves its URL.
+export async function uploadAvatar(userId, blob) {
+  const ext = blob.type === "image/webp" ? "webp" : blob.type === "image/png" ? "png" : "jpg";
+  const path = `${userId}/avatar.${ext}`;
+  unwrap(await client.storage.from(AVATAR_BUCKET).upload(path, blob, { upsert: true, contentType: blob.type, cacheControl: "3600" }));
+  const { data } = client.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  const url = `${data.publicUrl}?v=${Date.now()}`;
+  return unwrap(await client
+    .from("profiles").update({ avatar_url: url }).eq("id", userId).select(PERSON).single());
+}
+
+export async function removeAvatar(userId) {
+  await client.storage.from(AVATAR_BUCKET).remove(["webp", "png", "jpg"].map((ext) => `${userId}/avatar.${ext}`));
+  return unwrap(await client
+    .from("profiles").update({ avatar_url: null }).eq("id", userId).select(PERSON).single());
 }

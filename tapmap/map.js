@@ -178,21 +178,30 @@ function afterMove(map, fallbackMs) {
   });
 }
 
-// A friend's pin: their initials in a disc on a short stem, in their colour.
+// A friend's pin: their photo or initials in a disc on a short stem.
 function friendPinElement(friend, animate) {
-  const el = document.createElement("div");
+  const el = document.createElement("button");
+  el.type = "button";
   el.className = "pin pin-friend";
-  const body = document.createElement("div");
+  el.setAttribute("aria-label", `${friend.name}'s guess`);
+  const body = document.createElement("span");
   body.className = animate ? "pin-body pin-drop" : "pin-body";
   body.style.setProperty("--avatar", friend.colour);
   const badge = document.createElement("span");
   badge.className = "friend-pin-badge";
   badge.textContent = friend.initials;
+  if (friend.avatarUrl) {
+    const img = document.createElement("img");
+    img.src = friend.avatarUrl;
+    img.alt = "";
+    img.addEventListener("load", () => badge.classList.add("has-photo"));
+    img.addEventListener("error", () => img.remove());
+    badge.append(img);
+  }
   const stem = document.createElement("span");
   stem.className = "friend-pin-stem";
   body.append(badge, stem);
   el.append(body);
-  el.title = friend.name || friend.initials;
   return el;
 }
 
@@ -249,6 +258,7 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
   }).observe(container);
 
   let markers = [];
+  let popups = [];
   let guessMarker = null;
   let arcFeatures = [];
 
@@ -326,15 +336,25 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
         })),
       });
       friends.forEach((f) => {
-        const marker = new maplibregl.Marker({ element: friendPinElement(f, !reducedMotion), anchor: "bottom" })
+        const element = friendPinElement(f, !reducedMotion);
+        const marker = new maplibregl.Marker({ element, anchor: "bottom" })
           .setLngLat([f.guess.lng, f.guess.lat])
           .addTo(map);
+        // Tap a friend's pin for their name and how their guess went.
+        if (f.details) {
+          const popup = new maplibregl.Popup({ offset: [0, -34], closeButton: false, maxWidth: "260px", className: "friend-popup" })
+            .setDOMContent(f.details());
+          marker.setPopup(popup);
+          popups.push(popup);
+        }
         markers.push(marker);
       });
     }
   }
 
   function clear() {
+    popups.forEach((p) => p.remove());
+    popups = [];
     markers.forEach((m) => m.remove());
     markers = [];
     guessMarker = null;

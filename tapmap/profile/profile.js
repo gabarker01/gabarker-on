@@ -3,8 +3,9 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=6";
-import { avatarElement } from "/tapmap/avatar.js";
+import * as social from "/tapmap/social.js?v=7";
+import { avatarElement, squarePhoto } from "/tapmap/avatar.js";
+import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
 import { utcDateKey, formatNumber, MAX_SCORE } from "/tapmap/game.js";
 
 const $ = (id) => document.getElementById(id);
@@ -73,10 +74,11 @@ async function finishedToday() {
 // ---------- Stats, today and history ----------
 
 async function renderDetails(person, isMe) {
-  const [stats, games, done] = await Promise.all([
+  const [stats, games, done, myGames] = await Promise.all([
     social.getStats(person.id),
-    social.recentGames(person.id, 30),
+    social.recentGames(person.id, 60),
     isMe ? Promise.resolve(true) : finishedToday(),
+    isMe ? Promise.resolve(null) : social.recentGames(me.id, 60),
   ]);
   $("stat-played").textContent = formatNumber(stats ? stats.played : 0);
   $("stat-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
@@ -120,6 +122,94 @@ async function renderDetails(person, isMe) {
     return li;
   }));
   $("history-empty").hidden = past.length > 0;
+
+  // Today's result stays out of the charts until you've played it yourself.
+  const visibleGames = done ? games : games.filter((g) => g.game_date !== today);
+  if (isMe) renderMyCharts(games);
+  else renderComparison(person, visibleGames, myGames || []);
+}
+
+// ---------- Charts ----------
+
+const shortDate = (key) => new Date(`${key}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const ROUND_LABELS = ["Round 1", "Round 2", "Round 3", "Round 4", "Round 5"];
+const TIER_ORDER = ["🎯", "🟩", "🟨", "🟧", "🟥"];
+const TIER_LABELS = ["<50 km", "<500", "<1,500", "<3,000", "3,000+"];
+
+function roundAverages(games) {
+  return ROUND_LABELS.map((_, i) => {
+    const scores = games.map((g) => g.rounds && g.rounds[i] && g.rounds[i].score).filter(Number.isFinite);
+    return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  });
+}
+
+const scorePoints = (games) => games.slice(0, 30).map((g) => ({ x: g.game_date, y: g.total }));
+
+function renderMyCharts(games) {
+  $("my-charts").hidden = games.length === 0;
+  $("compare").hidden = true;
+  if (!games.length) return;
+  lineChart($("chart-scores"), {
+    title: "Score by day (out of 1,000)",
+    series: [{ name: "You", colour: YOU, points: scorePoints(games) }],
+    yMax: 1000, formatX: shortDate, formatY: (v) => formatNumber(v),
+  });
+  barChart($("chart-rounds"), {
+    title: "Average score by round (out of 100)",
+    categories: ROUND_LABELS.map((_, i) => `R${i + 1}`),
+    series: [{ name: "You", colour: YOU, values: roundAverages(games) }],
+    yMax: 100,
+  });
+  const css = getComputedStyle(document.documentElement);
+  const tierColours = ["--t-bullseye", "--t-close", "--t-near", "--t-far", "--t-off"].map((v) => css.getPropertyValue(v).trim());
+  const counts = TIER_ORDER.map((t) => games.reduce((n, g) => n + (g.rounds || []).filter((r) => r.tier === t).length, 0));
+  barChart($("chart-tiers"), {
+    title: "How close your guesses land (rounds)",
+    categories: TIER_LABELS,
+    series: [{ name: "Rounds", colour: YOU, values: counts }],
+    colours: tierColours,
+  });
+}
+
+function renderComparison(person, theirGames, myGames) {
+  $("my-charts").hidden = true;
+  const theirName = personName(person).split(" ")[0];
+  $("compare-title").textContent = `You vs ${theirName}`;
+  $("compare").hidden = theirGames.length === 0 && myGames.length === 0;
+
+  // Head to head on days you both played.
+  const mine = new Map(myGames.map((g) => [g.game_date, g.total]));
+  const shared = theirGames.filter((g) => mine.has(g.game_date));
+  const wins = shared.filter((g) => mine.get(g.game_date) > g.total).length;
+  const losses = shared.filter((g) => mine.get(g.game_date) < g.total).length;
+  const tiles = [["Played both", shared.length], ["You won", wins], [`${theirName} won`, losses], ["Drawn", shared.length - wins - losses]];
+  $("head-to-head").replaceChildren(...tiles.map(([label, value]) => {
+    const div = document.createElement("div");
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = formatNumber(value);
+    div.append(dt, dd);
+    return div;
+  }));
+
+  lineChart($("chart-compare-scores"), {
+    title: "Score by day (out of 1,000)",
+    series: [
+      { name: "You", colour: YOU, points: scorePoints(myGames) },
+      { name: theirName, colour: THEM, points: scorePoints(theirGames) },
+    ],
+    yMax: 1000, formatX: shortDate, formatY: (v) => formatNumber(v),
+  });
+  barChart($("chart-compare-rounds"), {
+    title: "Average score by round (out of 100)",
+    categories: ROUND_LABELS.map((_, i) => `R${i + 1}`),
+    series: [
+      { name: "You", colour: YOU, values: roundAverages(myGames) },
+      { name: theirName, colour: THEM, values: roundAverages(theirGames) },
+    ],
+    yMax: 100,
+  });
 }
 
 // ---------- People lists (own profile) ----------
@@ -268,7 +358,9 @@ async function render() {
     return;
   }
 
+  $("photo-controls").hidden = !isMe;
   if (isMe) {
+    $("photo-remove").hidden = !person.avatar_url;
     $("profile-private").hidden = true;
     $("profile-details").hidden = false;
     $("display-name").value = person.display_name || "";
@@ -291,6 +383,40 @@ async function render() {
 }
 
 // ---------- Actions ----------
+
+$("photo-input").addEventListener("change", async () => {
+  const file = $("photo-input").files[0];
+  $("photo-input").value = "";
+  if (!file) return;
+  fieldError("photo-error", "");
+  if (!file.type.startsWith("image/")) {
+    fieldError("photo-error", "Choose an image file.");
+    return;
+  }
+  message("Uploading photo…");
+  try {
+    const blob = await squarePhoto(file);
+    myProfile = await social.uploadAvatar(me.id, blob);
+    shown = myProfile;
+    await render();
+    message("Photo updated.");
+  } catch (error) {
+    message("");
+    fieldError("photo-error", errorText(error));
+  }
+});
+
+$("photo-remove").addEventListener("click", async () => {
+  fieldError("photo-error", "");
+  try {
+    myProfile = await social.removeAvatar(me.id);
+    shown = myProfile;
+    await render();
+    message("Photo removed.");
+  } catch (error) {
+    fieldError("photo-error", errorText(error));
+  }
+});
 
 $("invite-button").addEventListener("click", async () => {
   const url = `${window.location.origin}/tapmap/?invite=${encodeURIComponent(myProfile.username)}`;
@@ -362,6 +488,12 @@ export async function showProfile(username) {
     await social.initSocial();
     me = await social.currentUser();
     if (me) myProfile = await social.getProfile(me.id);
+    // A saved sign-in for an account that no longer exists counts as signed out.
+    if (me && !myProfile) {
+      const still = await social.verifiedUser().catch(() => null);
+      if (still) await social.signOut();
+      me = null;
+    }
 
     if (username === "me") {
       if (!myProfile) {

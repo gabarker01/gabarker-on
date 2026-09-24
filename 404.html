@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=11">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=12">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -54,6 +54,13 @@
         </div>
       </div>
 
+      <div id="photo-controls" class="photo-controls" hidden>
+        <label class="chip-button" for="photo-input">Change photo</label>
+        <input id="photo-input" type="file" accept="image/*" hidden>
+        <button id="photo-remove" class="chip-button" type="button" hidden>Remove photo</button>
+        <p id="photo-error" class="field-error" role="alert" hidden></p>
+      </div>
+
       <div class="profile-actions">
         <button id="profile-action" class="primary-button" type="button" hidden></button>
         <button id="invite-button" class="primary-button" type="button" hidden>Invite a friend</button>
@@ -70,6 +77,22 @@
 
         <h2 class="section-label">Today</h2>
         <div id="profile-today" class="person-today"></div>
+
+        <!-- Your own charts -->
+        <section id="my-charts" class="charts" hidden>
+          <h2 class="section-label">Your charts</h2>
+          <div id="chart-scores"></div>
+          <div id="chart-rounds"></div>
+          <div id="chart-tiers"></div>
+        </section>
+
+        <!-- You compared with this player -->
+        <section id="compare" class="charts" hidden>
+          <h2 id="compare-title" class="section-label">You vs them</h2>
+          <dl id="head-to-head" class="stats h2h"></dl>
+          <div id="chart-compare-scores"></div>
+          <div id="chart-compare-rounds"></div>
+        </section>
 
         <h2 class="section-label">Recent games</h2>
         <ol id="history" class="history"></ol>
@@ -127,7 +150,7 @@
   <script type="module">
     const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=1").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=2").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

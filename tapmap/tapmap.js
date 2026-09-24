@@ -6,9 +6,9 @@ import {
   rating, formatNumber, shareText,
   recordDailyResult, currentStreak,
 } from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=3";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=4";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=6";
+import * as social from "./social.js?v=7";
 import { initials, colourFor, avatarElement } from "./avatar.js";
 
 const $ = (id) => document.getElementById(id);
@@ -594,8 +594,46 @@ function friendsForRound(index) {
       guess: round.guess,
       initials: initials(row.profiles),
       colour: colourFor(row.profiles),
+      avatarUrl: row.profiles.avatar_url || null,
       name: personName(row.profiles),
+      details: () => friendGuessCard(row.profiles, round),
     }));
+}
+
+// The card shown when a friend's pin is tapped: who, how close, and a link.
+function friendGuessCard(person, round) {
+  const card = document.createElement("div");
+  card.className = "friend-card";
+  const head = document.createElement("a");
+  head.className = "person-link";
+  head.href = profileUrl(person.username);
+  head.append(avatarElement(person, "sm"));
+  const text = document.createElement("span");
+  text.className = "person-text";
+  const name = document.createElement("span");
+  name.className = "person-name";
+  name.textContent = personName(person);
+  const handle = document.createElement("span");
+  handle.className = "person-handle";
+  handle.textContent = `@${person.username}`;
+  text.append(name, handle);
+  head.append(text);
+  const stats = document.createElement("p");
+  stats.className = "friend-card-stats";
+  const score = document.createElement("strong");
+  score.textContent = String(round.score ?? "–");
+  const of = document.createElement("span");
+  of.className = "of";
+  of.textContent = "/100";
+  stats.append(score, of);
+  const meta = document.createElement("p");
+  meta.className = "friend-card-meta";
+  if (TIERS[round.tier]) meta.append(tierDot(round.tier));
+  const km = Number.isFinite(round.km) ? `${formatLength(round.km)} km away` : "";
+  const where = `${Math.abs(round.guess.lat).toFixed(1)}°${round.guess.lat >= 0 ? "N" : "S"}, ${Math.abs(round.guess.lng).toFixed(1)}°${round.guess.lng >= 0 ? "E" : "W"}`;
+  meta.append(` ${[km, where].filter(Boolean).join(" · ")}`);
+  card.append(head, stats, meta);
+  return card;
 }
 
 // ---------- Sign-in sheet ----------
@@ -731,6 +769,18 @@ async function onSignedIn(nextUser) {
     } catch (error) {
       console.error(error);
     }
+    // A saved sign-in whose account is gone (e.g. deleted) is cleared, so the
+    // player sees the sign-up form rather than a broken "signed in" state.
+    if (!profile) {
+      const still = await social.verifiedUser().catch(() => null);
+      if (!still || !(profile = await social.getProfile(user.id).catch(() => null))) {
+        if (still) await social.signOut();
+        user = null;
+        profile = null;
+      }
+    }
+  }
+  if (user) {
     await syncDaily();
     loadFriendGames();
     refreshRequestBadge();

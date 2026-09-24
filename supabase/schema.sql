@@ -27,6 +27,40 @@ alter table public.follows
   add column if not exists status text not null default 'accepted' check (status in ('pending', 'accepted'));
 alter table public.follows alter column status set default 'pending';
 
+-- Profile photo (a public URL in the "avatars" storage bucket); initials otherwise.
+alter table public.profiles
+  add column if not exists avatar_url text check (avatar_url is null or (avatar_url ~ '^https://' and char_length(avatar_url) <= 500));
+
+-- Accepting a follow request makes it mutual: the other player follows back.
+-- (security definer: players can't otherwise create an accepted follow.)
+create or replace function public.follow_back()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.status = 'accepted' and (tg_op = 'INSERT' or old.status is distinct from 'accepted') then
+    insert into public.follows (follower_id, followee_id, status)
+    values (new.followee_id, new.follower_id, 'accepted')
+    on conflict (follower_id, followee_id) do update
+      set status = 'accepted'
+      where public.follows.status <> 'accepted';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists follows_mutual on public.follows;
+create trigger follows_mutual
+  after insert or update of status on public.follows
+  for each row execute function public.follow_back();
+
+-- Make any follows accepted before this existed mutual too.
+insert into public.follows (follower_id, followee_id, status)
+select followee_id, follower_id, 'accepted' from public.follows where status = 'accepted'
+on conflict (follower_id, followee_id) do update set status = 'accepted' where public.follows.status <> 'accepted';
+
 -- One row per player per daily game. Rows can't be edited or deleted by
 -- players, so a day's result can't be replayed or rewritten.
 create table if not exists public.games (
@@ -235,7 +269,37 @@ grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
 revoke select on public.follows, public.games, public.profile_stats from anon;
 grant select on public.follows, public.games, public.profile_stats, public.daily_summary to authenticated;
-grant update (username, display_name) on public.profiles to authenticated;
+grant update (username, display_name, avatar_url) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;
+
+-- ---------- Profile photos (Supabase Storage) ----------
+
+-- Public bucket: anyone can view photos; each player may only write inside a
+-- folder named after their own user id (e.g. "<uid>/avatar.webp"). 1 MB max.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 1048576, array['image/webp', 'image/jpeg', 'image/png'])
+on conflict (id) do update
+  set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "avatar read own" on storage.objects;
+create policy "avatar read own" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "avatar upload own" on storage.objects;
+create policy "avatar upload own" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "avatar replace own" on storage.objects;
+create policy "avatar replace own" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "avatar delete own" on storage.objects;
+create policy "avatar delete own" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
