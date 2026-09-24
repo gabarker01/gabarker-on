@@ -6,6 +6,7 @@
 // Alaska for Fiji arcs across the Pacific.
 
 import * as maplibregl from "https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.mjs";
+import { createSpace } from "./space.js";
 
 const LAND = "land-110m.geojson?v=1";
 const IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -14,15 +15,16 @@ const EMPTY = { type: "FeatureCollection", features: [] };
 
 const rad = (d) => (d * Math.PI) / 180;
 const deg = (r) => (r * 180) / Math.PI;
+const ROMAN = ["i", "ii", "iii", "iv", "v"];
+const toVec = ({ lat, lng }) => [
+  Math.cos(rad(lat)) * Math.cos(rad(lng)),
+  Math.cos(rad(lat)) * Math.sin(rad(lng)),
+  Math.sin(rad(lat)),
+];
 const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
 
 // Points along the great circle from a to b, with continuous (unwrapped) longitudes.
 export function greatCircle(a, b, steps = 96) {
-  const toVec = ({ lat, lng }) => [
-    Math.cos(rad(lat)) * Math.cos(rad(lng)),
-    Math.cos(rad(lat)) * Math.sin(rad(lng)),
-    Math.sin(rad(lat)),
-  ];
   const va = toVec(a);
   const vb = toVec(b);
   const dot = Math.min(1, Math.max(-1, va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2]));
@@ -127,11 +129,20 @@ function attachHalo(map, container) {
   halo.className = "globe-halo";
   container.prepend(halo);
   const update = () => {
-    const radius = (512 * 2 ** map.getZoom()) / (2 * Math.PI);
-    halo.style.width = halo.style.height = `${radius * 1.9}px`;
+    // Measure the globe's silhouette: the furthest projected point along the
+    // centre meridian (perspective makes it smaller than the zoom alone implies).
+    const c = map.getCenter();
+    const centre = map.project(c);
+    let radius = 0;
+    for (let d = 40; d <= 90; d += 2) {
+      const p = map.project([c.lng, Math.max(-89.9, c.lat - d)]);
+      radius = Math.max(radius, Math.hypot(p.x - centre.x, p.y - centre.y));
+    }
+    halo.style.width = halo.style.height = `${radius * 1.98}px`;
     halo.style.opacity = String(Math.max(0, Math.min(1, 1 - (map.getZoom() - 2.5) / 2)));
   };
   map.on("zoom", update);
+  map.once("load", update);
   update();
 }
 
@@ -182,6 +193,7 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   attachHalo(map, container);
+  const space = createSpace(container, map, { reducedMotion });
 
   await whenLoaded(map);
 
@@ -189,7 +201,10 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
     if (!onTap) return;
     // Ignore taps in space: a point on the globe projects back onto itself.
     const back = map.project(event.lngLat);
-    if (Math.hypot(back.x - event.point.x, back.y - event.point.y) > 4) return;
+    if (Math.hypot(back.x - event.point.x, back.y - event.point.y) > 4) {
+      space.tap(event.point.x, event.point.y);
+      return;
+    }
     onTap({ lng: wrapLng(event.lngLat.lng), lat: event.lngLat.lat });
   });
 
@@ -311,6 +326,7 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
     fadeDuration: 0,
   });
   attachHalo(map, container);
+  const space = createSpace(container, map, { reducedMotion, eggs: false });
   await whenLoaded(map);
 
   map.getSource("arcs").setData({
@@ -328,13 +344,44 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
     ]),
   });
 
+  // A score bubble over whichever answer faces the viewer most.
+  const bubbles = rounds.map((r, i) => {
+    // MapLibre controls the marker element's own opacity, so fade an inner bubble.
+    const holder = document.createElement("div");
+    const el = document.createElement("div");
+    el.className = "score-bubble";
+    el.innerHTML = `<span class="bubble-n">${ROMAN[i]}</span><strong>${r.score}</strong><small>/100</small>`;
+    holder.append(el);
+    const marker = new maplibregl.Marker({ element: holder, anchor: "bottom", offset: [0, -8] })
+      .setLngLat([r.answer.lng, r.answer.lat])
+      .addTo(map);
+    return { el, marker, v: toVec(r.answer) };
+  });
+  let shown = -1;
+  const updateBubbles = () => {
+    const c = map.getCenter();
+    const view = toVec({ lng: c.lng, lat: c.lat });
+    let best = -1;
+    let bestDot = 0.45;
+    bubbles.forEach((b, i) => {
+      const d = b.v[0] * view[0] + b.v[1] * view[1] + b.v[2] * view[2];
+      if (d > bestDot) { bestDot = d; best = i; }
+    });
+    if (best !== shown) {
+      bubbles.forEach((b, i) => b.el.classList.toggle("is-visible", i === best));
+      shown = best;
+    }
+  };
+  updateBubbles();
+
   let frameId = null;
   if (!reducedMotion) {
     let last = performance.now();
     const spin = (now) => {
       const c = map.getCenter();
-      map.setCenter([c.lng + ((now - last) / 1000) * 4, c.lat]);
+      map.setCenter([c.lng + ((now - last) / 1000) * 6, c.lat]);
       last = now;
+      updateBubbles();
       frameId = requestAnimationFrame(spin);
     };
     frameId = requestAnimationFrame(spin);
@@ -344,6 +391,7 @@ export async function createSummaryGlobe(container, rounds, { colors, reducedMot
     setColors: (next) => applyColors(map, next),
     destroy() {
       if (frameId) cancelAnimationFrame(frameId);
+      space.destroy();
       map.remove();
     },
   };

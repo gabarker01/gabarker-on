@@ -23,8 +23,8 @@ const storage = {
   },
 };
 
-const DAILY_KEY = "tapmap:v3:daily";
-const STATS_KEY = "tapmap:v3:stats";
+const DAILY_KEY = "tapmap:v4:daily";
+const STATS_KEY = "tapmap:v4:stats";
 
 // ---------- Formatting ----------
 
@@ -39,6 +39,8 @@ const TIERS = {
 const ROMAN = ["i", "ii", "iii", "iv", "v"];
 const formatLength = (value) => (value < 10 ? value.toFixed(1) : formatNumber(value));
 const formatMultiplier = (m) => `×${m}`;
+// Weighted round points can end in .5 (e.g. 91 × 1.5 = 136.5).
+const formatPoints = (n) => (Number.isInteger(n) ? formatNumber(n) : n.toFixed(1));
 const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const longDate = new Date(`${utcDateKey()}T12:00:00Z`).toLocaleDateString("en-GB", {
   weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
@@ -257,7 +259,7 @@ async function confirmGuess() {
   $("result-km").textContent = formatLength(round.distanceKm);
   $("result-mi").textContent = `${formatLength(round.distanceKm / KM_PER_MILE)} mi`;
   $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
-  $("result-maths").textContent = `of ${round.max} · ${formatMultiplier(multiplier)}`;
+  $("result-maths").textContent = `${formatMultiplier(multiplier)} · ${formatPoints(round.weighted)} pts`;
   $("result-points").textContent = "0";
   $("result-answer").textContent = location.name;
   $("result-bonus").hidden = true;
@@ -267,11 +269,11 @@ async function confirmGuess() {
 
   await globe.reveal(game.guess, answer, fitPadding());
 
-  const counting = animateCount($("result-points"), 0, round.total);
+  const counting = animateCount($("result-points"), 0, round.score);
   const tallyStart = performance.now();
   const tallyTick = (now) => {
     const t = reducedMotion ? 1 : Math.min(1, (now - tallyStart) / 700);
-    updateHeader(before + round.total * (1 - (1 - t) ** 3));
+    updateHeader(before + round.weighted * (1 - (1 - t) ** 3));
     if (t < 1) requestAnimationFrame(tallyTick);
   };
   requestAnimationFrame(tallyTick);
@@ -280,7 +282,7 @@ async function confirmGuess() {
   if (round.bullseye) {
     const bonus = $("result-bonus");
     bonus.textContent = round.bonus > 0
-      ? `Within 25 km. Bullseye bonus applied.`
+      ? `Within 25 km. Bullseye bonus of +${round.bonus}.`
       : "Within 25 km. Full marks.";
     bonus.hidden = false;
   }
@@ -338,9 +340,13 @@ function breakdownRow(round, location, i) {
 
   const score = document.createElement("p");
   score.className = "score";
-  score.textContent = formatNumber(round.total);
+  score.textContent = String(round.score);
+  const of = document.createElement("span");
+  of.className = "of";
+  of.textContent = "/100";
+  score.append(of);
   const small = document.createElement("small");
-  small.textContent = `of ${round.max}`;
+  small.textContent = `${formatMultiplier(round.multiplier)} · ${formatPoints(round.weighted)} pts`;
   score.append(small);
 
   li.append(n, info, score);

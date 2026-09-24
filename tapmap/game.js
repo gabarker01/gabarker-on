@@ -2,23 +2,20 @@
 
 export const LAUNCH_DATE = "2026-09-24";
 
-// Rounds get harder, and are worth more, as the game goes on.
+// Rounds get harder, and weigh more, as the game goes on. Each round is scored
+// out of 100; the weights add up to 10, so a perfect game totals 1,000.
 export const ROUND_PLAN = [
   { difficulty: "easy", multiplier: 1 },
-  { difficulty: "medium", multiplier: 1 },
   { difficulty: "medium", multiplier: 1.5 },
-  { difficulty: "hard", multiplier: 1.5 },
-  { difficulty: "hard", multiplier: 2 },
+  { difficulty: "medium", multiplier: 2 },
+  { difficulty: "hard", multiplier: 2.5 },
+  { difficulty: "hard", multiplier: 3 },
 ];
 export const ROUNDS = ROUND_PLAN.length;
-// A perfect game scores exactly MAX_SCORE, shared between rounds by multiplier.
-export const MAX_SCORE = 1000;
-// Accuracy is scored out of 1,000 per round, then scaled to the round's share.
-export const ACCURACY_MAX = 1000;
-const MULTIPLIER_SUM = ROUND_PLAN.reduce((sum, r) => sum + r.multiplier, 0);
-export const roundMax = (multiplier) => Math.round((MAX_SCORE * multiplier) / MULTIPLIER_SUM);
+export const ROUND_MAX = 100;
+export const MAX_SCORE = ROUND_PLAN.reduce((sum, r) => sum + ROUND_MAX * r.multiplier, 0);
 export const BULLSEYE_KM = 25;
-export const BULLSEYE_BONUS = 50;
+export const BULLSEYE_BONUS = 5;
 export const GAME_URL = "https://gabarker.com/tapmap";
 
 const DAY_MS = 86400000;
@@ -108,18 +105,14 @@ export const haversineKm = (a, b) => {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-// Accuracy: round(1000 × e^(−d/2000)), plus a bullseye bonus under 25 km, capped
-// at 1,000. The round score is that accuracy share of the round's maximum
-// (143, 143, 214, 214, 286), so five perfect rounds make exactly 1,000.
+// Round score out of 100: round(100 × e^(−d/2000)), plus a 5-point bullseye
+// bonus under 25 km, capped at 100. It counts towards the game total × the
+// round's multiplier.
 export const scoreRound = (distanceKm, multiplier = 1) => {
-  const base = Math.round(ACCURACY_MAX * Math.exp(-distanceKm / 2000));
+  const base = Math.round(ROUND_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const accuracy = bullseye ? Math.min(ACCURACY_MAX, base + BULLSEYE_BONUS) : base;
-  const max = roundMax(multiplier);
-  return {
-    base, bonus: accuracy - base, bullseye, accuracy, multiplier, max,
-    total: Math.round((accuracy / ACCURACY_MAX) * max),
-  };
+  const score = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
+  return { base, bonus: score - base, bullseye, score, multiplier, weighted: score * multiplier };
 };
 
 export const tierFor = (distanceKm) => {
@@ -149,7 +142,7 @@ export const evaluateGuess = (guess, location, multiplier = 1) => {
   return { guess, distanceKm, ...scoreRound(distanceKm, multiplier), tier: tierFor(distanceKm) };
 };
 
-export const totalScore = (rounds) => rounds.reduce((sum, r) => sum + r.total, 0);
+export const totalScore = (rounds) => Math.round(rounds.reduce((sum, r) => sum + r.weighted, 0));
 
 // ---------- Formatting ----------
 
@@ -163,14 +156,14 @@ export const formatDistance = (km) => `${formatLength(km)} km (${formatLength(km
 
 // Spoiler-free share text: no location names, four short lines.
 //   TapMap #1
-//   🎯 143 🟩 121 🟨 150 🟩 187 🟥 42
-//   643 / 1,000 · Tourist
+//   🎯 100 🟩 91 🟨 58 🟩 83 🟥 12
+//   596 / 1,000 · Tourist
 //   https://gabarker.com/tapmap
 export const shareText = ({ number, practice, rounds, url = GAME_URL }) => {
   const total = totalScore(rounds);
   return [
     practice ? "TapMap Practice" : `TapMap #${number}`,
-    rounds.map((r) => `${r.tier} ${r.total}`).join(" "),
+    rounds.map((r) => `${r.tier} ${r.score}`).join(" "),
     `${formatNumber(total)} / ${formatNumber(MAX_SCORE)} · ${ratingFor(total)}`,
     url,
   ].join("\n");

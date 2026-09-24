@@ -12,7 +12,7 @@
   --ink-soft: #5b6069;
   --ink-faint: #8b9099;
   --hairline: rgba(22, 24, 29, 0.1);
-  --panel: rgba(250, 248, 243, 0.82);
+  --panel: rgba(250, 248, 243, 0.95);
   --panel-edge: rgba(22, 24, 29, 0.08);
   --primary: #16181d;
   --primary-ink: #f4f1ea;
@@ -163,7 +163,29 @@ a:focus-visible {
 .globe {
   position: fixed;
   inset: 0;
-  background: radial-gradient(120% 90% at 50% 45%, var(--space) 0%, var(--space-edge) 100%);
+  background: #000;
+}
+
+.space {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* The header and zoom buttons float over black space in both themes. */
+.topbar,
+.zoom-controls {
+  --ink: #f1ece2;
+  --ink-soft: #a7abb3;
+  --ink-faint: #71767f;
+  --accent: #d9b26a;
+  --panel: rgba(18, 20, 26, 0.6);
+  --panel-edge: rgba(241, 236, 226, 0.12);
+  --paper: #0b0d12;
+  --mark-light: #34496a;
+  --mark-deep: #101a2a;
+  --mark-line: rgba(241, 236, 226, 0.3);
 }
 
 .globe .maplibregl-canvas {
@@ -537,10 +559,12 @@ a:focus-visible {
   color: var(--accent);
 }
 
-.points .plus {
-  font-size: 0.7em;
-  vertical-align: 0.12em;
-  margin-right: 1px;
+.points .of,
+.breakdown .score .of {
+  margin-left: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
 }
 
 .result-sub {
@@ -769,7 +793,50 @@ a:focus-visible {
   margin-bottom: 8px;
   overflow: hidden;
   border-radius: 20px;
-  background: radial-gradient(120% 90% at 50% 45%, var(--space) 0%, var(--space-edge) 100%);
+  background: #000;
+}
+
+/* Score bubble on the results globe */
+.score-bubble {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 6px 10px;
+  color: #f1ece2;
+  background: rgba(14, 17, 24, 0.82);
+  border: 1px solid rgba(217, 178, 106, 0.45);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px) scale(0.92);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.score-bubble.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.score-bubble .bubble-n {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: #d9b26a;
+}
+
+.score-bubble strong {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.score-bubble small {
+  font-size: 0.7rem;
+  color: #a7abb3;
 }
 
 .breakdown {
@@ -964,7 +1031,7 @@ a:focus-visible {
 }
 
 .share-row {
-  margin: 0 0 18px;
+  margin: 4px 0 18px;
 }
 
 /* Soft, even glow around the globe (sized by map.js) */
