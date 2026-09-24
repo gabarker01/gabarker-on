@@ -2,7 +2,7 @@
 // Everything here is optional: if no key is configured, or the library can't
 // load, TapMap keeps working as a local-only game.
 
-import { SUPABASE_URL, SUPABASE_KEY } from "./config.js?v=2";
+import { SUPABASE_URL, SUPABASE_KEY } from "./config.js?v=3";
 
 const LIBRARY = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js";
 

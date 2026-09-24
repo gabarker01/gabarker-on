@@ -8,14 +8,14 @@ Project: `https://qmgwlvjvwwrlcuupsttb.supabase.co` (free tier).
 
 ## 1. Create the tables
 
-Dashboard → **SQL Editor** → **New query** → paste all of `schema.sql` → **Run**.
+Dashboard → **SQL Editor** → **New query** → paste the **entire contents** of
+`setup.sql` (not its file name) → **Run**. On a phone, open the file on
+GitHub, tap **⋯ → Copy raw file** (or open **Raw** and select all), then paste.
 
-This creates `profiles`, `follows`, `games` and the `profile_stats` view, turns
-on row-level security, and adds a trigger that gives every new user a profile.
-It is safe to run again after changes.
-
-Then run `locations.sql` the same way. It creates the `locations` table and
-fills it with the launch set of 68 places.
+`setup.sql` is `schema.sql` followed by `locations.sql`. It creates
+`profiles`, `follows`, `games`, `locations` (seeded with the 68 launch places)
+and the `profile_stats` view, turns on row-level security, and adds a trigger
+that gives every new user a profile. It is safe to run again.
 
 ## 2. Add the publishable key to the site
 
@@ -59,8 +59,8 @@ Sign in with Apple on the web requires the Apple Developer Program
 ($99/year). With an account, follow Supabase's guide for **Apple** (a
 Services ID, a key and your Team ID), using the same callback URL as Google.
 
-Until then, remove `"apple"` from `AUTH_PROVIDERS` in `tapmap/config.js` so
-the button doesn't show.
+The Apple button is hidden for now. To turn it on later, add `"apple"` back to
+`AUTH_PROVIDERS` in `tapmap/config.js`.
 
 ## Managing locations
 
