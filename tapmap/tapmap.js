@@ -7,6 +7,8 @@ import {
   recordDailyResult, currentStreak,
 } from "./game.js";
 import { createGlobe, createSummaryGlobe } from "./map.js";
+import { AUTH_PROVIDERS } from "./config.js";
+import * as social from "./social.js";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -286,6 +288,7 @@ function saveDaily() {
   storage.set(DAILY_KEY, daily);
   if (dailyDone()) {
     storage.set(STATS_KEY, recordDailyResult(storage.get(STATS_KEY) || {}, today, totalScore(daily.rounds)));
+    syncDaily();
   }
 }
 
@@ -360,6 +363,16 @@ async function showEnd(finished) {
   const shareButton = $("share-button");
   shareButton.hidden = !navigator.share;
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
+
+  renderFriends(practice);
+  if (user) {
+    social.getStats(user.id).then((server) => {
+      if (!server) return;
+      $("stat-played").textContent = formatNumber(server.played);
+      $("stat-streak").textContent = formatNumber(server.current_streak);
+      $("stat-best").textContent = formatNumber(server.best);
+    }).catch(() => {});
+  }
 
   startCountdown();
   openOverlay($("end"));
@@ -446,12 +459,275 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !$("intro").hidden && !$("intro-close").hidden) $("intro").hidden = true;
 });
 
+// ---------- Accounts & friends ----------
+
+let user = null;
+let profile = null;
+
+const PROVIDER_LABELS = { google: "Continue with Google", apple: "Continue with Apple" };
+const PROVIDER_ICONS = {
+  google: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7H2.1a11 11 0 0 0 0 10l3.7-2.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>',
+  apple: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8a4.7 4.7 0 0 0-4 2.4c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4a10 10 0 0 0 1.4-2.8 4.3 4.3 0 0 1-2.6-3.9zM14 5.5A4.3 4.3 0 0 0 15 2.4a4.4 4.4 0 0 0-2.9 1.5 4.1 4.1 0 0 0-1 3c1.1.1 2.2-.5 2.9-1.4z"/></svg>',
+};
+
+function accountMessage(text, isError = false) {
+  const el = $("account-message");
+  el.textContent = text;
+  el.classList.toggle("is-error", isError);
+}
+
+const errorText = (error) => (error && error.message) || "Something went wrong. Please try again.";
+
+function updateAccountButton() {
+  const button = $("account-button");
+  const initial = $("account-initial");
+  const name = profile ? profile.display_name || profile.username : "";
+  button.setAttribute("aria-label", user ? `Account: ${name || "signed in"}` : "Sign in");
+  button.classList.toggle("is-signed-in", Boolean(user));
+  initial.hidden = !user;
+  button.querySelector(".icon-person").style.display = user ? "none" : "";
+  initial.textContent = name ? name.trim().charAt(0).toUpperCase() : "·";
+}
+
+// Saves today's finished daily game to the account (once; the server ignores repeats).
+async function syncDaily() {
+  if (!user || !dailyDone()) return;
+  try {
+    await social.saveGame(user.id, { date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds) });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function personRow(person, { action, label }) {
+  const li = document.createElement("li");
+  const who = document.createElement("div");
+  const name = document.createElement("p");
+  name.className = "person-name";
+  name.textContent = person.display_name || person.username;
+  const handle = document.createElement("p");
+  handle.className = "person-handle";
+  handle.textContent = `@${person.username}`;
+  who.append(name, handle);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chip-button";
+  button.textContent = label;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await action(person);
+    } catch (error) {
+      accountMessage(errorText(error), true);
+      button.disabled = false;
+    }
+  });
+  li.append(who, button);
+  return li;
+}
+
+async function renderFollowing() {
+  const list = $("following-list");
+  const people = await social.listFollowing(user.id);
+  list.replaceChildren(...people.map((person) => personRow(person, {
+    label: "Unfollow",
+    action: async (p) => { await social.unfollow(user.id, p.id); await renderFollowing(); },
+  })));
+  $("following-empty").hidden = people.length > 0;
+  return people;
+}
+
+let searchTimer;
+async function runSearch() {
+  const query = $("people-search").value;
+  const results = $("people-results");
+  if (query.trim().length < 2) {
+    results.replaceChildren();
+    return;
+  }
+  const [found, following] = await Promise.all([social.searchProfiles(query, user.id), social.listFollowing(user.id)]);
+  const followingIds = new Set(following.map((p) => p.id));
+  results.replaceChildren(...found.map((person) => personRow(person, followingIds.has(person.id)
+    ? { label: "Following", action: async () => {} }
+    : { label: "Follow", action: async (p) => { await social.follow(user.id, p.id); await Promise.all([renderFollowing(), runSearch()]); } })));
+}
+
+async function renderAccount() {
+  $("account-signed-out").hidden = Boolean(user);
+  $("account-signed-in").hidden = !user;
+  if (!user) return;
+  $("account-name").textContent = profile ? profile.display_name || profile.username : "";
+  $("account-handle").textContent = profile ? `@${profile.username}` : "";
+  if (profile) {
+    $("display-name").value = profile.display_name || "";
+    $("username").value = profile.username;
+  }
+  try {
+    const [stats] = await Promise.all([social.getStats(user.id), renderFollowing()]);
+    $("acct-played").textContent = formatNumber(stats ? stats.played : 0);
+    $("acct-streak").textContent = formatNumber(stats ? stats.current_streak : 0);
+    $("acct-best").textContent = formatNumber(stats ? stats.best : 0);
+    $("acct-average").textContent = formatNumber(stats ? stats.average : 0);
+  } catch (error) {
+    accountMessage(errorText(error), true);
+  }
+}
+
+function openAccount() {
+  accountMessage("");
+  renderAccount();
+  openOverlay($("account"));
+}
+
+async function renderFriends(practice) {
+  const section = $("friends");
+  section.hidden = practice || !social.socialEnabled();
+  if (section.hidden) return;
+  $("friends-signin").hidden = Boolean(user);
+  $("friends-list").replaceChildren();
+  $("friends-empty").hidden = true;
+  if (!user) return;
+  try {
+    const rows = await social.friendsResults(user.id, today);
+    const others = rows.filter((r) => r.user_id !== user.id);
+    $("friends-list").replaceChildren(...rows.map((row) => {
+      const li = document.createElement("li");
+      if (row.user_id === user.id) li.className = "is-you";
+      const name = document.createElement("span");
+      name.className = "friend-name";
+      name.textContent = row.user_id === user.id ? "You" : (row.profiles && (row.profiles.display_name || row.profiles.username)) || "Player";
+      const tiers = document.createElement("span");
+      tiers.className = "friend-tiers";
+      tiers.setAttribute("aria-hidden", "true");
+      for (const r of row.rounds || []) {
+        const dot = TIERS[r.tier] ? tierDot(r.tier) : document.createElement("span");
+        tiers.append(dot);
+      }
+      const total = document.createElement("span");
+      total.className = "friend-total";
+      total.textContent = formatNumber(row.total);
+      li.append(name, tiers, total);
+      return li;
+    }));
+    $("friends-empty").hidden = others.length > 0;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function onSignedIn(nextUser) {
+  user = nextUser;
+  profile = null;
+  if (user) {
+    try {
+      profile = await social.getProfile(user.id);
+    } catch (error) {
+      console.error(error);
+    }
+    await syncDaily();
+  }
+  updateAccountButton();
+  if (!$("account").hidden) renderAccount();
+  if (!$("end").hidden && game) renderFriends(game.mode === "practice");
+}
+
+function buildProviderButtons() {
+  const container = $("provider-buttons");
+  container.replaceChildren();
+  for (const provider of AUTH_PROVIDERS) {
+    if (provider === "email") {
+      $("email-form").hidden = false;
+      continue;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `provider-button provider-${provider}`;
+    button.innerHTML = `${PROVIDER_ICONS[provider] || ""}<span>${PROVIDER_LABELS[provider] || provider}</span>`;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      accountMessage("Redirecting…");
+      try {
+        await social.signInWithProvider(provider);
+      } catch (error) {
+        accountMessage(errorText(error), true);
+        button.disabled = false;
+      }
+    });
+    container.append(button);
+  }
+}
+
+async function bootSocial() {
+  if (!social.socialEnabled()) return;
+  $("account-button").hidden = false;
+  buildProviderButtons();
+  try {
+    await social.initSocial();
+    social.onAuthChange((next) => {
+      if ((next && next.id) !== (user && user.id)) onSignedIn(next);
+    });
+    await onSignedIn(await social.currentUser());
+  } catch (error) {
+    console.error(error);
+    $("account-button").hidden = true;
+  }
+}
+
+$("account-button").addEventListener("click", openAccount);
+$("friends-signin").addEventListener("click", openAccount);
+$("account-close").addEventListener("click", () => { $("account").hidden = true; });
+$("email-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = $("email-input").value.trim();
+  if (!$("email-input").checkValidity()) {
+    accountMessage("Please enter a valid email address.", true);
+    return;
+  }
+  accountMessage("Sending…");
+  try {
+    await social.signInWithEmail(email);
+    accountMessage(`Check ${email} for a sign-in link.`);
+  } catch (error) {
+    accountMessage(errorText(error), true);
+  }
+});
+$("profile-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const username = $("username").value.trim().toLowerCase();
+  const displayName = $("display-name").value.trim();
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+    accountMessage("Usernames are 3–20 lowercase letters, numbers or _.", true);
+    return;
+  }
+  try {
+    profile = await social.updateProfile(user.id, { username, displayName });
+    updateAccountButton();
+    renderAccount();
+    accountMessage("Profile saved.");
+  } catch (error) {
+    accountMessage(error && error.code === "23505" ? "That username is taken." : errorText(error), true);
+  }
+});
+$("people-search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch().catch((e) => accountMessage(errorText(e), true)), 250);
+});
+$("sign-out").addEventListener("click", async () => {
+  await social.signOut();
+  await onSignedIn(null);
+  accountMessage("Signed out.");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("account").hidden) $("account").hidden = true;
+});
+
 // ---------- Boot ----------
 
 async function boot() {
   globe = await createGlobe($("globe"), { onTap: onGlobeTap, reducedMotion, colors: globeColors() });
   window.tapmapReady = true;
   updateHeader();
+  bootSocial();
   if (daily.rounds.length > 0) start("daily");
   else showIntro();
 }
