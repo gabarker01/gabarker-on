@@ -1515,13 +1515,23 @@ a.person-link {
 
 /* ---------- Profile pages ---------- */
 
-body.profile-page {
+/* Profile pages scroll as a normal document: the game's fixed-height,
+   overflow-hidden body (and a body scroller, which iOS Safari handles badly)
+   are undone, and the background isn't "fixed" (also janky on iOS). */
+html.profile-root,
+html.profile-root body.profile-page {
   height: auto;
-  min-height: 100vh;
-  overflow: auto;
-  background:
-    radial-gradient(120% 60% at 50% -10%, #0d1524 0%, #000 60%) fixed,
-    #000;
+  min-height: 100%;
+  overflow: visible;
+}
+
+html.profile-root {
+  background: #000;
+  -webkit-text-size-adjust: 100%;
+}
+
+body.profile-page {
+  background: radial-gradient(120% 600px at 50% -80px, #0d1524 0%, #000 70%) no-repeat, #000;
 }
 
 .profile-bar {
