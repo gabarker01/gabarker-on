@@ -90,7 +90,6 @@ create table if not exists public.games (
   game_date date not null,
   game_number integer not null check (game_number > 0),
   -- [{ "score": 0-100, "tier": "🟩", "km": 412.3, "multiplier": 1.5, "guess": { "lat": .., "lng": .. } }, ...]
-  -- (A satellite round, "sat": true, is out of 120; daily games have none.)
   rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5),
   total integer not null,
   created_at timestamptz not null default now(),
@@ -111,9 +110,8 @@ begin
   end if;
 end $$;
 
--- The total must be what the rounds add up to: each round's score (0 to 100,
--- or 0 to 120 for a satellite round) times its multiplier, rounded. The most
--- a game can score is 1,000, or 1,200 when every round is a satellite round.
+-- The total must be what the rounds add up to: each round's score (0 to 100)
+-- times its multiplier, rounded, so at most 1,000.
 create or replace function public.game_total_ok(rounds jsonb, total integer)
 returns boolean
 language plpgsql
@@ -135,13 +133,13 @@ begin
     end if;
     score := (r ->> 'score')::numeric;
     multiplier := (r ->> 'multiplier')::numeric;
-    if score <> trunc(score) or score < 0 or score > (case when r ->> 'sat' = 'true' then 120 else 100 end)
+    if score <> trunc(score) or score < 0 or score > 100
        or multiplier not in (1, 1.5, 2, 2.5, 3) then
       return false;
     end if;
     weighted := weighted + score * multiplier;
   end loop;
-  return total = round(weighted) and total between 0 and 1200;
+  return total = round(weighted) and total between 0 and 1000;
 end;
 $$;
 

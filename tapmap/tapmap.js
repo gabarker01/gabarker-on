@@ -2,14 +2,14 @@ import { LOCATIONS } from "./locations.js?v=3";
 import {
   ROUNDS, ROUND_PLAN, SATELLITE_PLAN, GAME_URL, BULLSEYE_KM,
   todayKey, gameNumber, dateForNumber, weekStart, msUntilNextGame,
-  dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore, maxScoreFor, roundMax,
+  dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore, maxScoreFor,
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=4";
+} from "./game.js?v=5";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=8";
+import * as social from "./social.js?v=9";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { satellitePhoto } from "./satellite.js?v=2";
 import { drawShareImage } from "./share-image.js?v=1";
@@ -408,7 +408,6 @@ function bonusText(round) {
   if (round.bullseye) {
     parts.push(round.bonus > 0 ? `Within ${BULLSEYE_KM} km: bullseye bonus of +${round.bonus}.` : `Within ${BULLSEYE_KM} km: full marks.`);
   }
-  if (round.sat && round.satBonus > 0) parts.push(`Photo bonus: +${round.satBonus}.`);
   return parts.join(" ");
 }
 
@@ -437,8 +436,6 @@ async function confirmGuess() {
   $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
   $("result-maths").textContent = `${formatMultiplier(multiplier)} · ${formatPoints(round.weighted)} pts`;
   $("result-points").textContent = "0";
-  $("result-of").textContent = `/${round.sat ? roundMax(plan) : 100}`;
-  $("result-answer").textContent = location.name;
   $("result-fact").textContent = location.notes || "";
   $("result-fact").hidden = !location.notes;
   $("result-bonus").hidden = true;
@@ -666,7 +663,7 @@ function breakdownRow(round, location, i) {
   score.textContent = String(round.score);
   const of = document.createElement("span");
   of.className = "of";
-  of.textContent = round.sat ? "/120" : "/100";
+  of.textContent = "/100";
   score.append(of);
   const small = document.createElement("small");
   small.textContent = `${formatMultiplier(round.multiplier)} · ${formatPoints(round.weighted)} pts`;

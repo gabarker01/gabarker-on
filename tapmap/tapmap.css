@@ -2063,8 +2063,12 @@ body.profile-page {
   margin-top: 4px;
 }
 
+/* The answer's name is already in the question panel above, so the result
+   panel shows the fact instead. */
 .result-fact {
-  margin: -4px 6px 12px;
+  margin: 0 6px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
   font-family: var(--font-serif);
   font-style: italic;
   font-size: 1rem;
@@ -2325,4 +2329,31 @@ body.profile-page {
 
 a.archive-item {
   text-decoration: none;
+}
+
+.practice-challenge {
+  margin: 20px 0 8px;
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.practice-challenge p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.practice-challenge strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.practice-challenge .practice-challenge-title {
+  margin-bottom: 4px;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  color: var(--accent);
 }

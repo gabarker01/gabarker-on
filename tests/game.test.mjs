@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BULLSEYE_KM, MAX_SCORE, SATELLITE_MAX_SCORE, SATELLITE_PLAN, ROUND_PLAN,
+  BULLSEYE_KM, MAX_SCORE, SATELLITE_PLAN, ROUND_PLAN,
   scoreRound, tierFor, rating, ratingFor, maxScoreFor, currentStreak, recordDailyResult,
   weekStart, practiceLocations, poolFor, encodeChallenge, decodeChallenge, resolvePlaces, dailyLocations, totalScore, evaluateGuess,
 } from "../tapmap/game.js";
@@ -20,25 +20,22 @@ test("one bullseye distance: the 🎯 band and the bonus both stop at 25 km", ()
 test("every rating has an emoji, out of the game's own maximum", () => {
   for (const total of [0, 400, 700, 900, 1000]) assert.match(ratingFor(total), /^\S+ \p{Extended_Pictographic}/u);
   assert.equal(rating(900).label, "Cartographer");
-  assert.equal(rating(900, SATELLITE_MAX_SCORE).label, "Navigator");
-  assert.equal(rating(1080, SATELLITE_MAX_SCORE).label, "Cartographer");
 });
 
-test("satellite practice: a photo every round, easy to hard, each out of 120, 1,200 in all", () => {
+test("satellite practice: a photo every round, easy to hard, out of 1,000 like the daily game", () => {
   assert.equal(MAX_SCORE, 1000);
   assert.equal(maxScoreFor(ROUND_PLAN), 1000);
-  assert.equal(SATELLITE_MAX_SCORE, 1200);
+  assert.equal(maxScoreFor(SATELLITE_PLAN), 1000);
   assert.ok(SATELLITE_PLAN.every((r) => r.satellite));
   assert.deepEqual(SATELLITE_PLAN.map((r) => r.difficulty), ROUND_PLAN.map((r) => r.difficulty));
   assert.deepEqual(SATELLITE_PLAN.map((r) => r.multiplier), ROUND_PLAN.map((r) => r.multiplier));
   const perfect = scoreRound(0, 3, { satellite: true });
-  assert.equal(perfect.score, 120);
-  assert.equal(perfect.weighted, 360);
+  assert.equal(perfect.score, 100);
+  assert.equal(perfect.weighted, 300);
+  assert.equal(perfect.sat, true);
   assert.equal(scoreRound(0, 3).score, 100);
-  // A far-off photo guess earns (almost) no bonus.
-  assert.equal(scoreRound(15000, 1, { satellite: true }).satBonus, 0);
   const rounds = SATELLITE_PLAN.map((r) => evaluateGuess({ lat: 0, lng: 0 }, { lat: 0, lng: 0 }, r.multiplier, { satellite: Boolean(r.satellite) }));
-  assert.equal(totalScore(rounds), 1200);
+  assert.equal(totalScore(rounds), 1000);
 });
 
 test("satellite practice picks five different places, easy to hard", () => {

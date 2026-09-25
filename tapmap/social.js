@@ -177,7 +177,6 @@ export async function saveGame(userId, { date, number, rounds, total, names }) {
   const payload = rounds.map((r, i) => ({
     name: names ? names[i] : undefined,
     score: r.score,
-    ...(r.sat ? { sat: true } : {}),
     tier: r.tier,
     km: Math.round(r.distanceKm * 10) / 10,
     multiplier: r.multiplier,

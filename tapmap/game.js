@@ -18,16 +18,11 @@ export const BULLSEYE_BONUS = 5;
 
 // Satellite practice: the same easy-to-hard rounds as the daily game, but
 // each place is shown only as a satellite photo (the name appears once you've
-// guessed). Guessing from the photo earns up to 20 extra points (scaled by
-// distance like the round score), so each round is out of 120 and the game is
-// out of 1,200.
-export const SATELLITE_BONUS = 20;
+// guessed). Scored exactly like the daily game, out of 1,000.
 export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, satellite: true }));
 
-export const roundMax = (plan) => ROUND_MAX + (plan.satellite ? SATELLITE_BONUS : 0);
-export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + roundMax(r) * r.multiplier, 0);
-export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000
-export const SATELLITE_MAX_SCORE = maxScoreFor(SATELLITE_PLAN); // 1,200
+export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + ROUND_MAX * r.multiplier, 0);
+export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000 (satellite practice too)
 export const GAME_URL = "https://gabarker.com/tapmap";
 
 const DAY_MS = 86400000;
@@ -218,16 +213,12 @@ export const haversineKm = (a, b) => {
 
 // Round score out of 100: round(100 × e^(−d/2000)), plus a 5-point bullseye
 // bonus under 25 km, capped at 100. It counts towards the game total × the
-// round's multiplier. A satellite round guessed from the photo alone adds
-// round(20 × e^(−d/2000)) on top.
+// round's multiplier. (`satellite` only marks a round played from the photo.)
 export const scoreRound = (distanceKm, multiplier = 1, { satellite = false } = {}) => {
-  const closeness = Math.exp(-distanceKm / 2000);
-  const base = Math.round(ROUND_MAX * closeness);
+  const base = Math.round(ROUND_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const capped = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
-  const satBonus = satellite ? Math.round(SATELLITE_BONUS * closeness) : 0;
-  const score = capped + satBonus;
-  return { base, bonus: capped - base, bullseye, satBonus, sat: satellite, score, multiplier, weighted: score * multiplier };
+  const score = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
+  return { base, bonus: score - base, bullseye, sat: satellite, score, multiplier, weighted: score * multiplier };
 };
 
 export const tierFor = (distanceKm) => {
@@ -239,7 +230,7 @@ export const tierFor = (distanceKm) => {
 };
 
 // Thresholds are 90%, 70% and 40% of the game's maximum (900 / 700 / 400 out
-// of 1,000; 1,080 / 840 / 480 out of 1,200 in satellite practice).
+// of 1,000).
 const RATINGS = [
   { min: 0.9, label: "Cartographer", emoji: "🧭" },
   { min: 0.7, label: "Navigator", emoji: "⛵" },
@@ -329,7 +320,7 @@ export const decodeChallenge = (code) => {
     const valid = d && d.v === 1 && kinds.includes(d.k)
       && Array.isArray(d.p) && d.p.length === ROUNDS && d.p.every((p) => typeof p === "string" && p.length <= 8)
       && Array.isArray(d.r) && d.r.length === ROUNDS
-      && d.r.every((r) => Array.isArray(r) && Number.isFinite(r[0]) && Number.isFinite(r[1]) && r[0] >= 0 && r[0] <= ROUND_MAX + SATELLITE_BONUS && r[1] >= 0)
+      && d.r.every((r) => Array.isArray(r) && Number.isFinite(r[0]) && Number.isFinite(r[1]) && r[0] >= 0 && r[0] <= ROUND_MAX && r[1] >= 0)
       && (d.n === undefined || (Number.isInteger(d.n) && d.n > 0));
     if (!valid) return null;
     return {

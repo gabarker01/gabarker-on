@@ -1,5 +1,5 @@
 // Practice menu: random places, satellite, or any earlier daily game.
-import { ROUNDS, todayKey, gameNumber, dateForNumber, totalScore, formatNumber } from "/tapmap/game.js?v=4";
+import { ROUNDS, todayKey, gameNumber, dateForNumber, totalScore, formatNumber } from "/tapmap/game.js?v=5";
 
 const ARCHIVE_KEY = "tapmap:v5:archive"; // past games played on this device (see tapmap.js)
 const $ = (id) => document.getElementById(id);
