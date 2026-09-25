@@ -2553,3 +2553,21 @@ a.chip-button {
   color: var(--ink-soft);
   text-align: center;
 }
+
+/* Under Share challenge: share just your score */
+#share-result {
+  margin-top: 14px;
+}
+
+#breakdown-label {
+  margin-top: 8px;
+}
+
+#challenge-note {
+  margin: 14px 0 0;
+}
+
+/* Your profile's challenges: room between New challenge and the list */
+#new-challenge {
+  margin-bottom: 16px;
+}

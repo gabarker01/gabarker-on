@@ -10,7 +10,7 @@ import {
 } from "./game.js?v=8";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=10";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=15";
+import * as social from "./social.js?v=16";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -780,8 +780,8 @@ async function createChallengeFor(finished, total) {
   }
 }
 
-// A challenge's results screen, at /tapmap/challenge/{id}: Share challenge at
-// the top, then your score and globe, the round-by-round comparison (if it
+// A challenge's results screen, at /tapmap/challenge/{id}: your score and
+// globe, then Share challenge, the round-by-round comparison (if it
 // was someone else's challenge) and everyone who has played it. For a game
 // played to challenge someone (sendAsChallenge), the challenge is saved (and
 // sent to that player's profile) first.
@@ -790,9 +790,12 @@ async function showChallengeReady(finished, total) {
   const isChallenge = Boolean(finished.sendAsChallenge || finished.challenge);
   block.hidden = !isChallenge;
   $("challenge-players").hidden = true;
-  // Share challenge is the main button here; Copy result steps back.
-  $("copy-button").classList.toggle("primary-button", !isChallenge);
-  $("copy-button").classList.toggle("secondary-button", isChallenge);
+  // Share challenge (and Share my result) replace the usual share buttons,
+  // your rounds get a heading, and the note moves to the bottom.
+  $("share-row").hidden = isChallenge;
+  $("breakdown-label").hidden = !isChallenge;
+  $("challenge-note").hidden = !isChallenge;
+  if (isChallenge) $("unranked-note").hidden = true;
   if (!isChallenge) return;
   const target = finished.sendAsChallenge && finished.sendAsChallenge.target;
   const button = $("challenge-share");
@@ -812,7 +815,7 @@ async function showChallengeReady(finished, total) {
   // The results live at the challenge's own address.
   if (finished.challengeId) window.history.replaceState(null, "", `/tapmap/challenge/${finished.challengeId}`);
   text.textContent = finished.challengeSent
-    ? `Sent to @${target.username}: it's waiting on their profile. Share the link with them too.`
+    ? `Sent to @${target.username}: it's waiting on their profile. Share the link with them, or other challengers, too.`
     : target ? `Share it with @${target.username}: same five places, can they beat ${formatNumber(total)}?`
       : `Same five places for anyone you send it to. Can they beat ${formatNumber(total)}?`;
   button.textContent = "Share challenge";
@@ -1156,7 +1159,7 @@ async function showEnd(finished) {
   $("unranked-note").textContent = finished.mode === "practice" || finished.mode === "photo"
     ? "Practice doesn't count towards your stats or streak."
     : finished.mode === "challenge"
-      ? "Challenges don't count towards your stats or streak."
+      ? "Challenges don't count towards streak."
       : "Unranked: saved on this device only, and it doesn't count towards your stats or streak.";
 
   const stats = storage.get(STATS_KEY) || {};
@@ -1181,6 +1184,18 @@ async function showEnd(finished) {
   const shareButton = $("share-button");
   shareButton.hidden = !navigator.share;
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
+  // (Challenge results: your score only, without the challenge link.)
+  $("share-result").onclick = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+      }
+    }
+    toast((await copyText(text)) ? "Copied" : "Couldn't copy. Try again.");
+  };
   shareImage = null;
   $("image-button").onclick = () => shareImageFor(finished, text);
   showChallengeReady(finished, total);
@@ -1377,6 +1392,30 @@ async function refreshRequestBadge() {
       `Your profile: ${personName(profile)}${requests.length ? `, ${requests.length} follow request${requests.length > 1 ? "s" : ""}` : ""}`);
   } catch (error) {
     console.error(error);
+  }
+}
+
+// A new account made on this device takes over the daily games played here
+// without one, so the streak and stats carry over. Asked once per account on
+// this device (the database only moves them in the account's first day).
+const CLAIMED_KEY = "tapmap:claimed"; // [user ids] already asked from this device
+const claiming = new Map(); // user id -> request in flight (sign-in can report twice)
+function claimDeviceGames() {
+  if (!user) return Promise.resolve();
+  if (!claiming.has(user.id)) claiming.set(user.id, claimOnce(user.id));
+  return claiming.get(user.id);
+}
+async function claimOnce(uid) {
+  let claimed = [];
+  try { claimed = JSON.parse(localStorage.getItem(CLAIMED_KEY)) || []; } catch (e) {}
+  if (!Array.isArray(claimed)) claimed = [];
+  if (claimed.includes(uid)) return;
+  try {
+    await social.claimDeviceGames(deviceId());
+    try { localStorage.setItem(CLAIMED_KEY, JSON.stringify([...claimed, uid].slice(-20))); } catch (e) {}
+  } catch (error) {
+    claiming.delete(uid); // (try again next time)
+    console.warn("Games from this device not moved yet:", error);
   }
 }
 
@@ -1751,6 +1790,7 @@ async function onSignedIn(nextUser) {
     }
   }
   if (user) {
+    await claimDeviceGames();
     await syncDaily();
     loadFriendGames();
     refreshRequestBadge();

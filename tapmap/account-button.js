@@ -2,7 +2,7 @@
 // pages (the game page has its own): your photo or initials when signed in,
 // with the number of follow requests; the outline icon when signed out, which
 // opens sign-in and then comes back to this page.
-import * as social from "/tapmap/social.js?v=15";
+import * as social from "/tapmap/social.js?v=16";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
 
 const NEXT_KEY = "tapmap:next"; // page to return to after signing in (see tapmap.js)

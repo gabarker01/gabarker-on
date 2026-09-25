@@ -321,12 +321,17 @@ const gameRounds = (rounds, names) => rounds.map((r, i) => ({
   guess: { lat: +r.guess.lat.toFixed(4), lng: +r.guess.lng.toFixed(4) },
 }));
 
-// Inserts a row; "already saved" (23505) is fine. device_id is left out if
-// the database doesn't have that column yet (setup.sql not re-run).
+// The player's time zone, as the device reports it (saved with each game).
+const deviceTimeZone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch (e) { return undefined; }
+};
+
+// Inserts a row; "already saved" (23505) is fine. device_id and time_zone are
+// left out if the database doesn't have those columns yet (setup.sql not re-run).
 async function insertOnce(table, row) {
   let { error } = await client.from(table).insert(row);
-  if (error && row.device_id !== undefined && (error.code === "PGRST204" || /device_id/.test(error.message || ""))) {
-    const { device_id: _unused, ...rest } = row;
+  if (error && (error.code === "PGRST204" || /device_id|time_zone/.test(error.message || ""))) {
+    const { device_id: _d, time_zone: _t, ...rest } = row;
     ({ error } = await client.from(table).insert(rest));
   }
   if (error && error.code !== "23505") throw error;
@@ -335,7 +340,19 @@ async function insertOnce(table, row) {
 export async function saveGame(userId, { date, number, rounds, total, names, deviceId }) {
   // Results can't be changed once saved. deviceId links it to the same game
   // if it was first saved without an account, so it's only counted once.
-  await insertOnce("games", { user_id: userId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total, device_id: deviceId || undefined });
+  await insertOnce("games", {
+    user_id: userId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total,
+    device_id: deviceId || undefined, time_zone: deviceTimeZone(),
+  });
+}
+
+// A new account takes over the games this device played without one, so its
+// streak and stats carry over (the database only does this in the account's
+// first day). Resolves to how many games were moved.
+export async function claimDeviceGames(deviceId) {
+  const { data, error } = await client.rpc("claim_device_games", { device: deviceId });
+  if (error) throw error;
+  return Number(data) || 0;
 }
 
 // Games and challenge results without an account: counted in the overall
@@ -351,8 +368,17 @@ async function postAnonymous(table, row) {
   if (!response.ok && response.status !== 409) throw new Error(`Couldn't save to ${table} (${response.status})`);
 }
 
-export const saveAnonymousGame = (deviceId, { date, number, rounds, total, names }) =>
-  postAnonymous("anonymous_games", { device_id: deviceId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total });
+// A daily game without an account is a row in games with no player (the
+// database records whether you were signed in). Until setup.sql is re-run,
+// it goes to the old anonymous_games table instead.
+export async function saveAnonymousGame(deviceId, { date, number, rounds, total, names }) {
+  const row = { device_id: deviceId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total };
+  try {
+    await postAnonymous("games", { ...row, signed_in: false, time_zone: deviceTimeZone() });
+  } catch (error) {
+    await postAnonymous("anonymous_games", row);
+  }
+}
 
 export const saveAnonymousChallengeResult = (challengeId, deviceId, rounds, total) =>
   postAnonymous("anonymous_challenge_results", { challenge_id: challengeId, device_id: deviceId, rounds: challengeRounds(rounds), total });

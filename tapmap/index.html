@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=25">
+  <link rel="stylesheet" href="tapmap.css?v=26">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -121,19 +121,20 @@
   <!-- Results -->
   <div id="end" class="overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
-      <!-- A challenge's results (at /tapmap/challenge/{id}): share it first -->
-      <div id="challenge-ready" class="challenge-ready" hidden>
-        <button id="challenge-share" class="primary-button" type="button" disabled>Share challenge</button>
-        <p id="challenge-ready-text" class="challenge-ready-text"></p>
-      </div>
-
       <p class="eyebrow" id="end-label"></p>
       <h2 id="end-title" class="final"><span id="final-points">0</span> <span class="final-of">of <span id="final-max">1,000</span></span></h2>
       <p id="end-rating" class="rating"></p>
 
       <div id="summary-globe" class="summary-globe" role="img" aria-label="Globe showing all five guesses and answers"></div>
 
-      <div class="share-row">
+      <!-- A challenge's results (at /tapmap/challenge/{id}): share the challenge, or just your result -->
+      <div id="challenge-ready" class="challenge-ready" hidden>
+        <button id="challenge-share" class="primary-button" type="button" disabled>Share challenge</button>
+        <p id="challenge-ready-text" class="challenge-ready-text"></p>
+        <button id="share-result" class="secondary-button" type="button">Share my result</button>
+      </div>
+
+      <div id="share-row" class="share-row">
         <button id="copy-button" class="primary-button" type="button">Copy result</button>
         <button id="share-button" class="secondary-button" type="button" hidden>Share</button>
         <div class="mode-row">
@@ -163,6 +164,7 @@
         <button id="end-signin-button" class="cta-button" type="button">Create account or sign in</button>
       </div>
 
+      <h3 id="breakdown-label" class="section-label" hidden>My scores</h3>
       <ol id="breakdown" class="breakdown"></ol>
 
       <section id="friends" class="friends" hidden>
@@ -188,6 +190,7 @@
       <button id="again-button" class="secondary-button" type="button" hidden>Play again</button>
       <a id="practice-button" class="secondary-button link-as-button" href="/tapmap/practice/">Practice</a>
       <button id="daily-results-button" class="link-button centered" type="button" hidden>Back to today's result</button>
+      <p id="challenge-note" class="unranked-note" hidden>Challenges don't count towards streak.</p>
       <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
     </div>
   </div>
@@ -293,7 +296,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=34"></script>
+  <script type="module" src="tapmap.js?v=35"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

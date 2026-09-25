@@ -204,19 +204,39 @@ group by c.id order by c.created_at desc limit 20;
 
 ## Players without an account
 
-Daily games and challenge results played without signing in are saved too,
-in `anonymous_games` and `anonymous_challenge_results`, under a random
-`device_id` kept on the player's device (no personal details). They count
-towards the overall stats but never towards leaderboards, friends' results
-or profile stats. Players can add these rows but can't read them; you see them
-in the dashboard. If someone plays signed out and then signs in on the same
-device, their result is saved to their account with the same `device_id`,
-and the stats count it once.
+Daily games played without signing in are rows in `games` too, with no
+`user_id`, `signed_in = false` and a random `device_id` kept on the player's
+device (no personal details). Every game records its `device_id` and
+`signed_in` (whether the player was signed in when they played). Games without
+an account count towards the overall stats but never towards leaderboards,
+friends' results or profile stats. Players can add these rows but can't read
+them; you see them in the dashboard. Challenge results without an account are
+in `anonymous_challenge_results`.
+
+Running `setup.sql` again copies the rows from the old `anonymous_games` table
+into `games` (the old table is kept, and anything still sent to it is copied
+across too). Nothing is deleted.
+
+**A new account takes over its device's games.** When someone creates an
+account, the games that device played without one move to the account (they
+keep `signed_in = false`), so the streak and stats carry over. This only
+happens in the account's first day, so signing in to an older account on a
+shared device doesn't take anyone else's games. Signing in to an existing
+account still saves today's game to it, as before.
+
+**Where it was played.** Each game records `country` (two letters, from the
+`cf-ipcountry` header Cloudflare adds in front of the Supabase API; the IP
+address isn't stored, and there's no lookup or extra service, so no delay) and
+`time_zone` (as the player's device reports it). `country` is empty if that
+header isn't passed through.
 
 ```sql
 -- Players per day, with and without an account
 select game_date, game_number, players, signed_in_players, players_without_account, average, best
 from public.daily_summary order by game_date desc;
+
+-- Where today's games were played
+select country, count(*) from public.games where game_date = current_date group by 1 order by 2 desc;
 ```
 
 (`daily_summary` is for the dashboard only now: it includes the anonymous
@@ -230,7 +250,7 @@ results and adds "+ N more played without an account".
 | `profiles` | username, display name, photo, time zone | everyone (for search) | the owner (update only) |
 | `follows` | follower, followee, status (`pending` / `accepted`) | accepted: signed-in players; pending: the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
-| `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
+| `games` | one row per daily game played: player (or none), device, signed in or not, date, game number, each round's score, tier, distance, multiplier and guess, total, country, time zone | the player and followers they have accepted (games without an account: nobody, only you in the dashboard) | the owner, or anyone for a game without an account; today's or yesterday's game only, once |
 
 Following someone sends a request. When they accept, you follow each other
 (the database adds the follow back automatically), and you can both see each
