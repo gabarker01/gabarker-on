@@ -183,12 +183,25 @@ const hasEnoughFor = (locations) =>
   ["easy", "medium", "hard"].every((level) =>
     locations.filter((l) => l.difficulty === level).length >= ROUND_PLAN.filter((r) => r.difficulty === level).length);
 
+// The built-in list's fact and photo article for each place, by name. The
+// database's copy wins, but where it's empty (e.g. before setup.sql has been
+// re-run) the built-in one is used, and places saved on the device before
+// facts existed get them too.
+const BUILT_IN = new Map(LOCATIONS.map((l) => [l.name, l]));
+const withDetails = (l) => {
+  const known = BUILT_IN.get(l.name);
+  if (!known) return l;
+  const notes = (l.notes && String(l.notes).trim()) || known.notes || null;
+  const photo = (l.photo && String(l.photo).trim()) || known.photo || null;
+  return notes === l.notes && photo === l.photo ? l : { ...l, notes, photo };
+};
+
 async function loadPool() {
   try {
     const rows = await social.fetchLocations();
     const valid = (rows || []).filter((r) =>
       r && typeof r.name === "string" && Number.isFinite(r.lat) && Number.isFinite(r.lng) && ["easy", "medium", "hard"].includes(r.difficulty));
-    if (hasEnoughFor(poolFor(today, valid))) allLocations = valid;
+    if (hasEnoughFor(poolFor(today, valid))) allLocations = valid.map(withDetails);
   } catch (error) {
     console.warn("Using the built-in location list:", error);
   }
@@ -198,11 +211,13 @@ async function loadPool() {
 const snapshot = (l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null, photo: l.photo || null });
 const validPlaces = (list) => Array.isArray(list) && list.length === ROUNDS
   && list.every((l) => l && typeof l.name === "string" && Number.isFinite(l.lat) && Number.isFinite(l.lng));
+// Places saved on the device, with any missing fact or photo filled in.
+const savedPlaces = (list) => list.map(withDetails);
 
 function loadDaily() {
   const saved = storage.get(DAILY_KEY);
   return saved && saved.date === today && Array.isArray(saved.rounds)
-    ? { date: today, number: todayNumber, locations: validPlaces(saved.locations) ? saved.locations : null, rounds: saved.rounds }
+    ? { date: today, number: todayNumber, locations: validPlaces(saved.locations) ? savedPlaces(saved.locations) : null, rounds: saved.rounds }
     : { date: today, number: todayNumber, locations: null, rounds: [] };
 }
 
@@ -243,7 +258,7 @@ function newGame(mode, options = {}) {
     const saved = savedMap(ARCHIVE_KEY)[number];
     const dateKey = dateForNumber(number);
     const locations = saved && validPlaces(saved.locations)
-      ? saved.locations
+      ? savedPlaces(saved.locations)
       : dailyLocations(dateKey, allLocations).map(snapshot);
     const rounds = saved && Array.isArray(saved.rounds) ? saved.rounds : [];
     return { ...base, number, dateKey, locations, rounds, index: rounds.length };
@@ -395,7 +410,7 @@ function showRound() {
   $("prompt-round").textContent = `Round ${ROMAN[game.index]}`;
   $("prompt-difficulty").textContent = capitalise(location.difficulty);
   $("prompt-multiplier").textContent = formatMultiplier(plan.multiplier);
-  if (plan.photo) showPhoto(location);
+  if (plan.photo) showPhoto(withDetails(location));
   else showName(location);
 
   // Replay the entrance animation each round.
@@ -468,8 +483,9 @@ async function confirmGuess() {
   $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
   $("result-maths").textContent = `${formatMultiplier(multiplier)} · ${formatPoints(round.weighted)} pts`;
   $("result-points").textContent = "0";
-  $("result-fact").textContent = location.notes || "";
-  $("result-fact").hidden = !location.notes;
+  const fact = withDetails(location).notes;
+  $("result-fact").textContent = fact || "";
+  $("result-fact").hidden = !fact;
   showPhotoCredit();
   $("result-bonus").hidden = true;
   $("next-button").textContent = game.index === ROUNDS - 1 ? "See your results" : "Next round";
