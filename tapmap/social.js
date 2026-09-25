@@ -65,6 +65,85 @@ export async function fetchLocations(timeoutMs = 5000) {
   }
 }
 
+// ---------- Challenges ----------
+
+// One challenge by id, with the sender's profile. Plain REST (challenges are
+// public), so it works signed out and without waiting for the auth library.
+export async function fetchChallenge(id, timeoutMs = 8000) {
+  if (!socialEnabled()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/challenges?id=eq.${encodeURIComponent(id)}&select=*,profiles(username,display_name,avatar_url)`,
+      { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
+    );
+    if (!response.ok) throw new Error(`Challenge request failed (${response.status})`);
+    const rows = await response.json();
+    return rows[0] || null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const challengeRounds = (rounds) => rounds.map((r) => ({
+  score: r.score,
+  km: Math.round(r.distanceKm * 10) / 10,
+  multiplier: r.multiplier,
+  tier: r.tier,
+  ...(r.guess ? { guess: { lat: +r.guess.lat.toFixed(4), lng: +r.guess.lng.toFixed(4) } } : {}),
+}));
+
+// Saves a finished game as a challenge and returns its id. Works signed out
+// (the challenge is then anonymous).
+export async function createChallenge({ userId, byName, kind, number, places, rounds, total }) {
+  const row = {
+    created_by: userId || null,
+    by_name: byName || null,
+    kind,
+    game_number: number || null,
+    places: places.map((l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null, photo: l.photo || null })),
+    rounds: challengeRounds(rounds),
+    total,
+  };
+  return unwrap(await client.from("challenges").insert(row).select("id").single()).id;
+}
+
+// Saves your result for a challenge (once; "already saved" is fine).
+export async function saveChallengeResult(challengeId, userId, rounds, total) {
+  const { error } = await client
+    .from("challenge_results")
+    .insert({ challenge_id: challengeId, user_id: userId, rounds: challengeRounds(rounds), total });
+  if (error && error.code !== "23505") throw error;
+}
+
+// Everyone's results for a challenge that you can see (you sent it or played it).
+export async function challengeResults(challengeId) {
+  return unwrap(await client
+    .from("challenge_results")
+    .select("user_id, total, rounds, created_at, profiles(id, username, display_name, avatar_url)")
+    .eq("challenge_id", challengeId)
+    .order("total", { ascending: false }));
+}
+
+// Your challenges for your profile: ones you sent (with everyone's results)
+// and ones you played (with the sender's score).
+export async function myChallenges(userId, limit = 50) {
+  const [sent, played] = await Promise.all([
+    client.from("challenges")
+      .select("id, kind, game_number, total, created_at, challenge_results(user_id, total, profiles(username, display_name))")
+      .eq("created_by", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    client.from("challenge_results")
+      .select("total, created_at, challenges(id, kind, game_number, total, by_name, created_by, created_at, profiles(username, display_name))")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  ]);
+  return { sent: unwrap(sent), played: unwrap(played) };
+}
+
 // ---------- Auth ----------
 
 // Which sign-in methods are switched on in the Supabase dashboard, e.g.

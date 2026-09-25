@@ -3,7 +3,7 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=10";
+import * as social from "/tapmap/social.js?v=11";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
 import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=7";
@@ -383,7 +383,7 @@ async function render() {
     const locked = social.isUsernameAccount(me);
     $("username").readOnly = locked;
     $("username-lock").hidden = !locked;
-    await Promise.all([renderDetails(person, true), renderPeople()]);
+    await Promise.all([renderDetails(person, true), renderPeople(), renderChallenges()]);
     return;
   }
 
@@ -398,6 +398,84 @@ async function render() {
     : "Their scores and stats are private. Follow to send a request.";
   if (visible) await renderDetails(person, false);
 }
+
+// ---------- Challenges (your own profile) ----------
+
+const KIND_LABELS = { practice: "Random places", photo: "Photos" };
+const kindLabel = (c) => (c.kind === "daily" && c.game_number ? `TapMap No. ${c.game_number}` : KIND_LABELS[c.kind] || "Challenge");
+const timestampDate = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+// Sent and played challenges in one list, newest first.
+async function renderChallenges() {
+  let data;
+  try {
+    data = await social.myChallenges(me.id);
+  } catch (error) {
+    // (Hidden until setup.sql has been re-run to create the challenge tables.)
+    console.warn("Challenges:", error);
+    $("challenges-section").hidden = true;
+    return;
+  }
+  $("challenges-section").hidden = false;
+  const entries = [];
+  for (const c of data.sent) {
+    const others = (c.challenge_results || []).filter((r) => r.user_id !== me.id);
+    const best = others.reduce((top, r) => (!top || r.total > top.total ? r : top), null);
+    entries.push({
+      id: c.id,
+      when: c.created_at,
+      title: kindLabel(c),
+      sub: `You sent it · ${others.length ? `${others.length} played` : "no one's played yet"}`,
+      mine: c.total,
+      theirs: best ? best.total : null,
+      theirName: best ? personName(best.profiles) : "",
+    });
+  }
+  for (const r of data.played) {
+    const c = r.challenges;
+    if (!c || c.created_by === me.id) continue; // already listed as sent
+    const from = c.by_name || (c.profiles ? personName(c.profiles) : "A friend");
+    entries.push({ id: c.id, when: r.created_at, title: kindLabel(c), sub: `From ${from}`, mine: r.total, theirs: c.total, theirName: from });
+  }
+  entries.sort((a, b) => (a.when < b.when ? 1 : -1));
+
+  const won = entries.filter((e) => e.theirs !== null && e.mine > e.theirs).length;
+  const decided = entries.filter((e) => e.theirs !== null).length;
+  $("challenges-summary").textContent = entries.length
+    ? `${entries.length} challenge${entries.length === 1 ? "" : "s"} sent and played${decided ? ` · won ${won} of ${decided}` : ""}.`
+    : "Challenges you've sent and played.";
+  $("challenges-list").replaceChildren(...entries.map((e) => {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.className = "archive-item challenge-item";
+    link.href = `/tapmap/challenge/${e.id}`;
+    const text = document.createElement("span");
+    text.className = "challenge-text";
+    const title = document.createElement("span");
+    title.className = "archive-title";
+    title.textContent = e.title;
+    const sub = document.createElement("span");
+    sub.className = "archive-date";
+    sub.textContent = `${e.sub} · ${timestampDate(e.when)}`;
+    text.append(title, sub);
+    const status = document.createElement("span");
+    status.className = "archive-status";
+    status.textContent = e.theirs === null ? formatNumber(e.mine) : `${formatNumber(e.mine)} v ${formatNumber(e.theirs)}`;
+    if (e.theirs !== null && e.mine !== e.theirs) status.classList.add(e.mine > e.theirs ? "is-done" : "is-lost");
+    status.title = e.theirs === null ? "Your score" : `You ${e.mine}, ${e.theirName} ${e.theirs}`;
+    link.append(text, status);
+    li.append(link);
+    return li;
+  }));
+  $("challenges-empty").hidden = entries.length > 0;
+}
+
+$("challenges-toggle").addEventListener("click", () => {
+  const open = $("challenges-body").hidden;
+  $("challenges-body").hidden = !open;
+  $("challenges-toggle").setAttribute("aria-expanded", String(open));
+  $("challenges-toggle").querySelector(".practice-arrow").textContent = open ? "↑" : "↓";
+});
 
 // ---------- Follow links ----------
 

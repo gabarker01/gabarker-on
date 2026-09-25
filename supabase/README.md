@@ -164,6 +164,24 @@ In the app, `weekly_league` only shows you and the players who accepted your
 follow (it uses the `games` table's row-level security), and the results
 screen ranks those players for the current week.
 
+## Challenges
+
+**Challenge a friend** (on any results screen) saves the game in `challenges`
+and shares `https://gabarker.com/tapmap/challenge/{id}` (`/challenge/{id}`
+works too). Anyone with the link can see the challenge and play it, signed in
+or not. Signed-in players' results go in `challenge_results`, which the
+sender and everyone who played that challenge can see; signed-out players'
+results stay on their device (and are saved when they next sign in). Your
+profile lists the challenges you've sent and played, separately from your
+daily games.
+
+```sql
+-- Newest challenges and how many have played each
+select c.id, c.kind, c.by_name, c.total, c.created_at, count(r.user_id) as played
+from public.challenges c left join public.challenge_results r on r.challenge_id = c.id
+group by c.id order by c.created_at desc limit 20;
+```
+
 ## What's stored
 
 | Table | Contents | Who can read | Who can write |

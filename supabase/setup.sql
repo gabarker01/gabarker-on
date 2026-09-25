@@ -297,6 +297,68 @@ from (
 ) w
 join public.profiles p on p.id = w.user_id;
 
+-- ---------- Challenges ----------
+
+-- A challenge: five places and the sender's result, shared as
+-- https://gabarker.com/tapmap/challenge/{id}. Anyone can create one (you don't
+-- need an account) and anyone with the link can read it.
+create or replace function public.new_challenge_id()
+returns text
+language sql
+volatile
+set search_path = ''
+as $$
+  -- 10 characters from an alphabet without look-alikes (no 0/o, 1/l).
+  select string_agg(substr('abcdefghijkmnpqrstuvwxyz23456789', (get_byte(b, i) % 32) + 1, 1), '' order by i)
+  from (select uuid_send(gen_random_uuid()) as b) as random_bytes, generate_series(0, 9) as i;
+$$;
+
+create table if not exists public.challenges (
+  id text primary key default public.new_challenge_id() check (id ~ '^[a-z0-9]{6,16}$'),
+  created_by uuid references public.profiles (id) on delete set null,
+  by_name text check (by_name is null or char_length(by_name) between 1 and 40),
+  -- daily: a daily game (game_number); practice / photo: five practice places.
+  kind text not null check (kind in ('daily', 'practice', 'photo')),
+  game_number integer check (game_number is null or game_number > 0),
+  -- [{ "name", "lat", "lng", "difficulty", "notes", "photo" }, ...] in round order
+  places jsonb not null check (jsonb_typeof(places) = 'array' and jsonb_array_length(places) = 5 and pg_column_size(places) < 8000),
+  -- The sender's rounds: [{ "score", "km", "multiplier", "tier", "guess": { "lat", "lng" } }, ...]
+  rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5 and pg_column_size(rounds) < 8000),
+  total integer not null,
+  created_at timestamptz not null default now(),
+  constraint challenges_total_matches_rounds check (public.game_total_ok(rounds, total))
+);
+
+create index if not exists challenges_created_by_idx on public.challenges (created_by, created_at desc);
+
+-- One result per player per challenge (signed-in players; others keep theirs
+-- on their device).
+create table if not exists public.challenge_results (
+  challenge_id text not null references public.challenges (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5 and pg_column_size(rounds) < 8000),
+  total integer not null,
+  created_at timestamptz not null default now(),
+  primary key (challenge_id, user_id),
+  constraint challenge_results_total_matches_rounds check (public.game_total_ok(rounds, total))
+);
+
+create index if not exists challenge_results_user_idx on public.challenge_results (user_id, created_at desc);
+
+-- Who can see a challenge's results: whoever sent it and everyone who has
+-- played it. (security definer, so the check can read results the policy
+-- itself would hide.)
+create or replace function public.can_see_challenge_results(cid text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.challenges c where c.id = cid and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.challenge_results r where r.challenge_id = cid and r.user_id = (select auth.uid()));
+$$;
+
 -- ---------- Row-level security ----------
 
 alter table public.profiles enable row level security;
@@ -363,6 +425,30 @@ create policy "save own game" on public.games
     and game_date between (now() at time zone 'utc')::date - 2 and (now() at time zone 'utc')::date + 1
   );
 
+alter table public.challenges enable row level security;
+alter table public.challenge_results enable row level security;
+
+-- Challenges are public by link. Anyone can create one; signed in, it's
+-- recorded as yours (or anonymous), never as someone else's.
+drop policy if exists "challenges are public" on public.challenges;
+create policy "challenges are public" on public.challenges
+  for select to anon, authenticated using (true);
+
+drop policy if exists "create a challenge" on public.challenges;
+create policy "create a challenge" on public.challenges
+  for insert to anon, authenticated
+  with check (created_by is null or created_by = (select auth.uid()));
+
+drop policy if exists "see challenge results" on public.challenge_results;
+create policy "see challenge results" on public.challenge_results
+  for select to authenticated
+  using ((select auth.uid()) = user_id or public.can_see_challenge_results(challenge_id));
+
+drop policy if exists "save own challenge result" on public.challenge_results;
+create policy "save own challenge result" on public.challenge_results
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
 -- ---------- Privileges ----------
 
 grant usage on schema public to anon, authenticated;
@@ -373,6 +459,11 @@ grant update (username, display_name, avatar_url, time_zone) on public.profiles 
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;
+grant select, insert on public.challenges to anon, authenticated;
+revoke select, insert on public.challenge_results from anon;
+grant select, insert on public.challenge_results to authenticated;
+revoke execute on function public.can_see_challenge_results(text) from anon;
+grant execute on function public.can_see_challenge_results(text) to authenticated;
 
 -- ---------- Profile photos (Supabase Storage) ----------
 

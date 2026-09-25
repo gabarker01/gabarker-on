@@ -2384,3 +2384,24 @@ a.archive-item {
 .photo-credit a {
   color: inherit;
 }
+
+/* Profile: challenges list */
+.challenges-section {
+  margin: 24px 0 8px;
+}
+
+.challenge-item {
+  grid-template-columns: 1fr auto;
+}
+
+.challenge-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.archive-status.is-lost {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+}

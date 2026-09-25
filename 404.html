@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=20">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=21">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -122,6 +122,19 @@
 
       <!-- Only on your own profile -->
       <div id="own-sections" hidden>
+        <!-- Challenges, kept apart from the daily games above -->
+        <section id="challenges-section" class="challenges-section">
+          <button id="challenges-toggle" class="practice-option" type="button" aria-expanded="false" aria-controls="challenges-body">
+            <span class="practice-name">Challenges</span>
+            <span id="challenges-summary" class="practice-text">Challenges you've sent and played.</span>
+            <span class="practice-arrow" aria-hidden="true">↓</span>
+          </button>
+          <div id="challenges-body" class="past-days" hidden>
+            <ol id="challenges-list" class="archive-list"></ol>
+            <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. After any game, tap Challenge a friend on the results screen.</p>
+          </div>
+        </section>
+
         <section id="requests-section" hidden>
           <h2 class="section-label">Follow requests</h2>
           <ul id="requests-list" class="people-list"></ul>
@@ -181,15 +194,44 @@
       </div>
     </section>
 
+    <!-- A challenge: /tapmap/challenge/{id} -->
+    <section id="challenge-view" hidden>
+      <p class="eyebrow">Challenge</p>
+      <h1 id="challenge-heading" class="sheet-title"></h1>
+      <p id="challenge-lead" class="lead"></p>
+      <div class="profile-actions">
+        <a id="challenge-play" class="primary-button link-as-button" href="/tapmap/">Play the challenge</a>
+        <button id="challenge-share" class="secondary-button" type="button">Share challenge</button>
+      </div>
+      <h2 class="section-label">Results</h2>
+      <ol id="challenge-results" class="friends-list league-list"></ol>
+      <p id="challenge-results-note" class="profile-note" hidden></p>
+    </section>
+
+    <!-- No such challenge -->
+    <section id="no-challenge" hidden>
+      <p class="eyebrow">Challenge</p>
+      <h1 class="sheet-title">Challenge not <em>found.</em></h1>
+      <p class="lead">This challenge link doesn't work. Check it's complete, or ask for it again.</p>
+      <a class="primary-button link-as-button" href="/tapmap/">Play today's game</a>
+    </section>
+
     <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
-    const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
+    const path = window.location.pathname;
+    const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
+    const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=10").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=11").then((m) => m.showProfile(decodeURIComponent(match[1])));
+    } else if (challenge && !path.startsWith("/tapmap/")) {
+      // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
+      window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
+    } else if (challenge) {
+      import("/tapmap/challenge/challenge.js?v=1").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

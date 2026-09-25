@@ -9,7 +9,7 @@ import {
 } from "./game.js?v=7";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=10";
+import * as social from "./social.js?v=11";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -35,8 +35,9 @@ const storage = {
 const DAILY_KEY = "tapmap:v5:daily"; // { date, number, locations, rounds }
 const STATS_KEY = "tapmap:v5:stats";
 const ARCHIVE_KEY = "tapmap:v5:archive"; // { [game number]: { locations, rounds } }
-const CHALLENGES_KEY = "tapmap:v5:challenges"; // { [challenge code]: { locations, rounds } }
-const CHALLENGE_KEY = "tapmap:v5:challenge"; // the last challenge link opened
+const CHALLENGES_KEY = "tapmap:v5:challenges"; // { [challenge key]: { locations, rounds } }
+const CHALLENGE_KEY = "tapmap:v5:challenge"; // the last challenge opened: a link code, or { id, ch }
+const CHALLENGE_RESULTS_KEY = "tapmap:v5:challenge-results"; // { [challenge id]: { rounds, total, saved } }
 const LEGACY_DAILY_KEY = "tapmap:v4:daily";
 const LEGACY_STATS_KEY = "tapmap:v4:stats";
 
@@ -536,8 +537,11 @@ function saveDaily() {
 
 // ---------- Challenges ----------
 
-// Links look like /tapmap/?challenge=… and carry the five places (as short
-// codes) and the sender's round scores. They work without an account.
+// Challenges are saved in the database and shared as /tapmap/challenge/{id}
+// (that page's Play button opens /tapmap/?c={id}). Older links, and links made
+// when the database can't be reached, look like /tapmap/?challenge=… and
+// carry the places (as short codes) and the sender's rounds themselves.
+// Either way they work without an account.
 const challengeKind = (g) => (g.mode === "daily" || g.mode === "archive" ? "daily" : g.plan.some((r) => r.photo) ? "photo" : "practice");
 
 function challengeLink(g) {
@@ -552,24 +556,57 @@ function challengeLink(g) {
   return `${GAME_URL}/?challenge=${code}`;
 }
 
+// A challenge row from the database, in the same shape as a decoded link.
+function challengeFromRow(row) {
+  if (!row) return null;
+  const places = Array.isArray(row.places) ? row.places : [];
+  const rounds = Array.isArray(row.rounds) ? row.rounds : [];
+  if (!validPlaces(places) || rounds.length !== ROUNDS || !["daily", "practice", "photo"].includes(row.kind)) return null;
+  return {
+    by: row.by_name || (row.profiles ? personName(row.profiles) : null),
+    username: row.profiles ? row.profiles.username : null,
+    kind: row.kind,
+    number: row.game_number || undefined,
+    codes: places.map((l) => placeCode(l.name)),
+    places,
+    rounds: rounds.map((r) => ({
+      score: r.score,
+      distanceKm: r.km,
+      tier: tierFor(r.km),
+      guess: r.guess && Number.isFinite(r.guess.lat) && Number.isFinite(r.guess.lng) ? r.guess : null,
+    })),
+  };
+}
+
+// The last challenge opened on this device: { key, ch, id? }.
+function openedChallengeEntry() {
+  const saved = storage.get(CHALLENGE_KEY);
+  if (typeof saved === "string") {
+    const ch = decodeChallenge(saved);
+    return ch ? { key: saved, ch } : null;
+  }
+  return saved && saved.id && saved.ch ? { key: `id:${saved.id}`, id: saved.id, ch: saved.ch } : null;
+}
+
 // What playing a challenge means here: today's daily, a past game, or the
 // same five places as an unranked challenge. Null if the places are unknown.
-function resolveChallenge(code) {
-  const ch = decodeChallenge(code);
-  if (!ch) return null;
+function resolveChallenge(entry) {
+  if (!entry) return null;
+  const { ch, key: code, id } = entry;
   const plan = ch.kind === "photo" ? PHOTO_PLAN : ROUND_PLAN;
   const sameAs = (locations) => locations.every((l, i) => l && placeCode(l.name) === ch.codes[i]);
   if (ch.kind === "daily" && ch.number && ch.number <= todayNumber) {
-    if (ch.number === todayNumber && sameAs(todaysPlaces())) return { ch, code, plan, mode: "daily", number: todayNumber };
+    if (ch.number === todayNumber && sameAs(todaysPlaces())) return { ch, code, id, plan, mode: "daily", number: todayNumber };
     if (ch.number < todayNumber) {
       const saved = savedMap(ARCHIVE_KEY)[ch.number];
       const locations = saved && validPlaces(saved.locations) ? saved.locations : dailyLocations(dateForNumber(ch.number), allLocations);
-      if (sameAs(locations)) return { ch, code, plan, mode: "archive", number: ch.number };
+      if (sameAs(locations)) return { ch, code, id, plan, mode: "archive", number: ch.number };
     }
   }
-  const locations = resolvePlaces(ch.codes, allLocations);
+  // Saved challenges carry their places; link codes are looked up by name.
+  const locations = ch.places ? savedPlaces(ch.places) : resolvePlaces(ch.codes, allLocations);
   if (!locations) return null;
-  return { ch, code, plan, mode: "challenge", locations: locations.map(snapshot) };
+  return { ch, code, id, plan, mode: "challenge", locations: locations.map(snapshot) };
 }
 
 const challengerName = (ch) => ch.by || "A friend";
@@ -578,9 +615,8 @@ const challengerTotal = ({ ch, plan }) =>
 
 // Is this finished game the one the last opened challenge is about?
 function challengeFor(g) {
-  const code = storage.get(CHALLENGE_KEY);
-  if (!code || g.mode === "practice" || g.mode === "photo") return null;
-  const resolved = resolveChallenge(code);
+  if (g.mode === "practice" || g.mode === "photo") return null;
+  const resolved = resolveChallenge(openedChallengeEntry());
   if (!resolved || resolved.mode !== g.mode) return null;
   if (g.mode === "challenge") return resolved.code === g.code ? resolved : null;
   return resolved.number === g.number ? resolved : null;
@@ -594,9 +630,8 @@ function startChallenge(resolved) {
 }
 
 function offerChallenge() {
-  const code = storage.get(CHALLENGE_KEY);
-  if (!code) return false;
-  const resolved = resolveChallenge(code);
+  if (!storage.get(CHALLENGE_KEY)) return false;
+  const resolved = resolveChallenge(openedChallengeEntry());
   if (!resolved) {
     storage.set(CHALLENGE_KEY, null);
     toast("That challenge link doesn't work any more.");
@@ -624,6 +659,85 @@ function offerChallenge() {
   };
   openOverlay($("challenge-invite"));
   return true;
+}
+
+// Saves the game as a challenge in the database (once per game) and shares
+// its /tapmap/challenge/{id} link. If the database can't be reached, the
+// challenge goes in the link itself instead.
+async function shareChallenge(finished, total) {
+  const button = $("challenge-button");
+  let link = finished.challengeUrl;
+  let fresh = false;
+  if (!link) {
+    button.disabled = true;
+    try {
+      const id = await social.createChallenge({
+        userId: user ? user.id : null,
+        byName: user && profile ? personName(profile) : null,
+        kind: challengeKind(finished),
+        number: finished.number,
+        places: finished.locations,
+        rounds: finished.rounds,
+        total,
+      });
+      link = `${GAME_URL}/challenge/${id}`;
+    } catch (error) {
+      console.warn("Couldn't save the challenge, so it goes in the link:", error);
+      link = challengeLink(finished);
+    } finally {
+      button.disabled = false;
+    }
+    finished.challengeUrl = link;
+    button.textContent = "Share challenge link";
+    fresh = true;
+  }
+  const message = `Can you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: message });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      // Some phones only allow sharing straight after a tap, not after
+      // saving the challenge: the next tap shares at once.
+      if (fresh) {
+        toast("Challenge ready. Tap again to share.");
+        return;
+      }
+    }
+  }
+  toast((await copyText(message)) ? "Challenge link copied" : "Challenge ready. Tap again to copy.");
+}
+
+// Your result for a saved challenge: kept on the device, and saved to your
+// account when you're signed in (now, or when you next sign in).
+function recordChallengeResult(g) {
+  const resolved = g.challenge;
+  if (!resolved || !resolved.id || g.rounds.length < ROUNDS) return;
+  const results = savedMap(CHALLENGE_RESULTS_KEY);
+  if (!results[resolved.id]) {
+    saveInMap(CHALLENGE_RESULTS_KEY, resolved.id, { rounds: g.rounds, total: totalScore(g.rounds), saved: false }, 200);
+  }
+  syncChallengeResults();
+}
+
+let syncingChallenges = false;
+async function syncChallengeResults() {
+  if (!user || syncingChallenges) return;
+  syncingChallenges = true;
+  try {
+    for (const [id, result] of Object.entries(savedMap(CHALLENGE_RESULTS_KEY))) {
+      if (result.saved || !Array.isArray(result.rounds) || result.rounds.length < ROUNDS) continue;
+      try {
+        await social.saveChallengeResult(id, user.id, result.rounds, result.total);
+        saveInMap(CHALLENGE_RESULTS_KEY, id, { ...result, saved: true }, 200);
+      } catch (error) {
+        console.warn("Challenge result not saved yet:", error);
+      }
+    }
+  } finally {
+    syncingChallenges = false;
+  }
 }
 
 function renderComparison(finished) {
@@ -673,9 +787,28 @@ function renderComparison(finished) {
   if (myTotal > theirTotal) t2.className = "is-winner";
   foot.append(label, t1, t2);
   $("compare-rows").replaceChildren(...rows, foot);
+  $("compare-link").hidden = !resolved.id;
+  if (resolved.id) $("compare-link").href = `/tapmap/challenge/${resolved.id}`;
   const diff = Math.abs(myTotal - theirTotal);
   $("compare-verdict").textContent = myTotal > theirTotal ? `You win by ${formatNumber(diff)} points.`
     : myTotal < theirTotal ? `${them} wins by ${formatNumber(diff)} points.` : "It's a draw.";
+}
+
+// Opens a saved challenge straight into play (or its comparison, if played).
+async function playSavedChallenge(id) {
+  try {
+    const ch = challengeFromRow(await social.fetchChallenge(id));
+    if (!ch) throw new Error("No such challenge");
+    storage.set(CHALLENGE_KEY, { id, ch });
+    const resolved = resolveChallenge(openedChallengeEntry());
+    if (!resolved) throw new Error("This challenge's places aren't available");
+    startChallenge(resolved);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    toast("That challenge couldn't be loaded.");
+    return false;
+  }
 }
 
 // ---------- Results ----------
@@ -829,21 +962,11 @@ async function showEnd(finished) {
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
   shareImage = null;
   $("image-button").onclick = () => shareImageFor(finished, text);
-  $("challenge-button").onclick = async () => {
-    const link = challengeLink(finished);
-    const message = `Can you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ text: message });
-        return;
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-      }
-    }
-    toast((await copyText(message)) ? "Challenge link copied" : "Couldn't copy. Try again.");
-  };
+  $("challenge-button").textContent = finished.challengeUrl ? "Share challenge link" : "Challenge a friend";
+  $("challenge-button").onclick = () => shareChallenge(finished, total);
 
   renderComparison(finished);
+  if (finished.challenge) recordChallengeResult(finished);
   renderFriends(!isDaily);
   renderLeague(!isDaily);
   updateSignInPrompts();
@@ -1384,6 +1507,7 @@ async function onSignedIn(nextUser) {
     loadFriendGames();
     refreshRequestBadge();
     saveTimeZone();
+    syncChallengeResults();
   }
   updateAccountButton();
   updateSignInPrompts();
@@ -1582,13 +1706,15 @@ const pendingSignIn = params.has("signin");
 // (?play=satellite is the old name for photo practice.)
 const playParam = params.get("play") === "satellite" ? "photo" : params.get("play");
 const playNumber = Number(params.get("n"));
+// ?c={id}: the Play button on a /tapmap/challenge/{id} page.
+const challengeId = /^[a-z0-9]{6,16}$/.test(params.get("c") || "") ? params.get("c") : null;
 const openedChallenge = Boolean(params.get("challenge") && decodeChallenge(params.get("challenge")));
 if (openedChallenge) storage.set(CHALLENGE_KEY, params.get("challenge"));
 else if (params.has("challenge")) window.addEventListener("load", () => toast("That challenge link isn't complete. Ask for it again."));
 if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
   store.set(INVITE_KEY, params.get("invite").toLowerCase());
 }
-if (["invite", "signin", "challenge", "play", "n"].some((key) => params.has(key))) {
+if (["invite", "signin", "challenge", "c", "play", "n"].some((key) => params.has(key))) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 // The profile button is always there (it opens sign-in until you're signed in).
@@ -1603,6 +1729,7 @@ async function boot() {
   window.tapmapReady = true;
   updateHeader();
   bootSocial();
+  if (challengeId && (await playSavedChallenge(challengeId))) return;
   if (openedChallenge && offerChallenge()) return;
   if (playParam === "practice" || playParam === "photo") return start(playParam);
   if (playParam === "archive" && Number.isInteger(playNumber) && playNumber >= 1 && playNumber < todayNumber) {
