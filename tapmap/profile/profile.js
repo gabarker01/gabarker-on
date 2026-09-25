@@ -3,7 +3,7 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=12";
+import * as social from "/tapmap/social.js?v=13";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
 import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=7";

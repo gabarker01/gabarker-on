@@ -131,11 +131,8 @@ export async function createChallenge({ userId, byName, kind, number, places, ro
 }
 
 // Saves your result for a challenge (once; "already saved" is fine).
-export async function saveChallengeResult(challengeId, userId, rounds, total) {
-  const { error } = await client
-    .from("challenge_results")
-    .insert({ challenge_id: challengeId, user_id: userId, rounds: challengeRounds(rounds), total });
-  if (error && error.code !== "23505") throw error;
+export async function saveChallengeResult(challengeId, userId, rounds, total, deviceId) {
+  await insertOnce("challenge_results", { challenge_id: challengeId, user_id: userId, rounds: challengeRounds(rounds), total, device_id: deviceId || undefined });
 }
 
 // Everyone's results for a challenge that you can see (you sent it or played it).
@@ -274,20 +271,62 @@ export async function getStats(userId) {
 
 // ---------- Games ----------
 
-export async function saveGame(userId, { date, number, rounds, total, names }) {
-  const payload = rounds.map((r, i) => ({
-    name: names ? names[i] : undefined,
-    score: r.score,
-    tier: r.tier,
-    km: Math.round(r.distanceKm * 10) / 10,
-    multiplier: r.multiplier,
-    guess: { lat: +r.guess.lat.toFixed(4), lng: +r.guess.lng.toFixed(4) },
-  }));
-  // Results can't be changed once saved, so "already saved" (23505) is fine.
-  const { error } = await client
-    .from("games")
-    .insert({ user_id: userId, game_date: date, game_number: number, rounds: payload, total });
+const gameRounds = (rounds, names) => rounds.map((r, i) => ({
+  name: names ? names[i] : undefined,
+  score: r.score,
+  tier: r.tier,
+  km: Math.round(r.distanceKm * 10) / 10,
+  multiplier: r.multiplier,
+  guess: { lat: +r.guess.lat.toFixed(4), lng: +r.guess.lng.toFixed(4) },
+}));
+
+// Inserts a row; "already saved" (23505) is fine. device_id is left out if
+// the database doesn't have that column yet (setup.sql not re-run).
+async function insertOnce(table, row) {
+  let { error } = await client.from(table).insert(row);
+  if (error && row.device_id !== undefined && (error.code === "PGRST204" || /device_id/.test(error.message || ""))) {
+    const { device_id: _unused, ...rest } = row;
+    ({ error } = await client.from(table).insert(rest));
+  }
   if (error && error.code !== "23505") throw error;
+}
+
+export async function saveGame(userId, { date, number, rounds, total, names, deviceId }) {
+  // Results can't be changed once saved. deviceId links it to the same game
+  // if it was first saved without an account, so it's only counted once.
+  await insertOnce("games", { user_id: userId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total, device_id: deviceId || undefined });
+}
+
+// Games and challenge results without an account: counted in the overall
+// stats, never on leaderboards. Plain REST, so they're saved even if the
+// sign-in library can't load; the database accepts them but never returns them.
+async function postAnonymous(table, row) {
+  if (!socialEnabled()) return;
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, "content-type": "application/json", prefer: "return=minimal" },
+    body: JSON.stringify(row),
+  });
+  if (!response.ok && response.status !== 409) throw new Error(`Couldn't save to ${table} (${response.status})`);
+}
+
+export const saveAnonymousGame = (deviceId, { date, number, rounds, total, names }) =>
+  postAnonymous("anonymous_games", { device_id: deviceId, game_date: date, game_number: number, rounds: gameRounds(rounds, names), total });
+
+export const saveAnonymousChallengeResult = (challengeId, deviceId, rounds, total) =>
+  postAnonymous("anonymous_challenge_results", { challenge_id: challengeId, device_id: deviceId, rounds: challengeRounds(rounds), total });
+
+// How many played a challenge without an account.
+export async function anonymousChallengePlayers(challengeId) {
+  if (!socialEnabled()) return 0;
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/anonymous_challenge_players`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, "content-type": "application/json" },
+    body: JSON.stringify({ cid: challengeId }),
+  });
+  if (!response.ok) return 0;
+  const count = await response.json();
+  return Number.isInteger(count) ? count : 0;
 }
 
 // Today's results from you and everyone who has accepted your follow, best

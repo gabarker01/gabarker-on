@@ -1,9 +1,9 @@
 // The challenge page, /tapmap/challenge/{id} (served by /404.html): who sent
 // it and their score, a button to play it, and everyone's results that you
 // can see (you sent it or played it).
-import * as social from "/tapmap/social.js?v=12";
+import * as social from "/tapmap/social.js?v=13";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
-import { signInHref } from "/tapmap/account-button.js?v=1";
+import { signInHref } from "/tapmap/account-button.js?v=2";
 import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=7";
 
 const $ = (id) => document.getElementById(id);
@@ -146,6 +146,15 @@ export async function showChallenge(id) {
     last = r.total;
     return resultRow(rank, r.person, r.total, r);
   }));
+  // Players without an account are counted, not listed.
+  social.anonymousChallengePlayers(id).then((count) => {
+    const others = $("challenge-anonymous");
+    // (Your own result from this device is already listed as "You".)
+    const shown = mine && !me ? count - 1 : count;
+    others.hidden = shown < 1;
+    others.textContent = `+ ${shown} more ${shown === 1 ? "person" : "people"} played without an account.`;
+  }).catch(() => {});
+
   const note = $("challenge-results-note");
   note.hidden = canSee;
   if (me) {

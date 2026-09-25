@@ -199,6 +199,27 @@ from public.challenges c left join public.challenge_results r on r.challenge_id 
 group by c.id order by c.created_at desc limit 20;
 ```
 
+## Players without an account
+
+Daily games and challenge results played without signing in are saved too,
+in `anonymous_games` and `anonymous_challenge_results`, under a random
+`device_id` kept on the player's device (no personal details). They count
+towards the overall stats but never towards leaderboards, friends' results
+or profile stats. Players can add these rows but can't read them; you see them
+in the dashboard. If someone plays signed out and then signs in on the same
+device, their result is saved to their account with the same `device_id`,
+and the stats count it once.
+
+```sql
+-- Players per day, with and without an account
+select game_date, game_number, players, signed_in_players, players_without_account, average, best
+from public.daily_summary order by game_date desc;
+```
+
+(`daily_summary` is for the dashboard only now: it includes the anonymous
+games, which the app can't read.) A challenge page lists signed-in players'
+results and adds "+ N more played without an account".
+
 ## What's stored
 
 | Table | Contents | Who can read | Who can write |

@@ -10,7 +10,7 @@ import {
 } from "./game.js?v=7";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=12";
+import * as social from "./social.js?v=13";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -549,7 +549,39 @@ function saveDaily() {
   storage.set(DAILY_KEY, daily);
   if (dailyDone()) {
     storage.set(STATS_KEY, recordDailyResult(storage.get(STATS_KEY) || {}, today, totalScore(daily.rounds)));
-    syncDaily();
+    if (user) syncDaily();
+    else saveAnonymousDaily();
+  }
+}
+
+// A random id for this device (no personal details), so games played
+// without an account are counted once in the overall stats, and not again
+// if they're later saved to an account.
+const DEVICE_KEY = "tapmap:device";
+function deviceId() {
+  let id = null;
+  try { id = localStorage.getItem(DEVICE_KEY); } catch (e) {}
+  if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+    id = crypto.randomUUID ? crypto.randomUUID()
+      : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16));
+    try { localStorage.setItem(DEVICE_KEY, id); } catch (e) {}
+  }
+  return id;
+}
+
+// Today's game without an account: counted in the overall stats (never on
+// leaderboards). Once per day per device.
+async function saveAnonymousDaily() {
+  if (user || !dailyDone() || daily.anonSaved) return;
+  try {
+    await social.saveAnonymousGame(deviceId(), {
+      date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds),
+      names: todaysPlaces().map((l) => l.name),
+    });
+    daily.anonSaved = true;
+    storage.set(DAILY_KEY, daily);
+  } catch (error) {
+    console.warn("Game not counted yet:", error);
   }
 }
 
@@ -741,13 +773,21 @@ function recordChallengeResult(g) {
 
 let syncingChallenges = false;
 async function syncChallengeResults() {
-  if (!user || syncingChallenges) return;
+  if (syncingChallenges) return;
   syncingChallenges = true;
   try {
     for (const [id, result] of Object.entries(savedMap(CHALLENGE_RESULTS_KEY))) {
       if (result.saved || !Array.isArray(result.rounds) || result.rounds.length < ROUNDS) continue;
+      // Signed out, the result is counted without an account (once); it's
+      // saved to the account too if they sign in later.
+      if (!user && result.anonSaved) continue;
       try {
-        await social.saveChallengeResult(id, user.id, result.rounds, result.total);
+        if (!user) {
+          await social.saveAnonymousChallengeResult(id, deviceId(), result.rounds, result.total);
+          saveInMap(CHALLENGE_RESULTS_KEY, id, { ...result, anonSaved: true }, 200);
+          continue;
+        }
+        await social.saveChallengeResult(id, user.id, result.rounds, result.total, deviceId());
         saveInMap(CHALLENGE_RESULTS_KEY, id, { ...result, saved: true }, 200);
       } catch (error) {
         console.warn("Challenge result not saved yet:", error);
@@ -1178,6 +1218,7 @@ async function syncDaily() {
     await social.saveGame(user.id, {
       date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds),
       names: todaysPlaces().map((l) => l.name),
+      deviceId: deviceId(),
     });
   } catch (error) {
     console.error(error);
@@ -1526,6 +1567,11 @@ async function onSignedIn(nextUser) {
     loadFriendGames();
     refreshRequestBadge();
     saveTimeZone();
+    // (Finished before any return to the page that asked for sign-in.)
+    await syncChallengeResults();
+  } else {
+    // Signed out: count today's game and any challenge results without an account.
+    saveAnonymousDaily();
     syncChallengeResults();
   }
   updateAccountButton();

@@ -150,6 +150,30 @@ begin
   end if;
 end $$;
 
+-- ---------- Players without an account ----------
+
+-- Daily games played without signing in: they count towards the overall
+-- daily stats (daily_summary) but never towards leaderboards, friends'
+-- results or profile stats. device_id is a random id kept on the player's
+-- device (no personal details). Players can add rows but not read them.
+create table if not exists public.anonymous_games (
+  device_id uuid not null,
+  game_date date not null,
+  game_number integer not null check (game_number > 0),
+  rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5 and pg_column_size(rounds) < 8000),
+  total integer not null,
+  created_at timestamptz not null default now(),
+  primary key (device_id, game_date),
+  constraint anonymous_games_number_matches_date check (game_number = (game_date - date '2026-09-24') + 1),
+  constraint anonymous_games_total_matches_rounds check (public.game_total_ok(rounds, total))
+);
+
+create index if not exists anonymous_games_date_idx on public.anonymous_games (game_date);
+
+-- A signed-in result also records the device it was played on, so a game
+-- played signed out and saved to an account afterwards is only counted once.
+alter table public.games add column if not exists device_id uuid;
+
 -- ---------- New users get a profile ----------
 
 -- Username: the one chosen at sign-up if valid and free, otherwise one made
@@ -250,18 +274,33 @@ where p.id = (select auth.uid())
   )
 group by p.id;
 
--- One row per daily game (date and TapMap number) with player count, average
--- and best. In the dashboard it covers everyone; in the app, what you can see.
-create or replace view public.daily_summary
+-- One row per daily game (date and TapMap number): how many played (with and
+-- without an account), the average and the best. For the dashboard: it
+-- includes games played without an account, which the app can't read.
+drop view if exists public.daily_summary;
+create view public.daily_summary
 with (security_invoker = true)
 as
+with all_games as (
+  select game_date, game_number, total, true as signed_in
+  from public.games
+  union all
+  select a.game_date, a.game_number, a.total, false
+  from public.anonymous_games a
+  -- (not if the same game was then saved to an account)
+  where not exists (
+    select 1 from public.games g where g.device_id = a.device_id and g.game_date = a.game_date
+  )
+)
 select
   game_date,
   game_number,
   count(*)::integer as players,
+  count(*) filter (where signed_in)::integer as signed_in_players,
+  count(*) filter (where not signed_in)::integer as players_without_account,
   round(avg(total))::integer as average,
   max(total) as best
-from public.games
+from all_games
 group by game_date, game_number;
 
 -- Weekly league: points per player for each Monday-to-Sunday week (by game
@@ -341,6 +380,37 @@ create table if not exists public.challenge_results (
 );
 
 create index if not exists challenge_results_user_idx on public.challenge_results (user_id, created_at desc);
+
+-- Challenge results from players without an account: counted (see
+-- anonymous_challenge_players), never listed. Add-only, like anonymous_games.
+create table if not exists public.anonymous_challenge_results (
+  challenge_id text not null references public.challenges (id) on delete cascade,
+  device_id uuid not null,
+  rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5 and pg_column_size(rounds) < 8000),
+  total integer not null,
+  created_at timestamptz not null default now(),
+  primary key (challenge_id, device_id),
+  constraint anonymous_challenge_results_total_matches_rounds check (public.game_total_ok(rounds, total))
+);
+
+alter table public.challenge_results add column if not exists device_id uuid;
+
+-- How many played a challenge without an account (and haven't since saved the
+-- result to one), for the challenge page.
+create or replace function public.anonymous_challenge_players(cid text)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer
+  from public.anonymous_challenge_results a
+  where a.challenge_id = cid
+    and not exists (
+      select 1 from public.challenge_results r where r.challenge_id = cid and r.device_id = a.device_id
+    );
+$$;
 
 -- Who can see a challenge's results: whoever sent it and everyone who has
 -- played it. (security definer, so the check can read results the policy
@@ -446,12 +516,32 @@ create policy "save own challenge result" on public.challenge_results
   for insert to authenticated
   with check ((select auth.uid()) = user_id);
 
+alter table public.anonymous_games enable row level security;
+alter table public.anonymous_challenge_results enable row level security;
+
+-- Anyone can add a game or challenge result without an account (same checks
+-- as signed-in games), but nobody can read them back through the app.
+drop policy if exists "save a game without an account" on public.anonymous_games;
+create policy "save a game without an account" on public.anonymous_games
+  for insert to anon, authenticated
+  with check (game_date between (now() at time zone 'utc')::date - 2 and (now() at time zone 'utc')::date + 1);
+
+drop policy if exists "save a challenge result without an account" on public.anonymous_challenge_results;
+create policy "save a challenge result without an account" on public.anonymous_challenge_results
+  for insert to anon, authenticated
+  with check (true);
+
 -- ---------- Privileges ----------
 
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
 revoke select on public.follows, public.games, public.profile_stats, public.weekly_league from anon;
-grant select on public.follows, public.games, public.profile_stats, public.daily_summary, public.weekly_league to authenticated;
+grant select on public.follows, public.games, public.profile_stats, public.weekly_league to authenticated;
+-- daily_summary includes games without an account, so it's for the dashboard only.
+revoke select on public.daily_summary from anon, authenticated;
+grant insert on public.anonymous_games, public.anonymous_challenge_results to anon, authenticated;
+revoke select, update, delete on public.anonymous_games, public.anonymous_challenge_results from anon, authenticated;
+grant execute on function public.anonymous_challenge_players(text) to anon, authenticated;
 grant update (username, display_name, avatar_url, time_zone) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
