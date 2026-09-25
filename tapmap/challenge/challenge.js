@@ -3,6 +3,7 @@
 // can see (you sent it or played it).
 import * as social from "/tapmap/social.js?v=12";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
+import { signInHref } from "/tapmap/account-button.js?v=1";
 import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=7";
 
 const $ = (id) => document.getElementById(id);
@@ -143,7 +144,14 @@ export async function showChallenge(id) {
   }));
   const note = $("challenge-results-note");
   note.hidden = canSee;
-  note.textContent = !me
-    ? "Sign in before you play to save your result and see everyone else's."
-    : "Play it to see everyone else's results.";
+  if (me) {
+    note.textContent = "Play it to see everyone else's results.";
+  } else {
+    // "Sign in" opens sign-in / create account, then comes back here.
+    const link = document.createElement("a");
+    link.href = "/tapmap/?signin=1";
+    link.textContent = "Sign in";
+    link.addEventListener("click", () => signInHref(`/tapmap/challenge/${id}`));
+    note.replaceChildren(link, " before you play to save your result and see everyone else's.");
+  }
 }

@@ -1,6 +1,10 @@
 // Practice menu: random places, photos, or any earlier daily game.
 import { ROUNDS, todayKey, gameNumber, dateForNumber, totalScore, formatNumber } from "/tapmap/game.js?v=7";
 
+import { mountAccountButton } from "/tapmap/account-button.js?v=1";
+
+mountAccountButton(document.getElementById("account-slot"));
+
 const ARCHIVE_KEY = "tapmap:v5:archive"; // past games played on this device (see tapmap.js)
 const $ = (id) => document.getElementById(id);
 

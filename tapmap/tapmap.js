@@ -1386,7 +1386,8 @@ function afterInvite() {
   const next = store.get(NEXT_KEY);
   if (next && user) {
     store.remove(NEXT_KEY);
-    if (next.startsWith("/tapmap/profile/")) window.location.href = next;
+    // Back to the profile, challenge or practice page that asked to sign in.
+    if (/^\/tapmap\/(profile|challenge|practice)\//.test(next)) window.location.href = next;
   }
 }
 

@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=21">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=22">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -41,7 +41,10 @@
         <span class="wordmark-name">Tap<em>Map</em></span>
       </span>
     </a>
-    <a class="chip-button" href="/tapmap/">Play today's game</a>
+    <div class="bar-actions">
+      <a class="chip-button" href="/tapmap/">Play today's game</a>
+      <span id="account-slot"></span>
+    </div>
   </header>
 
   <main class="profile-main">
@@ -222,6 +225,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
+    import("/tapmap/account-button.js?v=1").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
     const path = window.location.pathname;
     const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
@@ -231,7 +235,7 @@
       // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
       window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
     } else if (challenge) {
-      import("/tapmap/challenge/challenge.js?v=2").then((m) => m.showChallenge(challenge[1]));
+      import("/tapmap/challenge/challenge.js?v=3").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

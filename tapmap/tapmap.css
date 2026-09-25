@@ -2405,3 +2405,19 @@ a.archive-item {
   font-size: 1.2rem;
   color: var(--ink-soft);
 }
+
+/* Top bar of the profile, challenge and practice pages */
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+a.ghost-button {
+  text-decoration: none;
+}
+
+.profile-note a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
