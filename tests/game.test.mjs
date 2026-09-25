@@ -64,14 +64,19 @@ test("weeks run Monday to Sunday", () => {
 
 test("challenge links round-trip without spelling out the places", () => {
   const places = dailyLocations("2026-10-05", LOCATIONS);
-  const rounds = places.map((l, i) => ({ score: 50 + i, distanceKm: 123.45 + i }));
-  const code = encodeChallenge({ by: "Zoë", kind: "daily", number: 12, places: places.map((l) => l.name), rounds });
+  const rounds = places.map((l, i) => ({ score: 50 + i, distanceKm: 123.45 + i, guess: { lat: 10.123456 + i, lng: -170.98765 } }));
+  const code = encodeChallenge({ by: "Zoë", username: "zoe_b", kind: "daily", number: 12, places: places.map((l) => l.name), rounds });
   assert.match(code, /^[A-Za-z0-9_-]+$/);
   for (const place of places) assert.ok(!Buffer.from(code, "base64url").toString().includes(place.name.split(",")[0]));
   const back = decodeChallenge(code);
   assert.equal(back.by, "Zoë");
   assert.equal(back.number, 12);
   assert.deepEqual(back.rounds.map((r) => r.score), [50, 51, 52, 53, 54]);
+  assert.equal(back.username, "zoe_b");
+  assert.deepEqual(back.rounds[0].guess, { lat: 10.12, lng: -170.99 }); // the sender's pin, to about 1 km
+  // Links made before guesses were included still work, with no pin.
+  const noPins = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(code, "base64url").toString()), u: undefined, r: rounds.map((r) => [r.score, 5]) })).toString("base64url");
+  assert.deepEqual(decodeChallenge(noPins).rounds.map((r) => r.guess), [null, null, null, null, null]);
   assert.deepEqual(resolvePlaces(back.codes, LOCATIONS).map((l) => l.name), places.map((l) => l.name));
   assert.equal(decodeChallenge("not-a-challenge"), null);
   // Links made when photo practice was called satellite still work.

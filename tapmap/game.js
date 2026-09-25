@@ -300,16 +300,25 @@ const fromBase64Url = (code) => {
   return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 };
 
-// { by, kind: "daily" | "practice" | "photo", number?, places: [name…],
-//   rounds: [{ score, km, tier }…] } -> URL-safe string, and back.
-export const encodeChallenge = ({ by, kind, number, places, rounds }) =>
+// { by, username?, kind: "daily" | "practice" | "photo", number?, places: [name…],
+//   rounds: [{ score, distanceKm, guess: { lat, lng } }…] } -> URL-safe string,
+// and back. Each round is [score, km, lat, lng]; the guess (2 decimal places,
+// about 1 km) puts the sender's pin on the globe. Links made before guesses
+// were included have [score, km] and simply show no pin.
+const round2 = (n) => Math.round(n * 100) / 100;
+export const encodeChallenge = ({ by, username, kind, number, places, rounds }) =>
   toBase64Url(JSON.stringify({
     v: 1,
     b: by ? String(by).slice(0, 40) : undefined,
+    u: username || undefined,
     k: kind,
     n: number,
     p: places.map(placeCode),
-    r: rounds.map((r) => [r.score, Math.round(r.distanceKm * 10) / 10]),
+    r: rounds.map((r) => {
+      const round = [r.score, Math.round(r.distanceKm * 10) / 10];
+      if (r.guess && Number.isFinite(r.guess.lat) && Number.isFinite(r.guess.lng)) round.push(round2(r.guess.lat), round2(r.guess.lng));
+      return round;
+    }),
   }));
 
 export const decodeChallenge = (code) => {
@@ -329,7 +338,13 @@ export const decodeChallenge = (code) => {
       kind: d.k,
       number: d.n,
       codes: d.p,
-      rounds: d.r.map(([score, km]) => ({ score, distanceKm: km, tier: tierFor(km) })),
+      username: typeof d.u === "string" && /^[a-z0-9_]{3,20}$/.test(d.u) ? d.u : null,
+      rounds: d.r.map(([score, km, lat, lng]) => ({
+        score,
+        distanceKm: km,
+        tier: tierFor(km),
+        guess: Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null,
+      })),
     };
   } catch (e) {
     return null;

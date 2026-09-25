@@ -189,7 +189,7 @@
   <script type="module">
     const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=9").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=10").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

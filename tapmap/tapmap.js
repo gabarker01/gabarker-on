@@ -6,7 +6,7 @@ import {
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=6";
+} from "./game.js?v=7";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
 import * as social from "./social.js?v=10";
@@ -543,6 +543,7 @@ const challengeKind = (g) => (g.mode === "daily" || g.mode === "archive" ? "dail
 function challengeLink(g) {
   const code = encodeChallenge({
     by: user && profile ? personName(profile) : null,
+    username: user && profile ? profile.username : null,
     kind: challengeKind(g),
     number: g.number,
     places: g.locations.map((l) => l.name),
@@ -1057,8 +1058,66 @@ async function loadFriendGames() {
 }
 
 // Friends who played this round, shaped for the globe.
+// Pins for this round: the challenger's guess (when playing a challenge), and
+// in the daily game, friends who have played today.
 function friendsForRound(index) {
-  if (!game || game.mode !== "daily") return [];
+  if (!game) return [];
+  return [...challengerForRound(index), ...(game.mode === "daily" ? friendsTodayForRound(index) : [])];
+}
+
+function challengerForRound(index) {
+  const resolved = game.challenge;
+  const round = resolved && resolved.ch.rounds[index];
+  if (!round || !round.guess) return [];
+  const { ch } = resolved;
+  const person = { id: ch.username || ch.by || "challenger", username: ch.username || "", display_name: challengerName(ch) };
+  // Already shown as a friend's pin (same player, daily game)?
+  if (ch.username && game.mode === "daily" && friendGames.some((row) => row.profiles && row.profiles.username === ch.username)) return [];
+  return [{
+    guess: round.guess,
+    initials: initials(person),
+    colour: colourFor(person),
+    avatarUrl: null,
+    name: challengerName(ch),
+    details: () => challengerGuessCard(person, round),
+  }];
+}
+
+// The card shown when the challenger's pin is tapped.
+function challengerGuessCard(person, round) {
+  const card = document.createElement("div");
+  card.className = "friend-card";
+  const head = document.createElement(person.username ? "a" : "div");
+  head.className = "person-link";
+  if (person.username) head.href = profileUrl(person.username);
+  head.append(avatarElement(person, "sm"));
+  const text = document.createElement("span");
+  text.className = "person-text";
+  const name = document.createElement("span");
+  name.className = "person-name";
+  name.textContent = person.display_name;
+  const handle = document.createElement("span");
+  handle.className = "person-handle";
+  handle.textContent = person.username ? `@${person.username} · challenger` : "Challenger";
+  text.append(name, handle);
+  head.append(text);
+  const stats = document.createElement("p");
+  stats.className = "friend-card-stats";
+  const score = document.createElement("strong");
+  score.textContent = String(round.score);
+  const of = document.createElement("span");
+  of.className = "of";
+  of.textContent = "/100";
+  stats.append(score, of);
+  const meta = document.createElement("p");
+  meta.className = "friend-card-meta";
+  if (TIERS[round.tier]) meta.append(tierDot(round.tier));
+  meta.append(` ${formatLength(round.distanceKm)} km away`);
+  card.append(head, stats, meta);
+  return card;
+}
+
+function friendsTodayForRound(index) {
   return friendGames
     .map((row) => ({ row, round: (row.rounds || [])[index] }))
     .filter(({ round }) => round && round.guess && Number.isFinite(round.guess.lat) && Number.isFinite(round.guess.lng))

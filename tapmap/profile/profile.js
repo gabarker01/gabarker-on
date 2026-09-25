@@ -6,7 +6,7 @@
 import * as social from "/tapmap/social.js?v=10";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
-import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=6";
+import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=7";
 
 // Tiers from the saved distance, so older results (when 🎯 meant under 50 km)
 // use today's bands.
