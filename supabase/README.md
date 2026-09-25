@@ -183,8 +183,10 @@ screen ranks those players for the current week.
 
 ## Challenges
 
-**Challenge a friend** (on any results screen) saves the game in `challenges`
-and shares `https://gabarker.com/tapmap/challenge/{id}` (`/challenge/{id}`
+A challenge starts on purpose: **Challenge** on someone's profile, or **New
+challenge** (your profile or the practice page), then random places or photos.
+When that game ends it's saved in `challenges` (and sent to that player's
+profile), and the results screen's **Share challenge** button shares `https://gabarker.com/tapmap/challenge/{id}` (`/challenge/{id}`
 works too). Anyone with the link can see the challenge and play it, signed in
 or not. Signed-in players' results go in `challenge_results`, which anyone with
 the challenge link can see (their pins show while you play it); signed-out players'

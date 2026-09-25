@@ -2508,3 +2508,33 @@ a.ghost-button {
   background: var(--primary);
   border-color: transparent;
 }
+
+/* Results screen of a challenge game: ready to send */
+.challenge-ready {
+  margin: 4px 0 18px;
+  padding: 16px 18px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.challenge-ready .eyebrow {
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+
+.challenge-ready-text {
+  margin: 0 0 14px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+a.chip-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.practice-challenge .mode-row {
+  justify-content: flex-start;
+}

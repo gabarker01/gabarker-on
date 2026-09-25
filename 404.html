@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=23">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=24">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -147,9 +147,9 @@
             <span class="practice-arrow" aria-hidden="true">↓</span>
           </button>
           <div id="challenges-body" class="past-days" hidden>
-            <a class="secondary-button link-as-button" href="/tapmap/practice/">New challenge: play a game, then send it</a>
+            <button id="new-challenge" class="secondary-button" type="button">New challenge</button>
             <ol id="challenges-list" class="archive-list"></ol>
-            <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. After any game, tap Challenge a friend on the results screen.</p>
+            <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. Tap New challenge, or Challenge on a friend's profile.</p>
           </div>
         </section>
 
@@ -205,10 +205,6 @@
           <h2 id="challenge-sheet-title" class="sheet-title"></h2>
           <p id="challenge-sheet-text" class="lead"></p>
           <ul class="practice-options">
-            <li><a id="challenge-daily" class="practice-option" href="/tapmap/">
-              <span class="practice-name">Today's game</span>
-              <span id="challenge-daily-text" class="practice-text">Play today's game, then send them your result to beat.</span>
-              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
             <li><a id="challenge-random" class="practice-option" href="/tapmap/">
               <span class="practice-name">Random places</span>
               <span class="practice-text">Five random places, easy to hard.</span>
@@ -275,7 +271,7 @@
     const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=14").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=15").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else if (challenge && !path.startsWith("/tapmap/")) {
       // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
       window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);

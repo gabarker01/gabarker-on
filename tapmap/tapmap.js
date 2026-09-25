@@ -264,7 +264,7 @@ function saveInMap(key, id, value, keep = 60) {
 }
 
 function newGame(mode, options = {}) {
-  const base = { mode, plan: ROUND_PLAN, rounds: [], index: 0, phase: "guessing", guess: null, nameShown: false, challenge: options.challenge || null };
+  const base = { mode, plan: ROUND_PLAN, rounds: [], index: 0, phase: "guessing", guess: null, nameShown: false, challenge: options.challenge || null, sendAsChallenge: options.sendAsChallenge || null };
   if (mode === "daily") {
     return { ...base, number: todayNumber, dateKey: today, locations: todaysPlaces(), rounds: daily.rounds, index: daily.rounds.length };
   }
@@ -728,67 +728,77 @@ function offerChallenge() {
   return true;
 }
 
-// Saves the game as a challenge in the database (once per game) and shares
-// its /tapmap/challenge/{id} link. If the database can't be reached, the
-// challenge goes in the link itself instead.
-// Opened from "Challenge" on someone's profile (?to=username): the next game
-// you finish is sent to them.
-let challengeTarget = null; // { username, id? }
+// Challenges are created on purpose: "Challenge" on someone's profile, or
+// New challenge (your profile, the practice page), opens random places or
+// photos with ?send=1 (and ?to=username for a player). When that game ends,
+// it's saved as a challenge (and sent to that player's profile), and the
+// results screen shows a big Share challenge button. Other games don't offer
+// challenges.
+let challengeIntent = null; // { target: { username, id? } | null } for the next game started
 
-async function shareChallenge(finished, total) {
-  const button = $("challenge-button");
-  let link = finished.challengeUrl;
-  let fresh = false;
-  const target = finished.challengeTarget;
-  if (!link) {
-    button.disabled = true;
-    try {
-      if (target && user && !target.id) {
-        const person = await social.getProfileByUsername(target.username).catch(() => null);
-        if (person) target.id = person.id;
-      }
-      const id = await social.createChallenge({
-        challengedUser: target && target.id,
-        userId: user ? user.id : null,
-        byName: user && profile ? personName(profile) : null,
-        kind: challengeKind(finished),
-        number: finished.number,
-        places: finished.locations,
-        rounds: finished.rounds,
-        total,
-      });
-      link = `${GAME_URL}/challenge/${id}`;
-    } catch (error) {
-      console.warn("Couldn't save the challenge, so it goes in the link:", error);
-      link = challengeLink(finished);
-    } finally {
-      button.disabled = false;
+async function createChallengeFor(finished, total) {
+  const target = finished.sendAsChallenge.target;
+  try {
+    if (target && user && !target.id) {
+      const person = await social.getProfileByUsername(target.username).catch(() => null);
+      if (person) target.id = person.id;
     }
-    finished.challengeUrl = link;
-    button.textContent = "Share challenge link";
-    fresh = true;
-    if (target && target.id && link.includes("/challenge/")) {
-      toast(`Sent to @${target.username}: it's waiting on their profile`);
-      challengeTarget = null;
-    }
+    const id = await social.createChallenge({
+      challengedUser: target && target.id,
+      userId: user ? user.id : null,
+      byName: user && profile ? personName(profile) : null,
+      kind: challengeKind(finished),
+      number: finished.number,
+      places: finished.locations,
+      rounds: finished.rounds,
+      total,
+    });
+    finished.challengeUrl = `${GAME_URL}/challenge/${id}`;
+    finished.challengeSent = Boolean(target && target.id);
+  } catch (error) {
+    // If the database can't be reached, the challenge goes in the link itself.
+    console.warn("Couldn't save the challenge, so it goes in the link:", error);
+    finished.challengeUrl = challengeLink(finished);
   }
-  const message = `${target ? `@${target.username}, can` : "Can"} you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
-  if (fresh && target && target.id) return; // sent to their profile; tap again to share the link too
-  if (navigator.share) {
-    try {
-      await navigator.share({ text: message });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      // Some phones only allow sharing straight after a tap, not after
-      // saving the challenge: the next tap shares at once.
-      if (fresh) {
-        toast("Challenge ready. Tap again to share.");
+}
+
+// The big "Share challenge" block on a challenge game's results screen.
+async function showChallengeReady(finished, total) {
+  const block = $("challenge-ready");
+  block.hidden = !finished.sendAsChallenge;
+  // Share challenge is the main button here; Copy result steps back.
+  $("copy-button").classList.toggle("primary-button", !finished.sendAsChallenge);
+  $("copy-button").classList.toggle("secondary-button", Boolean(finished.sendAsChallenge));
+  if (!finished.sendAsChallenge) return;
+  const target = finished.sendAsChallenge.target;
+  const button = $("challenge-share");
+  const text = $("challenge-ready-text");
+  button.disabled = true;
+  button.textContent = "Getting your challenge ready…";
+  text.textContent = target ? `Your challenge for @${target.username}.` : "Your challenge is ready to send.";
+  if (!finished.challengeUrl) {
+    if (!finished.challengeSaving) finished.challengeSaving = createChallengeFor(finished, total);
+    await finished.challengeSaving;
+  }
+  if (game !== finished) return;
+  text.textContent = finished.challengeSent
+    ? `Sent to @${target.username}: it's waiting on their profile. Share the link with them too.`
+    : target ? `Share it with @${target.username}: same five places, can they beat ${formatNumber(total)}?`
+      : `Send it to anyone: same five places, can they beat ${formatNumber(total)}?`;
+  button.textContent = "Share challenge";
+  button.disabled = false;
+  button.onclick = async () => {
+    const message = `${target ? `@${target.username}, can` : "Can"} you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${finished.challengeUrl}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: message });
         return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
       }
     }
-  }
-  toast((await copyText(message)) ? "Challenge link copied" : "Challenge ready. Tap again to copy.");
+    toast((await copyText(message)) ? "Challenge link copied" : "Couldn't copy. Try again.");
+  };
 }
 
 // Your result for a saved challenge: kept on the device, and saved to your
@@ -1052,26 +1062,14 @@ async function showEnd(finished) {
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
   shareImage = null;
   $("image-button").onclick = () => shareImageFor(finished, text);
-  // From someone's profile: this game is the one to send them.
-  if (!finished.challengeUrl && challengeTarget && !finished.challengeTarget && (finished.mode !== "challenge")) finished.challengeTarget = challengeTarget;
-  $("challenge-button").textContent = finished.challengeUrl ? "Share challenge link"
-    : finished.challengeTarget ? `Challenge @${finished.challengeTarget.username}` : "Challenge a friend";
-  $("challenge-button").classList.toggle("is-target", Boolean(finished.challengeTarget && !finished.challengeUrl));
-  $("challenge-button").onclick = () => shareChallenge(finished, total);
+  showChallengeReady(finished, total);
 
   renderComparison(finished);
   if (finished.challenge) recordChallengeResult(finished);
   renderFriends(!isDaily);
   renderLeague(!isDaily);
   updateSignInPrompts();
-  if (user && isDaily) {
-    Promise.resolve(dailySaving).catch(() => {}).then(() => social.getStats(user.id)).then((server) => {
-      if (!server) return;
-      $("stat-played").textContent = formatNumber(server.played);
-      $("stat-streak").textContent = formatNumber(server.current_streak);
-      $("stat-best").textContent = formatNumber(server.best);
-    }).catch(() => {});
-  }
+  if (isDaily) refreshEndStats();
 
   startCountdown();
   openOverlay($("end"));
@@ -1090,6 +1088,20 @@ async function showEnd(finished) {
   } catch (error) {
     console.error(error);
   }
+}
+
+// Played / streak / best from your account (the device's own numbers are
+// shown first). Called again once sign-in finishes, since the results screen
+// can open before it has, and after today's game is saved, so the streak
+// includes today.
+function refreshEndStats() {
+  if (!user) return;
+  Promise.resolve(dailySaving).catch(() => {}).then(() => social.getStats(user.id)).then((server) => {
+    if (!server || !game || game.mode !== "daily" || $("end").hidden) return;
+    $("stat-played").textContent = formatNumber(server.played);
+    $("stat-streak").textContent = formatNumber(server.current_streak);
+    $("stat-best").textContent = formatNumber(server.best);
+  }).catch(() => {});
 }
 
 function startCountdown() {
@@ -1636,6 +1648,7 @@ async function onSignedIn(nextUser) {
   if (!$("end").hidden && game) {
     renderFriends(game.mode !== "daily");
     renderLeague(game.mode !== "daily");
+    if (game.mode === "daily") refreshEndStats();
   }
   if (user && !(await offerInvite())) afterInvite();
 }
@@ -1825,7 +1838,10 @@ const pendingSignIn = params.has("signin");
 // Links from the practice page: ?play=practice, ?play=photo, ?play=archive&n=3.
 // (?play=satellite is the old name for photo practice.)
 const playParam = params.get("play") === "satellite" ? "photo" : params.get("play");
-if (/^[a-z0-9_]{3,20}$/.test(params.get("to") || "")) challengeTarget = { username: params.get("to") };
+// ?send=1 (and ?to=username): this practice game is a challenge to send.
+if (params.has("send") || /^[a-z0-9_]{3,20}$/.test(params.get("to") || "")) {
+  challengeIntent = { target: /^[a-z0-9_]{3,20}$/.test(params.get("to") || "") ? { username: params.get("to") } : null };
+}
 const playNumber = Number(params.get("n"));
 // ?c={id}: the Play button on a /tapmap/challenge/{id} page.
 const challengeId = /^[a-z0-9]{6,16}$/.test(params.get("c") || "") ? params.get("c") : null;
@@ -1835,7 +1851,7 @@ else if (params.has("challenge")) window.addEventListener("load", () => toast("T
 if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
   store.set(INVITE_KEY, params.get("invite").toLowerCase());
 }
-if (["invite", "signin", "challenge", "c", "play", "n", "to"].some((key) => params.has(key))) {
+if (["invite", "signin", "challenge", "c", "play", "n", "to", "send"].some((key) => params.has(key))) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 // The profile button is always there (it opens sign-in until you're signed in).
@@ -1852,7 +1868,7 @@ async function boot() {
   bootSocial();
   if (challengeId && (await playSavedChallenge(challengeId))) return;
   if (openedChallenge && offerChallenge()) return;
-  if (playParam === "practice" || playParam === "photo") return start(playParam);
+  if (playParam === "practice" || playParam === "photo") return start(playParam, { sendAsChallenge: challengeIntent });
   if (playParam === "archive" && Number.isInteger(playNumber) && playNumber >= 1 && playNumber < todayNumber) {
     return start("archive", { number: playNumber });
   }

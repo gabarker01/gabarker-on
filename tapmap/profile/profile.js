@@ -429,21 +429,23 @@ document.addEventListener("keydown", (event) => {
 
 // ---------- Challenge this player ----------
 
-// Play a game (today's, random places or photos), then send them the same
-// five places. Signed in, the challenge is addressed to them and waits in
-// the Challenges list on their profile.
+// Pick random places or photos and play: when you finish, the game is saved
+// as a challenge, sent to their profile (signed in), and ready to share.
+// Without a person (New challenge on your own profile) it's just ready to share.
 function openChallengeSheet(person) {
-  const name = personName(person);
-  const to = encodeURIComponent(person.username);
-  $("challenge-sheet-title").textContent = `Challenge ${name}`;
-  $("challenge-sheet-text").textContent = me
-    ? `Pick a game and play it. At the end, tap Challenge @${person.username}: it's sent to their profile, and you can share the link too.`
-    : `Pick a game and play it, then send ${name} the link from the results screen.`;
-  $("challenge-daily").href = `/tapmap/?to=${to}`;
-  $("challenge-random").href = `/tapmap/?play=practice&to=${to}`;
-  $("challenge-photo").href = `/tapmap/?play=photo&to=${to}`;
+  const name = person ? personName(person) : "";
+  const to = person ? `&to=${encodeURIComponent(person.username)}` : "";
+  $("challenge-sheet-title").textContent = person ? `Challenge ${name}` : "New challenge";
+  $("challenge-sheet-text").textContent = person
+    ? (me
+      ? `Pick a game and play it. When you finish, it's sent to ${name}'s profile and you can share the link too.`
+      : `Pick a game and play it. When you finish, share the link with ${name}.`)
+    : "Pick a game and play it. When you finish, share the link with anyone.";
+  $("challenge-random").href = `/tapmap/?play=practice&send=1${to}`;
+  $("challenge-photo").href = `/tapmap/?play=photo&send=1${to}`;
   $("challenge-sheet").hidden = false;
 }
+$("new-challenge").addEventListener("click", () => openChallengeSheet(null));
 $("challenge-sheet-close").addEventListener("click", () => { $("challenge-sheet").hidden = true; });
 
 // ---------- Someone else's followers and following ----------
