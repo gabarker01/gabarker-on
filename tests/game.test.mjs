@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BULLSEYE_KM, MAX_SCORE, SATELLITE_PLAN, ROUND_PLAN,
+  BULLSEYE_KM, MAX_SCORE, PHOTO_PLAN, ROUND_PLAN,
   scoreRound, tierFor, rating, ratingFor, maxScoreFor, currentStreak, recordDailyResult,
   weekStart, practiceLocations, poolFor, encodeChallenge, decodeChallenge, resolvePlaces, dailyLocations, totalScore, evaluateGuess,
 } from "../tapmap/game.js";
@@ -22,25 +22,25 @@ test("every rating has an emoji, out of the game's own maximum", () => {
   assert.equal(rating(900).label, "Cartographer");
 });
 
-test("satellite practice: a photo every round, easy to hard, out of 1,000 like the daily game", () => {
+test("photo practice: a photo every round, easy to hard, out of 1,000 like the daily game", () => {
   assert.equal(MAX_SCORE, 1000);
   assert.equal(maxScoreFor(ROUND_PLAN), 1000);
-  assert.equal(maxScoreFor(SATELLITE_PLAN), 1000);
-  assert.ok(SATELLITE_PLAN.every((r) => r.satellite));
-  assert.deepEqual(SATELLITE_PLAN.map((r) => r.difficulty), ROUND_PLAN.map((r) => r.difficulty));
-  assert.deepEqual(SATELLITE_PLAN.map((r) => r.multiplier), ROUND_PLAN.map((r) => r.multiplier));
-  const perfect = scoreRound(0, 3, { satellite: true });
+  assert.equal(maxScoreFor(PHOTO_PLAN), 1000);
+  assert.ok(PHOTO_PLAN.every((r) => r.photo));
+  assert.deepEqual(PHOTO_PLAN.map((r) => r.difficulty), ROUND_PLAN.map((r) => r.difficulty));
+  assert.deepEqual(PHOTO_PLAN.map((r) => r.multiplier), ROUND_PLAN.map((r) => r.multiplier));
+  const perfect = scoreRound(0, 3, { photo: true });
   assert.equal(perfect.score, 100);
   assert.equal(perfect.weighted, 300);
   assert.equal(perfect.sat, true);
   assert.equal(scoreRound(0, 3).score, 100);
-  const rounds = SATELLITE_PLAN.map((r) => evaluateGuess({ lat: 0, lng: 0 }, { lat: 0, lng: 0 }, r.multiplier, { satellite: Boolean(r.satellite) }));
+  const rounds = PHOTO_PLAN.map((r) => evaluateGuess({ lat: 0, lng: 0 }, { lat: 0, lng: 0 }, r.multiplier, { photo: Boolean(r.photo) }));
   assert.equal(totalScore(rounds), 1000);
 });
 
-test("satellite practice picks five different places, easy to hard", () => {
+test("photo practice picks five different places, easy to hard", () => {
   for (let i = 0; i < 50; i++) {
-    const picks = practiceLocations(poolFor("2026-10-05", LOCATIONS), Math.random, SATELLITE_PLAN);
+    const picks = practiceLocations(poolFor("2026-10-05", LOCATIONS), Math.random, PHOTO_PLAN);
     assert.equal(picks.length, 5);
     assert.deepEqual(picks.map((l) => l.difficulty), ["easy", "medium", "medium", "hard", "hard"]);
     assert.equal(new Set(picks.map((l) => l.name)).size, 5);
@@ -74,5 +74,9 @@ test("challenge links round-trip without spelling out the places", () => {
   assert.deepEqual(back.rounds.map((r) => r.score), [50, 51, 52, 53, 54]);
   assert.deepEqual(resolvePlaces(back.codes, LOCATIONS).map((l) => l.name), places.map((l) => l.name));
   assert.equal(decodeChallenge("not-a-challenge"), null);
+  // Links made when photo practice was called satellite still work.
+  const old = encodeChallenge({ kind: "photo", places: places.map((l) => l.name), rounds });
+  const legacy = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(old, "base64url").toString()), k: "satellite" })).toString("base64url");
+  assert.equal(decodeChallenge(legacy).kind, "photo");
   assert.equal(decodeChallenge(encodeChallenge({ kind: "daily", places: ["a"], rounds: [] })), null);
 });

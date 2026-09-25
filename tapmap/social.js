@@ -47,14 +47,15 @@ const unwrap = ({ data, error }) => {
 
 // The whole location list from the database, oldest first, including places
 // not yet live or already retired (the daily picker replays every day since
-// launch). Plain REST so the game doesn't wait for the auth library.
+// launch). Plain REST so the game doesn't wait for the auth library. (All
+// columns, so a database that hasn't been updated yet still works.)
 export async function fetchLocations(timeoutMs = 5000) {
   if (!socialEnabled()) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/locations?select=name,lat,lng,difficulty,added_on,retired_on,notes&order=id.asc`,
+      `${SUPABASE_URL}/rest/v1/locations?select=*&order=id.asc`,
       { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
     );
     if (!response.ok) throw new Error(`Locations request failed (${response.status})`);

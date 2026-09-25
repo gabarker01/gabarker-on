@@ -1,16 +1,17 @@
-import { LOCATIONS } from "./locations.js?v=3";
+import { LOCATIONS } from "./locations.js?v=4";
 import {
-  ROUNDS, ROUND_PLAN, SATELLITE_PLAN, GAME_URL, BULLSEYE_KM,
+  ROUNDS, ROUND_PLAN, PHOTO_PLAN, GAME_URL, BULLSEYE_KM,
   todayKey, gameNumber, dateForNumber, weekStart, msUntilNextGame,
   dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore, maxScoreFor,
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=5";
+} from "./game.js?v=6";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=9";
+import * as social from "./social.js?v=10";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
+import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
 import { drawShareImage } from "./share-image.js?v=1";
 
@@ -194,7 +195,7 @@ async function loadPool() {
 }
 
 // What's saved about each place: enough to replay it without the list.
-const snapshot = (l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null });
+const snapshot = (l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null, photo: l.photo || null });
 const validPlaces = (list) => Array.isArray(list) && list.length === ROUNDS
   && list.every((l) => l && typeof l.name === "string" && Number.isFinite(l.lat) && Number.isFinite(l.lng));
 
@@ -253,7 +254,7 @@ function newGame(mode, options = {}) {
     return { ...base, plan: options.plan, code: options.code, locations: options.locations, rounds, index: rounds.length };
   }
   const pool = poolFor(today, allLocations);
-  if (mode === "satellite") return { ...base, plan: SATELLITE_PLAN, locations: practiceLocations(pool, Math.random, SATELLITE_PLAN).map(snapshot) };
+  if (mode === "photo") return { ...base, plan: PHOTO_PLAN, locations: practiceLocations(pool, Math.random, PHOTO_PLAN).map(snapshot) };
   return { ...base, locations: practiceLocations(pool).map(snapshot) };
 }
 
@@ -263,7 +264,7 @@ function saveProgress() {
   else if (game.mode === "challenge") saveInMap(CHALLENGES_KEY, game.code, { locations: game.locations, rounds: game.rounds });
 }
 
-const MODE_LABELS = { practice: "Practice", satellite: "Satellite", challenge: "Challenge" };
+const MODE_LABELS = { practice: "Practice", photo: "Photos", challenge: "Challenge" };
 const gameLabel = (g) => {
   if (!g || g.mode === "daily") return `No. ${todayNumber}`;
   if (g.mode === "archive") return `No. ${g.number} · Past game`;
@@ -294,10 +295,10 @@ const prompt = $("prompt");
 const actionBar = $("action-bar");
 const confirmButton = $("confirm-button");
 const result = $("result");
-let photo = null; // the current satellite photo { url, revoke }
+let photo = null; // the current photo { url, revoke, file?, page? }
 let photoToken = 0;
 
-// The satellite photo can be minimised to a thumbnail, so the question panel
+// The photo can be minimised to a thumbnail, so the question panel
 // is about the size of a normal one and more of the globe is free to tap.
 // The choice is remembered for the next rounds.
 const PHOTO_MIN_KEY = "tapmap:v5:photo-min";
@@ -319,8 +320,9 @@ function clearPhoto() {
   prompt.classList.remove("is-photo-min");
 }
 
-// Satellite rounds show only the photo; the name appears once you've guessed
-// (or straight away if the photo can't load, with no photo bonus).
+// Photo rounds show only a photo of the landmark; the name appears once
+// you've guessed. If the place has no usable photo, a satellite view is shown
+// instead, and if that can't load either, the name.
 function showName(location) {
   game.nameShown = true;
   $("prompt-name").textContent = location.name;
@@ -335,9 +337,12 @@ function showPhoto(location) {
   $("photo-size").hidden = false;
   setPhotoMinimised(Boolean(storage.get(PHOTO_MIN_KEY)));
   $("prompt-photo-status").hidden = false;
-  $("prompt-photo-status").textContent = "Loading satellite photo…";
+  $("prompt-photo-status").textContent = "Loading photo…";
   $("prompt-img").hidden = true;
-  satellitePhoto(location).then((next) => {
+  landmarkPhoto(location).catch((error) => {
+    console.warn("Landmark photo:", error);
+    return satellitePhoto(location);
+  }).then((next) => {
     if (token !== photoToken) return next.revoke();
     photo = next;
     $("prompt-img").src = next.url;
@@ -348,8 +353,34 @@ function showPhoto(location) {
     console.warn(error);
     clearPhoto();
     showName(location);
-    toast("The satellite photo couldn't load, so here's the name.");
+    toast("The photo couldn't load, so here's the name.");
   });
+}
+
+// Wikimedia photos need their author and licence credited: shown once the
+// round is answered (it would give the answer away before).
+function showPhotoCredit() {
+  const el = $("photo-credit");
+  const current = photo;
+  el.replaceChildren();
+  el.hidden = !current;
+  if (!current) return;
+  if (!current.file) {
+    el.textContent = "Satellite imagery © Esri, Maxar, Earthstar Geographics";
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = current.page;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = "Wikimedia Commons";
+  el.append("Photo via ", link);
+  photoCredit(current.file).then((credit) => {
+    if (photo !== current) return;
+    link.href = credit.url;
+    const who = [credit.artist, credit.license].filter(Boolean).join(", ");
+    el.replaceChildren(`Photo${who ? `: ${who}` : ""}, via `, link);
+  }).catch(() => {});
 }
 
 function showRound() {
@@ -359,11 +390,12 @@ function showRound() {
   game.guess = null;
   game.nameShown = false;
   clearPhoto();
+  $("photo-credit").hidden = true;
 
   $("prompt-round").textContent = `Round ${ROMAN[game.index]}`;
   $("prompt-difficulty").textContent = capitalise(location.difficulty);
   $("prompt-multiplier").textContent = formatMultiplier(plan.multiplier);
-  if (plan.satellite) showPhoto(location);
+  if (plan.photo) showPhoto(location);
   else showName(location);
 
   // Replay the entrance animation each round.
@@ -418,8 +450,8 @@ async function confirmGuess() {
   const plan = game.plan[game.index];
   const { multiplier } = plan;
   const answer = { lat: location.lat, lng: location.lng };
-  const satellite = Boolean(plan.satellite) && !game.nameShown;
-  const round = { ...evaluateGuess(game.guess, answer, multiplier, { satellite }), answer };
+  const fromPhoto = Boolean(plan.photo) && !game.nameShown;
+  const round = { ...evaluateGuess(game.guess, answer, multiplier, { photo: fromPhoto }), answer };
   const before = totalScore(game.rounds);
   game.rounds.push(round);
   saveProgress();
@@ -438,6 +470,7 @@ async function confirmGuess() {
   $("result-points").textContent = "0";
   $("result-fact").textContent = location.notes || "";
   $("result-fact").hidden = !location.notes;
+  showPhotoCredit();
   $("result-bonus").hidden = true;
   $("next-button").textContent = game.index === ROUNDS - 1 ? "See your results" : "Next round";
   $("next-button").disabled = true;
@@ -489,7 +522,7 @@ function saveDaily() {
 
 // Links look like /tapmap/?challenge=… and carry the five places (as short
 // codes) and the sender's round scores. They work without an account.
-const challengeKind = (g) => (g.mode === "daily" || g.mode === "archive" ? "daily" : g.plan.some((r) => r.satellite) ? "satellite" : "practice");
+const challengeKind = (g) => (g.mode === "daily" || g.mode === "archive" ? "daily" : g.plan.some((r) => r.photo) ? "photo" : "practice");
 
 function challengeLink(g) {
   const code = encodeChallenge({
@@ -507,7 +540,7 @@ function challengeLink(g) {
 function resolveChallenge(code) {
   const ch = decodeChallenge(code);
   if (!ch) return null;
-  const plan = ch.kind === "satellite" ? SATELLITE_PLAN : ROUND_PLAN;
+  const plan = ch.kind === "photo" ? PHOTO_PLAN : ROUND_PLAN;
   const sameAs = (locations) => locations.every((l, i) => l && placeCode(l.name) === ch.codes[i]);
   if (ch.kind === "daily" && ch.number && ch.number <= todayNumber) {
     if (ch.number === todayNumber && sameAs(todaysPlaces())) return { ch, code, plan, mode: "daily", number: todayNumber };
@@ -529,7 +562,7 @@ const challengerTotal = ({ ch, plan }) =>
 // Is this finished game the one the last opened challenge is about?
 function challengeFor(g) {
   const code = storage.get(CHALLENGE_KEY);
-  if (!code || g.mode === "practice" || g.mode === "satellite") return null;
+  if (!code || g.mode === "practice" || g.mode === "photo") return null;
   const resolved = resolveChallenge(code);
   if (!resolved || resolved.mode !== g.mode) return null;
   if (g.mode === "challenge") return resolved.code === g.code ? resolved : null;
@@ -556,7 +589,7 @@ function offerChallenge() {
   const max = maxScoreFor(plan);
   const what = resolved.mode === "daily" ? "today's game"
     : resolved.mode === "archive" ? `TapMap No. ${resolved.number}`
-      : ch.kind === "satellite" ? "five places in satellite practice" : "five practice places";
+      : ch.kind === "photo" ? "five places in photo practice" : "five practice places";
   const done = resolved.mode === "daily" ? dailyDone()
     : resolved.mode === "archive" ? ((savedMap(ARCHIVE_KEY)[resolved.number] || {}).rounds || []).length >= ROUNDS
       : ((savedMap(CHALLENGES_KEY)[resolved.code] || {}).rounds || []).length >= ROUNDS;
@@ -677,14 +710,14 @@ const shareTitle = (g) => ({
   daily: `TapMap #${g.number}`,
   archive: `TapMap #${g.number} (past game)`,
   practice: "TapMap Practice",
-  satellite: "TapMap Satellite",
+  photo: "TapMap Photos",
   challenge: "TapMap Challenge",
 }[g.mode]);
 
 const endLabel = (g) => {
   if (g.mode === "daily") return `TapMap No. ${g.number} · ${longDateOf(today)}`;
   if (g.mode === "archive") return `TapMap No. ${g.number} · ${longDateOf(g.dateKey)} · Unranked`;
-  return { practice: "Practice", satellite: "Satellite practice", challenge: "Challenge · Unranked" }[g.mode];
+  return { practice: "Practice", photo: "Photo practice", challenge: "Challenge · Unranked" }[g.mode];
 };
 
 let shareImage = null; // { game, blob } drawn ahead so sharing is instant
@@ -751,7 +784,7 @@ async function showEnd(finished) {
   $("final-points").textContent = "0";
   $("breakdown").replaceChildren(...rounds.map((r, i) => breakdownRow(r, finished.locations[i], i)));
   $("unranked-note").hidden = isDaily;
-  $("unranked-note").textContent = finished.mode === "practice" || finished.mode === "satellite"
+  $("unranked-note").textContent = finished.mode === "practice" || finished.mode === "photo"
     ? "Practice doesn't count towards your stats or streak."
     : "Unranked: saved on this device only, and it doesn't count towards your stats or streak.";
 
@@ -761,7 +794,7 @@ async function showEnd(finished) {
   $("stat-streak").textContent = formatNumber(currentStreak(stats, today));
   $("stat-best").textContent = formatNumber(stats.best || 0);
 
-  const replayable = finished.mode === "practice" || finished.mode === "satellite";
+  const replayable = finished.mode === "practice" || finished.mode === "photo";
   $("again-button").hidden = !replayable;
   $("again-button").onclick = () => start(finished.mode);
   $("practice-button").textContent = replayable || finished.mode === "archive" ? "More practice" : "Practice";
@@ -1470,8 +1503,9 @@ document.addEventListener("keydown", (event) => {
 // Read ?invite=, ?signin= and ?challenge= once, then tidy the address bar.
 const params = new URLSearchParams(window.location.search);
 const pendingSignIn = params.has("signin");
-// Links from the practice page: ?play=practice, ?play=satellite, ?play=archive&n=3.
-const playParam = params.get("play");
+// Links from the practice page: ?play=practice, ?play=photo, ?play=archive&n=3.
+// (?play=satellite is the old name for photo practice.)
+const playParam = params.get("play") === "satellite" ? "photo" : params.get("play");
 const playNumber = Number(params.get("n"));
 const openedChallenge = Boolean(params.get("challenge") && decodeChallenge(params.get("challenge")));
 if (openedChallenge) storage.set(CHALLENGE_KEY, params.get("challenge"));
@@ -1495,7 +1529,7 @@ async function boot() {
   updateHeader();
   bootSocial();
   if (openedChallenge && offerChallenge()) return;
-  if (playParam === "practice" || playParam === "satellite") return start(playParam);
+  if (playParam === "practice" || playParam === "photo") return start(playParam);
   if (playParam === "archive" && Number.isInteger(playNumber) && playNumber >= 1 && playNumber < todayNumber) {
     return start("archive", { number: playNumber });
   }

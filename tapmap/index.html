@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="game-root">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=19">
+  <link rel="stylesheet" href="tapmap.css?v=20">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -80,7 +80,7 @@
       </div>
       <div id="prompt-photo" class="prompt-photo" hidden>
         <button id="photo-frame" class="photo-frame" type="button" aria-label="Minimise the photo">
-          <img id="prompt-img" alt="Satellite photo of the place to find" width="512" height="512" hidden>
+          <img id="prompt-img" alt="Photo of the place to find" width="512" height="512" hidden>
           <span id="prompt-photo-status" class="prompt-photo-status"></span>
         </button>
       </div>
@@ -113,6 +113,7 @@
       </div>
       <p id="result-bonus" class="result-bonus" hidden></p>
       <p id="result-fact" class="result-fact" hidden></p>
+      <p id="photo-credit" class="photo-credit" hidden></p>
       <button id="next-button" class="primary-button" type="button">Next round</button>
     </div>
   </section>
@@ -199,7 +200,7 @@
         <li><span class="tier-dot t-off"></span>Beyond</li>
       </ul>
       <button id="play-button" class="primary-button" type="button">Play today's game</button>
-      <a id="intro-practice-button" class="secondary-button link-as-button" href="/tapmap/practice/">Practice</a>
+      <a id="intro-practice-button" class="primary-button link-as-button" href="/tapmap/practice/">Practice</a>
       <div id="intro-signin" class="signin-cta" hidden>
         <p>Save your streak, see your stats and play with friends.</p>
         <button id="intro-signin-button" class="cta-button" type="button">Sign in or create account</button>
@@ -281,7 +282,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=23"></script>
+  <script type="module" src="tapmap.js?v=24"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

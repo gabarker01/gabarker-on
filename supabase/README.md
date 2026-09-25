@@ -190,7 +190,7 @@ current streak counts if the last game was today or yesterday in the player's
 time zone (the game saves it to `profiles.time_zone`), the same rule the game
 uses.
 
-Past games, challenges and satellite practice are unranked and stay on the
+Past games, challenges and photo practice are unranked and stay on the
 player's device; only each day's daily game is saved.
 
 Scores are calculated in the browser, so a determined player could submit a

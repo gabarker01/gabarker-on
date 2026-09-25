@@ -48,13 +48,23 @@
 html,
 body {
   margin: 0;
+}
+
+/* Only the game page is locked to the screen (the globe fills it and nothing
+   scrolls). The practice and profile pages that share this stylesheet are
+   ordinary scrolling pages, so they have nothing to undo. */
+html.game-root,
+html.game-root body {
   height: 100%;
 }
 
-body {
+html.game-root body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+}
+
+body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -2259,8 +2269,13 @@ body.profile-page {
 
 /* ---------- Practice menu (/tapmap/practice/) ---------- */
 
-.secondary-button.link-as-button {
+.secondary-button.link-as-button,
+.primary-button + .primary-button.link-as-button {
   margin-top: 10px;
+}
+
+.primary-button.link-as-button {
+  color: var(--primary-ink);
 }
 
 .practice-options {
@@ -2356,4 +2371,16 @@ a.archive-item {
   font-family: var(--font-serif);
   font-size: 1.35rem;
   color: var(--accent);
+}
+
+.photo-credit {
+  margin: -6px 6px 12px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.photo-credit a {
+  color: inherit;
 }

@@ -676,3 +676,72 @@ from (values
 ) as more (n, name, lat, lng, difficulty, notes)
 order by n
 on conflict (name) do nothing;
+
+-- Photo rounds show the main photo of a Wikipedia article. By default that's
+-- the first part of the name ("Eiffel Tower, Paris, France" -> "Eiffel Tower");
+-- photo names a different article where that wouldn't find a good landmark
+-- photo (e.g. "Tokyo, Japan" -> "Tokyo Tower"). Only fills photo where empty.
+alter table public.locations
+  add column if not exists photo text check (photo is null or char_length(photo) between 1 and 200);
+
+update public.locations l
+set photo = v.photo
+from (values
+  ('Christ the Redeemer, Rio de Janeiro, Brazil', 'Christ the Redeemer (statue)'),
+  ('Tokyo, Japan', 'Tokyo Tower'),
+  ('Great Wall at Badaling, China', 'Badaling'),
+  ('Cape Town, South Africa', 'Table Mountain'),
+  ('Acropolis, Athens, Greece', 'Acropolis of Athens'),
+  ('Chicago, USA', 'Cloud Gate'),
+  ('Venice, Italy', 'Grand Canal (Venice)'),
+  ('Hong Kong', 'Victoria Harbour'),
+  ('Amsterdam, Netherlands', 'Canals of Amsterdam'),
+  ('Seoul, South Korea', 'Gyeongbokgung'),
+  ('Chichén Itzá, Mexico', 'Chichen Itza'),
+  ('Reykjavík, Iceland', 'Hallgrímskirkja'),
+  ('Istanbul, Turkey', 'Hagia Sophia'),
+  ('Buenos Aires, Argentina', 'Obelisco de Buenos Aires'),
+  ('Nairobi, Kenya', 'Nairobi National Park'),
+  ('Bangkok, Thailand', 'Wat Arun'),
+  ('Galápagos Islands, Ecuador', 'Bartolomé Island'),
+  ('Banff, Alberta, Canada', 'Moraine Lake'),
+  ('Serengeti, Tanzania', 'Serengeti National Park'),
+  ('Marrakesh, Morocco', 'Jemaa el-Fnaa'),
+  ('Kyoto, Japan', 'Kinkaku-ji'),
+  ('Singapore', 'Marina Bay Sands'),
+  ('Honolulu, Hawaii, USA', 'Diamond Head, Hawaii'),
+  ('Anchorage, Alaska, USA', 'Anchorage, Alaska'),
+  ('Mexico City, Mexico', 'Palacio de Bellas Artes'),
+  ('Havana, Cuba', 'El Capitolio'),
+  ('Auckland, New Zealand', 'Sky Tower (Auckland)'),
+  ('Yellowstone, Wyoming, USA', 'Grand Prismatic Spring'),
+  ('Lisbon, Portugal', 'Belém Tower'),
+  ('Edinburgh, Scotland', 'Edinburgh Castle'),
+  ('Quebec City, Canada', 'Château Frontenac'),
+  ('New Orleans, Louisiana, USA', 'French Quarter'),
+  ('Cartagena, Colombia', 'Walled City of Cartagena'),
+  ('Torres del Paine, Chile', 'Torres del Paine National Park'),
+  ('Zhangjiajie, China', 'Zhangjiajie National Forest Park'),
+  ('Easter Island, Chile', 'Moai'),
+  ('Timbuktu, Mali', 'Djinguereber Mosque'),
+  ('Ulaanbaatar, Mongolia', 'Sükhbaatar Square'),
+  ('Socotra, Yemen', 'Dracaena cinnabari'),
+  ('Lalibela, Ethiopia', 'Church of Saint George, Lalibela'),
+  ('Tristan da Cunha', 'Edinburgh of the Seven Seas'),
+  ('Samarkand, Uzbekistan', 'Registan'),
+  ('Lhasa, Tibet, China', 'Potala Palace'),
+  ('Tórshavn, Faroe Islands', 'Tinganes'),
+  ('Pitcairn Islands', 'Adamstown, Pitcairn Islands'),
+  ('Kerguelen Islands', 'Port-aux-Français'),
+  ('Nauru', 'Anibare Bay'),
+  ('Kiruna, Sweden', 'Kiruna Church'),
+  ('Leh, Ladakh, India', 'Leh Palace'),
+  ('Darvaza Gas Crater, Turkmenistan', 'Darvaza gas crater'),
+  ('Jamestown, Saint Helena', 'Jamestown, Saint Helena'),
+  ('Tiger''s Nest, Bhutan', 'Paro Taktsang'),
+  ('Lake Assal, Djibouti', 'Lake Assal (Djibouti)'),
+  ('Churchill, Manitoba, Canada', 'Churchill, Manitoba'),
+  ('Utqiaġvik, Alaska, USA', 'Utqiagvik, Alaska'),
+  ('Danakil Depression, Ethiopia', 'Dallol (hydrothermal field)')
+) as v (name, photo)
+where l.name = v.name and (l.photo is null or trim(l.photo) = '');

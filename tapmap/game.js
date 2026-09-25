@@ -16,13 +16,13 @@ export const ROUND_MAX = 100;
 export const BULLSEYE_KM = 25; // the 🎯 band and the bonus both use this
 export const BULLSEYE_BONUS = 5;
 
-// Satellite practice: the same easy-to-hard rounds as the daily game, but
-// each place is shown only as a satellite photo (the name appears once you've
+// Photo practice: the same easy-to-hard rounds as the daily game, but each
+// place is shown only as a photo of the landmark (the name appears once you've
 // guessed). Scored exactly like the daily game, out of 1,000.
-export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, satellite: true }));
+export const PHOTO_PLAN = ROUND_PLAN.map((r) => ({ ...r, photo: true }));
 
 export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + ROUND_MAX * r.multiplier, 0);
-export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000 (satellite practice too)
+export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000 (photo practice too)
 export const GAME_URL = "https://gabarker.com/tapmap";
 
 const DAY_MS = 86400000;
@@ -213,12 +213,12 @@ export const haversineKm = (a, b) => {
 
 // Round score out of 100: round(100 × e^(−d/2000)), plus a 5-point bullseye
 // bonus under 25 km, capped at 100. It counts towards the game total × the
-// round's multiplier. (`satellite` only marks a round played from the photo.)
-export const scoreRound = (distanceKm, multiplier = 1, { satellite = false } = {}) => {
+// round's multiplier. (`photo` only marks a round played from a photo.)
+export const scoreRound = (distanceKm, multiplier = 1, { photo = false } = {}) => {
   const base = Math.round(ROUND_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
   const score = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
-  return { base, bonus: score - base, bullseye, sat: satellite, score, multiplier, weighted: score * multiplier };
+  return { base, bonus: score - base, bullseye, sat: photo, score, multiplier, weighted: score * multiplier };
 };
 
 export const tierFor = (distanceKm) => {
@@ -243,8 +243,7 @@ export const ratingFor = (total, max = MAX_SCORE) => {
   return `${r.label} ${r.emoji}`;
 };
 
-// Everything recorded about a finished round. `satellite`: guessed from the
-// satellite photo without revealing the name.
+// Everything recorded about a finished round. `photo`: guessed from a photo.
 export const evaluateGuess = (guess, location, multiplier = 1, options = {}) => {
   const distanceKm = haversineKm(guess, location);
   return { guess, distanceKm, ...scoreRound(distanceKm, multiplier, options), tier: tierFor(distanceKm) };
@@ -301,7 +300,7 @@ const fromBase64Url = (code) => {
   return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 };
 
-// { by, kind: "daily" | "practice" | "satellite", number?, places: [name…],
+// { by, kind: "daily" | "practice" | "photo", number?, places: [name…],
 //   rounds: [{ score, km, tier }…] } -> URL-safe string, and back.
 export const encodeChallenge = ({ by, kind, number, places, rounds }) =>
   toBase64Url(JSON.stringify({
@@ -316,7 +315,9 @@ export const encodeChallenge = ({ by, kind, number, places, rounds }) =>
 export const decodeChallenge = (code) => {
   try {
     const d = JSON.parse(fromBase64Url(String(code)));
-    const kinds = ["daily", "practice", "satellite"];
+    // ("satellite" is what photo practice was first called.)
+    if (d && d.k === "satellite") d.k = "photo";
+    const kinds = ["daily", "practice", "photo"];
     const valid = d && d.v === 1 && kinds.includes(d.k)
       && Array.isArray(d.p) && d.p.length === ROUNDS && d.p.every((p) => typeof p === "string" && p.length <= 8)
       && Array.isArray(d.r) && d.r.length === ROUNDS
