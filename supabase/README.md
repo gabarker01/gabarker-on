@@ -98,8 +98,9 @@ values ('Table Mountain, South Africa', -33.9628, 18.4098, 'medium',
 - **How places are picked:** everyone gets the same five on the same date.
   From 27 September 2026, each difficulty works through its whole list, in a
   shuffled order, before any place comes round again; then it starts a new
-  shuffled round. With 20 easy, 28 medium and 20 hard places, that's a place
-  at most once every 20, 14 and 10 days, and never twice in a week. Places
+  shuffled round. With 36 easy, 50 medium and 47 hard places (from 28
+  September 2026), that's a place at most once every 36, 25 and 23 days or
+  so, and never twice in a week. Places
   are matched by name, so adding or retiring one never changes an earlier
   game. (Games before 27 September 2026 keep their original places.)
 - **Retire a place** by setting `retired_on` to a date at least two days

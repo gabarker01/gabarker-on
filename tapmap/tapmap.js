@@ -1,4 +1,4 @@
-import { LOCATIONS } from "./locations.js?v=2";
+import { LOCATIONS } from "./locations.js?v=3";
 import {
   ROUNDS, ROUND_PLAN, SATELLITE_PLAN, GAME_URL, BULLSEYE_KM,
   todayKey, gameNumber, dateForNumber, weekStart, msUntilNextGame,
