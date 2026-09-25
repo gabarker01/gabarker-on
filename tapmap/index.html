@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=16">
+  <link rel="stylesheet" href="tapmap.css?v=17">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -112,39 +112,6 @@
     </div>
   </section>
 
-  <!-- Intro -->
-  <div id="intro" class="overlay" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="intro-title">
-      <p class="eyebrow" id="intro-number"></p>
-      <h2 id="intro-title" class="sheet-title">Five places.<br><em>One globe.</em></h2>
-      <ol class="steps">
-        <li><span class="step-n">i</span><p>Tap the globe where you think the place is. Tap again to move your pin, then confirm.</p></li>
-        <li><span class="step-n">ii</span><p>Each round is scored out of <strong>100</strong>. The closer you land, the more you score, with a small bonus inside 25&nbsp;km.</p></li>
-        <li><span class="step-n">iii</span><p>Rounds grow harder and weigh more, from <strong>×1</strong> to <strong>×3</strong>, for a game total out of <strong>1,000</strong>.</p></li>
-        <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight, your time.</p></li>
-      </ol>
-      <ul class="legend" aria-label="Distance bands">
-        <li><span class="tier-dot t-bullseye"></span>Under 25 km</li>
-        <li><span class="tier-dot t-close"></span>500</li>
-        <li><span class="tier-dot t-near"></span>1,500</li>
-        <li><span class="tier-dot t-far"></span>3,000</li>
-        <li><span class="tier-dot t-off"></span>Beyond</li>
-      </ul>
-      <button id="play-button" class="primary-button" type="button">Play today's game</button>
-      <button id="intro-practice-button" class="secondary-button" type="button">Practice</button>
-      <div id="intro-modes" class="mode-row">
-        <button id="intro-archive-button" class="chip-button" type="button">Past games</button>
-        <button id="intro-satellite-button" class="chip-button" type="button">Satellite practice</button>
-      </div>
-      <div id="intro-signin" class="signin-cta" hidden>
-        <p>Save your streak, see your stats and play with friends.</p>
-        <button id="intro-signin-button" class="cta-button" type="button">Sign in or create account</button>
-      </div>
-      <button id="intro-close" class="secondary-button" type="button" hidden>Back to the game</button>
-      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
-    </div>
-  </div>
-
   <!-- Results -->
   <div id="end" class="overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
@@ -201,25 +168,39 @@
       </dl>
       <p id="next-game" class="next-game"></p>
 
-      <button id="practice-button" class="secondary-button" type="button">Practice</button>
-      <div class="mode-row">
-        <button id="end-archive-button" class="chip-button" type="button">Past games</button>
-        <button id="end-satellite-button" class="chip-button" type="button">Satellite practice</button>
-      </div>
+      <button id="again-button" class="secondary-button" type="button" hidden>Play again</button>
+      <a id="practice-button" class="secondary-button link-as-button" href="/tapmap/practice/">Practice</a>
       <button id="daily-results-button" class="link-button centered" type="button" hidden>Back to today's result</button>
       <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
     </div>
   </div>
 
-  <!-- Past games -->
-  <div id="archive" class="overlay" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="archive-title">
-      <p class="eyebrow">Past games</p>
-      <h2 id="archive-title" class="sheet-title">Play an<br><em>earlier day.</em></h2>
-      <p class="lead">Past games are unranked. They're saved on this device only and don't count towards your stats or streak.</p>
-      <ol id="archive-list" class="archive-list"></ol>
-      <p id="archive-empty" class="friends-empty" hidden>No past games yet. Tomorrow, today's game joins the archive.</p>
-      <button id="archive-close" class="secondary-button" type="button">Close</button>
+  <!-- Intro / how to play (after the results sheet, so it opens on top of it) -->
+  <div id="intro" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+      <p class="eyebrow" id="intro-number"></p>
+      <h2 id="intro-title" class="sheet-title">Five places.<br><em>One globe.</em></h2>
+      <ol class="steps">
+        <li><span class="step-n">i</span><p>Tap the globe where you think the place is. Tap again to move your pin, then confirm.</p></li>
+        <li><span class="step-n">ii</span><p>Each round is scored out of <strong>100</strong>. The closer you land, the more you score, with a small bonus inside 25&nbsp;km.</p></li>
+        <li><span class="step-n">iii</span><p>Rounds grow harder and weigh more, from <strong>×1</strong> to <strong>×3</strong>, for a game total out of <strong>1,000</strong>.</p></li>
+        <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight, your time.</p></li>
+      </ol>
+      <ul class="legend" aria-label="Distance bands">
+        <li><span class="tier-dot t-bullseye"></span>Under 25 km</li>
+        <li><span class="tier-dot t-close"></span>500</li>
+        <li><span class="tier-dot t-near"></span>1,500</li>
+        <li><span class="tier-dot t-far"></span>3,000</li>
+        <li><span class="tier-dot t-off"></span>Beyond</li>
+      </ul>
+      <button id="play-button" class="primary-button" type="button">Play today's game</button>
+      <a id="intro-practice-button" class="secondary-button link-as-button" href="/tapmap/practice/">Practice</a>
+      <div id="intro-signin" class="signin-cta" hidden>
+        <p>Save your streak, see your stats and play with friends.</p>
+        <button id="intro-signin-button" class="cta-button" type="button">Sign in or create account</button>
+      </div>
+      <button id="intro-close" class="secondary-button" type="button" hidden>Back to the game</button>
+      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
     </div>
   </div>
 
@@ -295,7 +276,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=20"></script>
+  <script type="module" src="tapmap.js?v=21"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

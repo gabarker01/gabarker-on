@@ -16,16 +16,17 @@ export const ROUND_MAX = 100;
 export const BULLSEYE_KM = 25; // the 🎯 band and the bonus both use this
 export const BULLSEYE_BONUS = 5;
 
-// Satellite practice: the hard rounds start with a satellite photo and no
-// name. Guessing from the photo alone earns up to 20 extra points (scaled by
-// distance like the round score), so those rounds are out of 120.
+// Satellite practice: five hard places, each shown first as a satellite
+// photo with no name. Guessing from the photo alone earns up to 20 extra
+// points (scaled by distance like the round score), so each round is out of
+// 120 and the game is out of 1,200.
 export const SATELLITE_BONUS = 20;
-export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, satellite: r.difficulty === "hard" }));
+export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, difficulty: "hard", satellite: true }));
 
 export const roundMax = (plan) => ROUND_MAX + (plan.satellite ? SATELLITE_BONUS : 0);
 export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + roundMax(r) * r.multiplier, 0);
 export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000
-export const SATELLITE_MAX_SCORE = maxScoreFor(SATELLITE_PLAN); // 1,110
+export const SATELLITE_MAX_SCORE = maxScoreFor(SATELLITE_PLAN); // 1,200
 export const GAME_URL = "https://gabarker.com/tapmap";
 
 const DAY_MS = 86400000;
@@ -98,14 +99,14 @@ export const poolFor = (dateKey, locations) =>
 const LEVELS = [...new Set(ROUND_PLAN.map((r) => r.difficulty))];
 const PER_DAY = Object.fromEntries(LEVELS.map((level) => [level, ROUND_PLAN.filter((r) => r.difficulty === level).length]));
 
-// Five locations following ROUND_PLAN (easy → hard), drawn with `rng`.
-const planLocations = (pool, rng) => {
+// Five locations following a plan (ROUND_PLAN: easy → hard), drawn with `rng`.
+const planLocations = (pool, rng, plan = ROUND_PLAN) => {
   const picks = {};
-  for (const level of LEVELS) {
-    const count = ROUND_PLAN.filter((r) => r.difficulty === level).length;
+  for (const level of new Set(plan.map((r) => r.difficulty))) {
+    const count = plan.filter((r) => r.difficulty === level).length;
     picks[level] = sample(pool.filter((loc) => loc.difficulty === level), count, rng);
   }
-  return ROUND_PLAN.map((r) => picks[r.difficulty].shift());
+  return plan.map((r) => picks[r.difficulty].shift());
 };
 
 export const nextDateKey = (dateKey) =>
@@ -198,7 +199,7 @@ export const dailyLocations = (dateKey, locations) =>
     ? originalPicks(dateKey, locations)
     : simulate(locations, dateKey).get(dateKey);
 
-export const practiceLocations = (pool, rng = Math.random) => planLocations(pool, rng);
+export const practiceLocations = (pool, rng = Math.random, plan = ROUND_PLAN) => planLocations(pool, rng, plan);
 
 // ---------- Distance & scoring ----------
 
@@ -237,7 +238,7 @@ export const tierFor = (distanceKm) => {
 };
 
 // Thresholds are 90%, 70% and 40% of the game's maximum (900 / 700 / 400 out
-// of 1,000; 999 / 777 / 444 out of 1,110 in satellite practice).
+// of 1,000; 1,080 / 840 / 480 out of 1,200 in satellite practice).
 const RATINGS = [
   { min: 0.9, label: "Cartographer", emoji: "🧭" },
   { min: 0.7, label: "Navigator", emoji: "⛵" },

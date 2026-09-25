@@ -110,7 +110,7 @@ end $$;
 
 -- The total must be what the rounds add up to: each round's score (0 to 100,
 -- or 0 to 120 for a satellite round) times its multiplier, rounded. The most
--- a game can score is 1,000, or 1,110 with satellite rounds (×2.5 and ×3).
+-- a game can score is 1,000, or 1,200 when every round is a satellite round.
 create or replace function public.game_total_ok(rounds jsonb, total integer)
 returns boolean
 language plpgsql
@@ -138,7 +138,7 @@ begin
     end if;
     weighted := weighted + score * multiplier;
   end loop;
-  return total = round(weighted) and total between 0 and 1110;
+  return total = round(weighted) and total between 0 and 1200;
 end;
 $$;
 

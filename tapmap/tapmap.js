@@ -6,12 +6,12 @@ import {
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=2";
+} from "./game.js?v=3";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
 import * as social from "./social.js?v=8";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
-import { satellitePhoto } from "./satellite.js?v=1";
+import { satellitePhoto } from "./satellite.js?v=2";
 import { drawShareImage } from "./share-image.js?v=1";
 
 const $ = (id) => document.getElementById(id);
@@ -253,7 +253,7 @@ function newGame(mode, options = {}) {
     return { ...base, plan: options.plan, code: options.code, locations: options.locations, rounds, index: rounds.length };
   }
   const pool = poolFor(today, allLocations);
-  if (mode === "satellite") return { ...base, plan: SATELLITE_PLAN, locations: practiceLocations(pool).map(snapshot) };
+  if (mode === "satellite") return { ...base, plan: SATELLITE_PLAN, locations: practiceLocations(pool, Math.random, SATELLITE_PLAN).map(snapshot) };
   return { ...base, locations: practiceLocations(pool).map(snapshot) };
 }
 
@@ -565,7 +565,8 @@ function offerChallenge() {
   $("challenge-skip").onclick = () => {
     $("challenge-invite").hidden = true;
     storage.set(CHALLENGE_KEY, null);
-    showIntro();
+    if (!seenIntro()) showIntro();
+    else start("daily");
   };
   openOverlay($("challenge-invite"));
   return true;
@@ -756,9 +757,11 @@ async function showEnd(finished) {
   $("stat-streak").textContent = formatNumber(currentStreak(stats, today));
   $("stat-best").textContent = formatNumber(stats.best || 0);
 
-  const practice = finished.mode === "practice";
-  $("practice-button").textContent = practice ? "Practice again" : "Practice";
-  $("end-satellite-button").textContent = finished.mode === "satellite" ? "Satellite again" : "Satellite practice";
+  const replayable = finished.mode === "practice" || finished.mode === "satellite";
+  $("again-button").hidden = !replayable;
+  $("again-button").onclick = () => start(finished.mode);
+  $("practice-button").textContent = replayable || finished.mode === "archive" ? "More practice" : "Practice";
+  $("practice-button").href = finished.mode === "archive" ? "/tapmap/practice/#past" : "/tapmap/practice/";
   const dailyButton = $("daily-results-button");
   dailyButton.hidden = isDaily;
   dailyButton.textContent = dailyDone() ? "Back to today's result" : "Play today's game";
@@ -837,51 +840,11 @@ function startCountdown() {
   countdownTimer = setInterval(tick, 1000);
 }
 
-// ---------- Past games ----------
-
-function openArchive() {
-  const saved = savedMap(ARCHIVE_KEY);
-  const items = [];
-  for (let n = todayNumber - 1; n >= 1; n--) {
-    const entry = saved[n];
-    const played = entry && Array.isArray(entry.rounds) ? entry.rounds.length : 0;
-    const li = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "archive-item";
-    const title = document.createElement("span");
-    title.className = "archive-title";
-    title.textContent = `No. ${n}`;
-    const when = document.createElement("span");
-    when.className = "archive-date";
-    when.textContent = shortDateOf(dateForNumber(n));
-    const status = document.createElement("span");
-    status.className = "archive-status";
-    if (played >= ROUNDS) {
-      status.textContent = formatNumber(totalScore(entry.rounds));
-      status.classList.add("is-done");
-    } else {
-      status.textContent = played ? `Round ${played + 1}/${ROUNDS}` : "Play";
-    }
-    button.append(title, when, status);
-    button.addEventListener("click", () => {
-      $("archive").hidden = true;
-      start("archive", { number: n });
-    });
-    li.append(button);
-    items.push(li);
-  }
-  $("archive-list").replaceChildren(...items);
-  $("archive-empty").hidden = items.length > 0;
-  openOverlay($("archive"));
-}
-
 // ---------- Starting games ----------
 
 function start(mode, options = {}) {
   $("intro").hidden = true;
   $("end").hidden = true;
-  $("archive").hidden = true;
   clearInterval(countdownTimer);
   if (summary) {
     summary.destroy();
@@ -899,16 +862,25 @@ function start(mode, options = {}) {
   showRound();
 }
 
+// How to play. It opens by itself on a player's first visit only; after that
+// it's under the ? button.
+const SEEN_INTRO_KEY = "tapmap:v5:seen-intro";
+const seenIntro = () => Boolean(storage.get(SEEN_INTRO_KEY))
+  // Anyone who has played before has seen it.
+  || Boolean(storage.get(STATS_KEY) || storage.get(DAILY_KEY));
+
 function showIntro({ help = false } = {}) {
+  storage.set(SEEN_INTRO_KEY, true);
   const partial = daily.rounds.length > 0 && !dailyDone();
+  const playingDaily = Boolean(game) && game.mode === "daily" && game.phase !== "done";
+  const playing = Boolean(game) && game.phase !== "done";
   $("intro-number").textContent = `No. ${todayNumber} · ${longDateOf(today)}`;
   $("play-button").textContent = dailyDone()
     ? "See today's result"
     : partial ? "Continue today's game" : "Play today's game";
-  $("play-button").hidden = help;
-  $("intro-practice-button").hidden = help;
-  $("intro-modes").hidden = help;
+  $("play-button").hidden = playingDaily;
   $("intro-close").hidden = !help;
+  $("intro-close").textContent = playing ? "Back to the game" : "Close";
   updateSignInPrompts();
   openOverlay($("intro"));
 }
@@ -920,24 +892,16 @@ $("next-button").addEventListener("click", nextRound);
 $("zoom-in").addEventListener("click", () => globe.zoomIn());
 $("zoom-out").addEventListener("click", () => globe.zoomOut());
 $("play-button").addEventListener("click", () => start("daily"));
-$("intro-practice-button").addEventListener("click", () => start("practice"));
-$("practice-button").addEventListener("click", () => start("practice"));
 $("daily-results-button").addEventListener("click", () => start("daily"));
-$("intro-archive-button").addEventListener("click", openArchive);
-$("end-archive-button").addEventListener("click", openArchive);
-$("intro-satellite-button").addEventListener("click", () => start("satellite"));
-$("end-satellite-button").addEventListener("click", () => start("satellite"));
-$("archive-close").addEventListener("click", () => { $("archive").hidden = true; });
 $("reveal-name").addEventListener("click", () => {
   if (game && game.phase === "guessing") showName(game.locations[game.index]);
 });
 $("prompt-img").addEventListener("click", () => $("prompt-photo").classList.toggle("is-large"));
-$("help-button").addEventListener("click", () => showIntro({ help: Boolean(game && game.phase !== "done") }));
+$("help-button").addEventListener("click", () => showIntro({ help: true }));
 $("intro-close").addEventListener("click", () => { $("intro").hidden = true; });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!$("intro").hidden && !$("intro-close").hidden) $("intro").hidden = true;
-  if (!$("archive").hidden) $("archive").hidden = true;
 });
 
 
@@ -1504,13 +1468,16 @@ document.addEventListener("keydown", (event) => {
 // Read ?invite=, ?signin= and ?challenge= once, then tidy the address bar.
 const params = new URLSearchParams(window.location.search);
 const pendingSignIn = params.has("signin");
+// Links from the practice page: ?play=practice, ?play=satellite, ?play=archive&n=3.
+const playParam = params.get("play");
+const playNumber = Number(params.get("n"));
 const openedChallenge = Boolean(params.get("challenge") && decodeChallenge(params.get("challenge")));
 if (openedChallenge) storage.set(CHALLENGE_KEY, params.get("challenge"));
 else if (params.has("challenge")) window.addEventListener("load", () => toast("That challenge link isn't complete. Ask for it again."));
 if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
   store.set(INVITE_KEY, params.get("invite").toLowerCase());
 }
-if (params.has("invite") || params.has("signin") || params.has("challenge")) {
+if (["invite", "signin", "challenge", "play", "n"].some((key) => params.has(key))) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 // The profile button is always there (it opens sign-in until you're signed in).
@@ -1526,8 +1493,13 @@ async function boot() {
   updateHeader();
   bootSocial();
   if (openedChallenge && offerChallenge()) return;
-  if (daily.rounds.length > 0) start("daily");
-  else showIntro();
+  if (playParam === "practice" || playParam === "satellite") return start(playParam);
+  if (playParam === "archive" && Number.isInteger(playNumber) && playNumber >= 1 && playNumber < todayNumber) {
+    return start("archive", { number: playNumber });
+  }
+  // First visit: how to play. After that, straight into today's game (or its result).
+  if (!seenIntro()) showIntro();
+  else start("daily");
 }
 
 boot().catch((error) => {

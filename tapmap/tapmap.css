@@ -2193,3 +2193,77 @@ body.profile-page {
   font-size: 1.2rem;
   color: var(--accent);
 }
+
+/* ---------- Practice menu (/tapmap/practice/) ---------- */
+
+.secondary-button.link-as-button {
+  margin-top: 10px;
+}
+
+.practice-options {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
+  width: 100%;
+  padding: 18px 20px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 18px;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.12s ease;
+}
+
+.practice-option:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.practice-option:active {
+  transform: scale(0.99);
+}
+
+.practice-name {
+  grid-column: 1;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.practice-text {
+  grid-column: 1;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.practice-arrow {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.past-days {
+  margin-top: 8px;
+}
+
+.past-days .archive-list {
+  max-height: none;
+}
+
+a.archive-item {
+  text-decoration: none;
+}

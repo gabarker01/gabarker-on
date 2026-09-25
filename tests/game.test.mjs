@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   BULLSEYE_KM, MAX_SCORE, SATELLITE_MAX_SCORE, SATELLITE_PLAN, ROUND_PLAN,
   scoreRound, tierFor, rating, ratingFor, maxScoreFor, currentStreak, recordDailyResult,
-  weekStart, encodeChallenge, decodeChallenge, resolvePlaces, dailyLocations, totalScore, evaluateGuess,
+  weekStart, practiceLocations, poolFor, encodeChallenge, decodeChallenge, resolvePlaces, dailyLocations, totalScore, evaluateGuess,
 } from "../tapmap/game.js";
 import { LOCATIONS } from "../tapmap/locations.js";
 
@@ -21,14 +21,15 @@ test("every rating has an emoji, out of the game's own maximum", () => {
   for (const total of [0, 400, 700, 900, 1000]) assert.match(ratingFor(total), /^\S+ \p{Extended_Pictographic}/u);
   assert.equal(rating(900).label, "Cartographer");
   assert.equal(rating(900, SATELLITE_MAX_SCORE).label, "Navigator");
-  assert.equal(rating(999, SATELLITE_MAX_SCORE).label, "Cartographer");
+  assert.equal(rating(1080, SATELLITE_MAX_SCORE).label, "Cartographer");
 });
 
-test("satellite rounds are out of 120, so satellite practice is out of 1,110", () => {
+test("satellite practice: five hard photo rounds, each out of 120, 1,200 in all", () => {
   assert.equal(MAX_SCORE, 1000);
   assert.equal(maxScoreFor(ROUND_PLAN), 1000);
-  assert.equal(SATELLITE_MAX_SCORE, 1110);
-  assert.deepEqual(SATELLITE_PLAN.map((r) => Boolean(r.satellite)), [false, false, false, true, true]);
+  assert.equal(SATELLITE_MAX_SCORE, 1200);
+  assert.ok(SATELLITE_PLAN.every((r) => r.satellite && r.difficulty === "hard"));
+  assert.deepEqual(SATELLITE_PLAN.map((r) => r.multiplier), ROUND_PLAN.map((r) => r.multiplier));
   const perfect = scoreRound(0, 3, { satellite: true });
   assert.equal(perfect.score, 120);
   assert.equal(perfect.weighted, 360);
@@ -36,7 +37,16 @@ test("satellite rounds are out of 120, so satellite practice is out of 1,110", (
   // A far-off photo guess earns (almost) no bonus.
   assert.equal(scoreRound(15000, 1, { satellite: true }).satBonus, 0);
   const rounds = SATELLITE_PLAN.map((r) => evaluateGuess({ lat: 0, lng: 0 }, { lat: 0, lng: 0 }, r.multiplier, { satellite: Boolean(r.satellite) }));
-  assert.equal(totalScore(rounds), 1110);
+  assert.equal(totalScore(rounds), 1200);
+});
+
+test("satellite practice picks five different hard places", () => {
+  for (let i = 0; i < 50; i++) {
+    const picks = practiceLocations(poolFor("2026-10-05", LOCATIONS), Math.random, SATELLITE_PLAN);
+    assert.equal(picks.length, 5);
+    assert.ok(picks.every((l) => l && l.difficulty === "hard"));
+    assert.equal(new Set(picks.map((l) => l.name)).size, 5);
+  }
 });
 
 test("a streak counts only if the last daily was today or yesterday", () => {
