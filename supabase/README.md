@@ -80,28 +80,44 @@ built-in list in `tapmap/locations.js` if the database can't be reached).
 
 **Add a place:** Table Editor → `locations` → **Insert row**. Fill in `name`,
 `lat`, `lng` (decimal degrees) and `difficulty` (`easy`, `medium` or `hard`).
-Leave `added_on` as today. Or in the SQL Editor:
+Leave `added_on` empty (it fills in the day after tomorrow, UTC). Add a
+`notes` line too: one short fact shown when the answer is revealed. Or in the
+SQL Editor:
 
 ```sql
-insert into public.locations (name, lat, lng, difficulty)
-values ('Table Mountain, South Africa', -33.9628, 18.4098, 'medium');
+insert into public.locations (name, lat, lng, difficulty, notes)
+values ('Table Mountain, South Africa', -33.9628, 18.4098, 'medium',
+        'Its flat top is about 3 km wide and often covered by a "tablecloth" of cloud.');
 ```
 
-- New places join the daily pool **the next day** (UTC), so today's game never
-  changes for someone halfway through it.
-- **Retire a place** by setting `retired_on` to a future date instead of
-  deleting it. Deleting or editing a place that is already in the pool changes
-  which places later days pick, so prefer retiring.
+- New places join the daily pool **two days later** (`added_on` defaults to
+  tomorrow's UTC date, and a place is used from the day after `added_on`).
+  Players' days run from UTC−12 to UTC+14, so that way nobody's game changes
+  partway through. The game also keeps each player's five places on their
+  device once they start.
+- **How places are picked:** everyone gets the same five on the same date.
+  From 27 September 2026, each difficulty works through its whole list, in a
+  shuffled order, before any place comes round again; then it starts a new
+  shuffled round. With 20 easy, 28 medium and 20 hard places, that's a place
+  at most once every 20, 14 and 10 days, and never twice in a week. Places
+  are matched by name, so adding or retiring one never changes an earlier
+  game. (Games before 27 September 2026 keep their original places.)
+- **Retire a place** by setting `retired_on` to a date at least two days
+  ahead instead of deleting it. Don't rename or delete a place that has been
+  in the pool: its name is how the picker tracks it.
 - Each day needs at least 1 easy, 2 medium and 2 hard places.
 
 **Handy queries:**
 
 ```sql
--- How many places of each difficulty are live today
+-- How many places of each difficulty are live today (UTC)
 select difficulty, count(*) from public.locations
 where added_on < (now() at time zone 'utc')::date
   and (retired_on is null or retired_on > (now() at time zone 'utc')::date)
 group by difficulty;
+
+-- Places without a fact yet
+select id, name from public.locations where notes is null or trim(notes) = '';
 
 -- Newest additions
 select id, name, difficulty, added_on from public.locations order by id desc limit 20;
@@ -130,19 +146,28 @@ select * from public.locations where name ilike '%peru%';
 
 ## Games by date and number
 
-Each saved result has `game_date` (UTC) and `game_number` (TapMap No., where
-No. 1 is 2026-09-24); the database rejects results where they don't match.
+Each saved result has `game_date` (the player's local date: a new game starts
+at their midnight) and `game_number` (TapMap No., where No. 1 is 2026-09-24);
+the database rejects results where they don't match, or where the total isn't
+what the rounds add up to.
 Each round also stores the place `name`. For a quick overview:
 
 ```sql
 select * from public.daily_summary order by game_date desc;
+
+-- This week's league (Monday to Sunday), everyone, in the dashboard
+select * from public.weekly_league order by week_start desc, rank;
 ```
+
+In the app, `weekly_league` only shows you and the players who accepted your
+follow (it uses the `games` table's row-level security), and the results
+screen ranks those players for the current week.
 
 ## What's stored
 
 | Table | Contents | Who can read | Who can write |
 | --- | --- | --- | --- |
-| `profiles` | username, display name | everyone (for search) | the owner (update only) |
+| `profiles` | username, display name, photo, time zone | everyone (for search) | the owner (update only) |
 | `follows` | follower, followee, status (`pending` / `accepted`) | the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
 | `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
@@ -159,7 +184,13 @@ app crops photos to a small square before uploading (1 MB limit).
 before requests existed are kept as accepted.
 
 Results can't be edited or deleted once saved. Stats (played, best, average,
-current and longest streak) are worked out from `games` by `profile_stats`.
+current and longest streak) are worked out from `games` by `profile_stats`. A
+current streak counts if the last game was today or yesterday in the player's
+time zone (the game saves it to `profiles.time_zone`), the same rule the game
+uses.
+
+Past games, challenges and satellite practice are unranked and stay on the
+player's device; only each day's daily game is saved.
 
 Scores are calculated in the browser, so a determined player could submit a
 fake result. That's fine among friends; moving scoring into the database is

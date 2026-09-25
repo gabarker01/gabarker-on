@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=15">
+  <link rel="stylesheet" href="tapmap.css?v=16">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -74,6 +74,11 @@
       <span id="prompt-multiplier" class="multiplier"></span>
     </p>
     <h1 id="prompt-name" class="prompt-name"></h1>
+    <div id="prompt-photo" class="prompt-photo" hidden>
+      <img id="prompt-img" alt="Satellite photo of the place to find. Tap to enlarge." width="512" height="512" hidden>
+      <p id="prompt-photo-status" class="prompt-photo-status"></p>
+    </div>
+    <button id="reveal-name" class="link-button" type="button" hidden>Show the name (no photo bonus)</button>
   </section>
 
   <div class="zoom-controls" role="group" aria-label="Zoom">
@@ -96,12 +101,13 @@
           <p class="result-sub"><span id="result-mi"></span><span class="sep" aria-hidden="true"></span> <span id="result-tier" class="tier"></span></p>
         </div>
         <div class="result-points">
-          <p class="points"><span id="result-points">0</span><span class="of">/100</span></p>
+          <p class="points"><span id="result-points">0</span><span id="result-of" class="of">/100</span></p>
           <p id="result-maths" class="result-sub"></p>
         </div>
       </div>
       <p id="result-bonus" class="result-bonus" hidden></p>
       <p class="result-answer"><span class="label">Answer</span> <span id="result-answer"></span></p>
+      <p id="result-fact" class="result-fact" hidden></p>
       <button id="next-button" class="primary-button" type="button">Next round</button>
     </div>
   </section>
@@ -118,7 +124,7 @@
         <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight, your time.</p></li>
       </ol>
       <ul class="legend" aria-label="Distance bands">
-        <li><span class="tier-dot t-bullseye"></span>Under 50 km</li>
+        <li><span class="tier-dot t-bullseye"></span>Under 25 km</li>
         <li><span class="tier-dot t-close"></span>500</li>
         <li><span class="tier-dot t-near"></span>1,500</li>
         <li><span class="tier-dot t-far"></span>3,000</li>
@@ -126,6 +132,10 @@
       </ul>
       <button id="play-button" class="primary-button" type="button">Play today's game</button>
       <button id="intro-practice-button" class="secondary-button" type="button">Practice</button>
+      <div id="intro-modes" class="mode-row">
+        <button id="intro-archive-button" class="chip-button" type="button">Past games</button>
+        <button id="intro-satellite-button" class="chip-button" type="button">Satellite practice</button>
+      </div>
       <div id="intro-signin" class="signin-cta" hidden>
         <p>Save your streak, see your stats and play with friends.</p>
         <button id="intro-signin-button" class="cta-button" type="button">Sign in or create account</button>
@@ -147,7 +157,22 @@
       <div class="share-row">
         <button id="copy-button" class="primary-button" type="button">Copy result</button>
         <button id="share-button" class="secondary-button" type="button" hidden>Share</button>
+        <div class="mode-row">
+          <button id="image-button" class="chip-button" type="button">Share image</button>
+          <button id="challenge-button" class="chip-button" type="button">Challenge a friend</button>
+        </div>
       </div>
+
+      <p id="unranked-note" class="unranked-note" hidden></p>
+
+      <section id="challenge-compare" class="compare" hidden>
+        <h3 class="section-label">Challenge</h3>
+        <p id="compare-verdict" class="compare-verdict"></p>
+        <table class="compare-table">
+          <thead><tr><th scope="col">Round</th><th scope="col" id="compare-them">Them</th><th scope="col">You</th></tr></thead>
+          <tbody id="compare-rows"></tbody>
+        </table>
+      </section>
 
       <div id="end-signin" class="signin-cta end-signin" hidden>
         <p><strong>Save today's score.</strong> Create a free account to keep your streak, track your stats and compare with friends.</p>
@@ -163,7 +188,13 @@
         <button id="friends-signin" class="link-button centered" type="button" hidden>Sign in to compare with friends</button>
       </section>
 
-      <dl class="stats">
+      <section id="league" class="friends league" hidden>
+        <h3 class="section-label">This week <span id="league-dates" class="section-note"></span></h3>
+        <ol id="league-list" class="friends-list league-list"></ol>
+        <p id="league-empty" class="friends-empty" hidden>Nobody you follow has played this week yet.</p>
+      </section>
+
+      <dl id="end-stats" class="stats">
         <div><dt>Played</dt><dd id="stat-played">0</dd></div>
         <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
         <div><dt>Best</dt><dd id="stat-best">0</dd></div>
@@ -171,8 +202,35 @@
       <p id="next-game" class="next-game"></p>
 
       <button id="practice-button" class="secondary-button" type="button">Practice</button>
+      <div class="mode-row">
+        <button id="end-archive-button" class="chip-button" type="button">Past games</button>
+        <button id="end-satellite-button" class="chip-button" type="button">Satellite practice</button>
+      </div>
       <button id="daily-results-button" class="link-button centered" type="button" hidden>Back to today's result</button>
       <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
+    </div>
+  </div>
+
+  <!-- Past games -->
+  <div id="archive" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+      <p class="eyebrow">Past games</p>
+      <h2 id="archive-title" class="sheet-title">Play an<br><em>earlier day.</em></h2>
+      <p class="lead">Past games are unranked. They're saved on this device only and don't count towards your stats or streak.</p>
+      <ol id="archive-list" class="archive-list"></ol>
+      <p id="archive-empty" class="friends-empty" hidden>No past games yet. Tomorrow, today's game joins the archive.</p>
+      <button id="archive-close" class="secondary-button" type="button">Close</button>
+    </div>
+  </div>
+
+  <!-- Challenge link -->
+  <div id="challenge-invite" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="challenge-title">
+      <p class="eyebrow">Challenge</p>
+      <h2 id="challenge-title" class="sheet-title"></h2>
+      <p id="challenge-text" class="lead"></p>
+      <button id="challenge-accept" class="primary-button" type="button">Play the challenge</button>
+      <button id="challenge-skip" class="secondary-button" type="button">Not now</button>
     </div>
   </div>
 
@@ -237,7 +295,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=18"></script>
+  <script type="module" src="tapmap.js?v=19"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

@@ -34,6 +34,25 @@ alter table public.follows alter column status set default 'pending';
 alter table public.profiles
   add column if not exists avatar_url text check (avatar_url is null or (avatar_url ~ '^https://' and char_length(avatar_url) <= 500));
 
+-- The player's time zone (e.g. "Europe/London"), set by the game, so streaks
+-- can use the player's own date. Null means UTC.
+alter table public.profiles
+  add column if not exists time_zone text check (time_zone is null or time_zone ~ '^[A-Za-z0-9_+/-]{1,64}$');
+
+-- Today's date in a time zone; UTC if the zone is missing or unknown.
+create or replace function public.local_today(tz text)
+returns date
+language plpgsql
+stable
+set search_path = ''
+as $$
+begin
+  return (now() at time zone coalesce(tz, 'UTC'))::date;
+exception when others then
+  return (now() at time zone 'UTC')::date;
+end;
+$$;
+
 -- Accepting a follow request makes it mutual: the other player follows back.
 -- (security definer: players can't otherwise create an accepted follow.)
 create or replace function public.follow_back()
@@ -71,21 +90,68 @@ create table if not exists public.games (
   game_date date not null,
   game_number integer not null check (game_number > 0),
   -- [{ "score": 0-100, "tier": "🟩", "km": 412.3, "multiplier": 1.5, "guess": { "lat": .., "lng": .. } }, ...]
+  -- (A satellite round, "sat": true, is out of 120; daily games have none.)
   rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5),
-  total integer not null check (total between 0 and 1000),
+  total integer not null,
   created_at timestamptz not null default now(),
   primary key (user_id, game_date)
 );
 
 create index if not exists games_date_idx on public.games (game_date);
 
--- The TapMap number always matches the UTC date: No. 1 is 2026-09-24.
--- (NOT VALID: checks every new result without re-checking old rows.)
+-- The TapMap number always matches the game date: No. 1 is 2026-09-24. The
+-- date is the player's own local date (a new game starts at their midnight),
+-- not the UTC date. (NOT VALID: checks every new result without re-checking
+-- old rows.)
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'games_number_matches_date') then
     alter table public.games add constraint games_number_matches_date
       check (game_number = (game_date - date '2026-09-24') + 1) not valid;
+  end if;
+end $$;
+
+-- The total must be what the rounds add up to: each round's score (0 to 100,
+-- or 0 to 120 for a satellite round) times its multiplier, rounded. The most
+-- a game can score is 1,000, or 1,110 with satellite rounds (×2.5 and ×3).
+create or replace function public.game_total_ok(rounds jsonb, total integer)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  r jsonb;
+  score numeric;
+  multiplier numeric;
+  weighted numeric := 0;
+begin
+  if jsonb_typeof(rounds) is distinct from 'array' or total is null then
+    return false;
+  end if;
+  for r in select * from jsonb_array_elements(rounds) loop
+    if jsonb_typeof(r -> 'score') is distinct from 'number' or jsonb_typeof(r -> 'multiplier') is distinct from 'number' then
+      return false;
+    end if;
+    score := (r ->> 'score')::numeric;
+    multiplier := (r ->> 'multiplier')::numeric;
+    if score <> trunc(score) or score < 0 or score > (case when r ->> 'sat' = 'true' then 120 else 100 end)
+       or multiplier not in (1, 1.5, 2, 2.5, 3) then
+      return false;
+    end if;
+    weighted := weighted + score * multiplier;
+  end loop;
+  return total = round(weighted) and total between 0 and 1110;
+end;
+$$;
+
+-- Replaces the old fixed "total between 0 and 1000" check.
+alter table public.games drop constraint if exists games_total_check;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'games_total_matches_rounds') then
+    alter table public.games add constraint games_total_matches_rounds
+      check (public.game_total_ok(rounds, total)) not valid;
   end if;
 end $$;
 
@@ -147,8 +213,9 @@ create trigger on_auth_user_created
 
 -- Played, best, average and streaks per player, worked out from games so they
 -- never drift. Only your own row and those of players who accepted your
--- follow request are visible. A streak is a run of consecutive UTC dates; the current streak
--- counts only if its last game was today or yesterday.
+-- follow request are visible. A streak is a run of consecutive game dates
+-- (each player's local date). The current streak counts only if its last game
+-- was today or yesterday in that player's time zone, as in the game itself.
 drop view if exists public.profile_stats;
 create view public.profile_stats
 with (security_invoker = true)
@@ -175,8 +242,7 @@ select
   coalesce((select max(r.length) from runs r where r.user_id = p.id), 0) as max_streak,
   coalesce((
     select r.length from runs r
-    -- (dates are each player's local day, so allow for time zones)
-    where r.user_id = p.id and r.last_date >= (now() at time zone 'utc')::date - 2
+    where r.user_id = p.id and r.last_date >= public.local_today(p.time_zone) - 1
     order by r.last_date desc
     limit 1
   ), 0) as current_streak
@@ -202,6 +268,36 @@ select
   max(total) as best
 from public.games
 group by game_date, game_number;
+
+-- Weekly league: points per player for each Monday-to-Sunday week (by game
+-- date), ranked. security_invoker, so the games table's row-level security
+-- applies: you only see yourself and players who accepted your follow, and
+-- the ranking is among those.
+drop view if exists public.weekly_league;
+create view public.weekly_league
+with (security_invoker = true)
+as
+select
+  w.week_start,
+  w.user_id,
+  p.username,
+  p.display_name,
+  p.avatar_url,
+  w.played,
+  w.points,
+  w.best,
+  rank() over (partition by w.week_start order by w.points desc)::integer as rank
+from (
+  select
+    g.game_date - (extract(isodow from g.game_date)::integer - 1) as week_start,
+    g.user_id,
+    count(*)::integer as played,
+    sum(g.total)::integer as points,
+    max(g.total) as best
+  from public.games g
+  group by 1, 2
+) w
+join public.profiles p on p.id = w.user_id;
 
 -- ---------- Row-level security ----------
 
@@ -273,9 +369,9 @@ create policy "save own game" on public.games
 
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
-revoke select on public.follows, public.games, public.profile_stats from anon;
-grant select on public.follows, public.games, public.profile_stats, public.daily_summary to authenticated;
-grant update (username, display_name, avatar_url) on public.profiles to authenticated;
+revoke select on public.follows, public.games, public.profile_stats, public.weekly_league from anon;
+grant select on public.follows, public.games, public.profile_stats, public.daily_summary, public.weekly_league to authenticated;
+grant update (username, display_name, avatar_url, time_zone) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;
@@ -319,9 +415,12 @@ create policy "avatar delete own" on storage.objects
 --   insert into public.locations (name, lat, lng, difficulty)
 --   values ('Table Mountain, South Africa', -33.9628, 18.4098, 'medium');
 --
--- New places join the daily pool the day after they are added (UTC), so a
--- day that has started never changes. Set retired_on to take one out from that
--- date. Delete rows only if they were never in a daily game.
+-- added_on defaults to tomorrow's UTC date and a place is used from the day
+-- after added_on, so a new place joins two days later. Players' dates run from
+-- UTC-12 to UTC+14, so no day that has started anywhere ever changes. Set
+-- retired_on (at least two days ahead) to take one out from that date. Don't
+-- rename or delete a place that has been in a daily game: the picker tracks
+-- places by name.
 
 create table if not exists public.locations (
   id bigint generated always as identity primary key,
@@ -336,6 +435,9 @@ create table if not exists public.locations (
   check (retired_on is null or retired_on > added_on)
 );
 
+alter table public.locations
+  alter column added_on set default ((now() at time zone 'utc')::date + 1);
+
 create index if not exists locations_pool_idx on public.locations (added_on, retired_on);
 
 alter table public.locations enable row level security;
@@ -347,8 +449,9 @@ create policy "locations are public" on public.locations
 
 grant select on public.locations to anon, authenticated;
 
--- The launch set, matching tapmap/locations.js in the same order (the daily
--- picks depend on this order, so ids follow it).
+-- The launch set, matching tapmap/locations.js in the same order. (Games
+-- before 27 September 2026 depend on this order, so ids follow it. From then
+-- on places are matched by name, so the order no longer matters.)
 insert into public.locations (name, lat, lng, difficulty, added_on)
 select name, lat, lng, difficulty, date '2026-01-01'
 from (values
@@ -423,3 +526,79 @@ from (values
 ) as seed (n, name, lat, lng, difficulty)
 order by n
 on conflict (name) do nothing;
+
+-- One line about each launch place, shown when the answer is revealed. Only
+-- fills notes that are empty, so your own edits are never overwritten.
+update public.locations l
+set notes = v.notes
+from (values
+  ('Eiffel Tower, Paris, France', 'Built for the 1889 World''s Fair, it was only meant to stand for 20 years.'),
+  ('Statue of Liberty, New York, USA', 'A gift from France, dedicated in 1886. Its copper skin is thinner than 2.5 mm.'),
+  ('Great Pyramid of Giza, Egypt', 'It was the tallest human-made structure on Earth for more than 3,800 years.'),
+  ('Sydney Opera House, Australia', 'Its roof sails are covered in over a million tiles made in Sweden.'),
+  ('Colosseum, Rome, Italy', 'It could seat an estimated 50,000 to 80,000 spectators.'),
+  ('Taj Mahal, Agra, India', 'Shah Jahan built it as a tomb for his wife Mumtaz Mahal. Work began in 1632.'),
+  ('Big Ben, London, UK', 'Big Ben is the great bell, not the tower, which has been called Elizabeth Tower since 2012.'),
+  ('Christ the Redeemer, Rio de Janeiro, Brazil', 'Finished in 1931, the statue is 30 m tall, not counting its pedestal.'),
+  ('Mount Fuji, Japan', 'Japan''s highest peak, at 3,776 m. It last erupted in 1707.'),
+  ('Golden Gate Bridge, San Francisco, USA', 'Its colour, International Orange, was chosen to stand out in the fog.'),
+  ('Tokyo, Japan', 'Greater Tokyo is the world''s most populous metropolitan area, with about 37 million people.'),
+  ('Machu Picchu, Peru', 'The Inca built this citadel in the 15th century, about 2,430 m above sea level.'),
+  ('Great Wall at Badaling, China', 'Badaling is the Great Wall''s most visited section, and it opened to tourists in 1957.'),
+  ('Niagara Falls, Canada/USA', 'Horseshoe Falls, on the Canadian side, carries about 90% of the river''s water.'),
+  ('Grand Canyon, Arizona, USA', 'The Colorado River carved it up to 1.8 km deep.'),
+  ('Mount Everest, Nepal/China', 'At 8,849 m, its summit is the highest point above sea level on Earth.'),
+  ('Red Square, Moscow, Russia', 'Its name comes from an old Russian word for "beautiful", not from the colour.'),
+  ('Cape Town, South Africa', 'The flat-topped Table Mountain rises straight up behind the city.'),
+  ('Burj Khalifa, Dubai, UAE', 'At 828 m, it has been the world''s tallest building since 2010.'),
+  ('Acropolis, Athens, Greece', 'The Parthenon was built on its summit in the 5th century BC.'),
+  ('Petra, Jordan', 'The Nabataeans carved the city''s façades straight into rose-pink sandstone cliffs.'),
+  ('Angkor Wat, Cambodia', 'The world''s largest religious monument, and it''s on Cambodia''s flag.'),
+  ('Chichén Itzá, Mexico', 'At the equinoxes, shadows make a serpent that seems to slide down El Castillo''s steps.'),
+  ('Uluru, Australia', 'This sandstone monolith rises about 348 m above the flat desert around it.'),
+  ('Victoria Falls, Zambia/Zimbabwe', 'Its local name, Mosi-oa-Tunya, means "the smoke that thunders".'),
+  ('Mount Kilimanjaro, Tanzania', 'Africa''s highest mountain, at 5,895 m, is a dormant volcano.'),
+  ('Iguazu Falls, Argentina/Brazil', 'It is a chain of about 275 waterfalls on the border of Argentina and Brazil.'),
+  ('Reykjavík, Iceland', 'It is the world''s northernmost capital of a sovereign state.'),
+  ('Istanbul, Turkey', 'The city sits on both sides of the Bosphorus, so it is partly in Europe and partly in Asia.'),
+  ('Buenos Aires, Argentina', 'Avenida 9 de Julio, one of the widest avenues in the world, runs through the centre.'),
+  ('Nairobi, Kenya', 'Nairobi National Park is inside the city, and you can see giraffes against the skyline.'),
+  ('Bangkok, Thailand', 'Its full ceremonial name is one of the longest place names in the world.'),
+  ('Stonehenge, England', 'Its smaller bluestones were brought from the Preseli Hills in Wales, more than 200 km away.'),
+  ('Santorini, Greece', 'The island''s crescent is the rim of a caldera left by a huge eruption around 1600 BC.'),
+  ('Galápagos Islands, Ecuador', 'Their wildlife helped shape Charles Darwin''s thinking after he visited in 1835.'),
+  ('Banff, Alberta, Canada', 'Banff, founded in 1885, is Canada''s first national park.'),
+  ('Ha Long Bay, Vietnam', 'About 1,600 limestone islands and islets rise out of its water.'),
+  ('Serengeti, Tanzania', 'It is home to the great migration of more than a million wildebeest.'),
+  ('Dead Sea, Israel/Jordan', 'Its shore, more than 430 m below sea level, is the lowest land on Earth.'),
+  ('Marrakesh, Morocco', 'Every evening its main square, Jemaa el-Fnaa, fills with food stalls and performers.'),
+  ('Kyoto, Japan', 'It was Japan''s capital for more than a thousand years, until 1869.'),
+  ('Singapore', 'This city-state of more than 60 islands lies just north of the equator.'),
+  ('Honolulu, Hawaii, USA', 'ʻIolani Palace is here, the only royal palace in the United States.'),
+  ('Anchorage, Alaska, USA', 'Alaska''s largest city is home to about two in five Alaskans.'),
+  ('Great Barrier Reef, Australia', 'The world''s largest coral reef system stretches more than 2,300 km.'),
+  ('Mexico City, Mexico', 'It was built on the site of the Aztec capital Tenochtitlan, on a drained lake bed.'),
+  ('Havana, Cuba', 'The Spanish founded it in 1519, and its old town is a World Heritage Site.'),
+  ('Auckland, New Zealand', 'The city is built on a field of about 50 volcanoes.'),
+  ('Easter Island, Chile', 'The Rapa Nui people carved nearly 1,000 moai statues here.'),
+  ('Suva, Fiji', 'Fiji''s capital is on Viti Levu, the country''s largest island.'),
+  ('Timbuktu, Mali', 'In the 15th and 16th centuries it was a great centre of Islamic learning.'),
+  ('Ulaanbaatar, Mongolia', 'It is often called the coldest capital city in the world.'),
+  ('Longyearbyen, Svalbard, Norway', 'The Svalbard Global Seed Vault is here, holding seeds from around the world.'),
+  ('Socotra, Yemen', 'The island is known for its umbrella-shaped dragon''s blood trees, which grow nowhere else.'),
+  ('Lake Baikal, Russia', 'The world''s deepest lake holds about a fifth of Earth''s unfrozen surface fresh water.'),
+  ('Salar de Uyuni, Bolivia', 'After rain, the world''s largest salt flat becomes a giant mirror.'),
+  ('Bagan, Myanmar', 'More than 2,000 Buddhist temples and pagodas still stand on its plain.'),
+  ('Nuuk, Greenland', 'Greenland''s capital was founded in 1728 and is one of the smallest capitals in the world.'),
+  ('Ushuaia, Argentina', 'It is often called the southernmost city in the world.'),
+  ('Lalibela, Ethiopia', 'Its 11 medieval churches were carved downwards out of solid rock.'),
+  ('Tristan da Cunha', 'Fewer than 300 people live on the world''s most remote inhabited island group.'),
+  ('Samarkand, Uzbekistan', 'On this Silk Road city''s Registan square stand three madrasas covered in tiles.'),
+  ('McMurdo Station, Antarctica', 'The United States runs Antarctica''s largest research station here.'),
+  ('Sossusvlei, Namibia', 'Some of its red dunes are more than 300 m high, among the tallest in the world.'),
+  ('Cradle Mountain, Tasmania, Australia', 'It is the start of the Overland Track, one of Australia''s best-known long walks.'),
+  ('Apia, Samoa', 'Samoa is just west of the International Date Line, so it is among the first places to see each new day.'),
+  ('Nazca Lines, Peru', 'These giant figures were scratched into the desert about 2,000 years ago and are best seen from the air.'),
+  ('Koror, Palau', 'Palau''s largest town was its capital until 2006.')
+) as v (name, notes)
+where l.name = v.name and (l.notes is null or trim(l.notes) = '');

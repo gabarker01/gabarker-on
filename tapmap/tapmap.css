@@ -1943,3 +1943,253 @@ body.profile-page {
 .summary-globe .maplibregl-marker:has(.score-bubble.is-visible) {
   z-index: 2;
 }
+
+/* ---------- Practice modes ---------- */
+
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Satellite rounds: the photo comes first and the name is hidden. */
+.prompt-name.is-hidden {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.prompt-photo {
+  position: relative;
+  width: min(100%, 200px);
+  aspect-ratio: 1;
+  margin: 10px 0 0;
+  overflow: hidden;
+  background: var(--space);
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  transition: width 0.25s ease;
+}
+
+.prompt-photo.is-large {
+  width: min(100%, 340px, 42vh);
+}
+
+.prompt-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.prompt-photo.is-large img {
+  cursor: zoom-out;
+}
+
+.prompt-photo-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.prompt .link-button {
+  margin-top: 4px;
+}
+
+.result-fact {
+  margin: -4px 6px 12px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.3;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.unranked-note {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.section-note {
+  margin-left: 6px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+/* Weekly league */
+.league-list li {
+  grid-template-columns: 2ch 1fr auto auto;
+}
+
+.league-rank {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.league-list li:first-child .league-rank {
+  color: var(--accent);
+}
+
+.league-played {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* Challenge comparison */
+.compare {
+  margin: 0 0 8px;
+}
+
+.compare-verdict {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  color: var(--accent);
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  table-layout: fixed;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 400;
+  text-align: right;
+}
+
+.compare-table thead th {
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-table th:first-child {
+  width: 58%;
+  text-align: left;
+}
+
+.compare-table tbody th {
+  font-size: 0.85rem;
+}
+
+.compare-place {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.compare-n {
+  flex: none;
+  width: 2ch;
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--ink-faint);
+}
+
+.compare-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-table td {
+  color: var(--ink-soft);
+}
+
+.compare-table td .tier-dot {
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+
+.compare-table td.is-winner {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.compare-total th,
+.compare-total td {
+  border-bottom: none;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+}
+
+.compare-total th {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+
+/* Past games */
+.archive-list {
+  max-height: 46vh;
+  margin: 0 0 6px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--hairline);
+}
+
+.archive-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 2px;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-title {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+}
+
+.archive-date {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.archive-status {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.archive-status.is-done {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--accent);
+}

@@ -45,15 +45,16 @@ const unwrap = ({ data, error }) => {
 
 // ---------- Locations ----------
 
-// The location pool from the database, oldest first (the daily picks depend on
-// this order). Plain REST so the game doesn't wait for the auth library.
+// The whole location list from the database, oldest first, including places
+// not yet live or already retired (the daily picker replays every day since
+// launch). Plain REST so the game doesn't wait for the auth library.
 export async function fetchLocations(timeoutMs = 5000) {
   if (!socialEnabled()) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/locations?select=name,lat,lng,difficulty,added_on,retired_on&order=id.asc`,
+      `${SUPABASE_URL}/rest/v1/locations?select=name,lat,lng,difficulty,added_on,retired_on,notes&order=id.asc`,
       { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
     );
     if (!response.ok) throw new Error(`Locations request failed (${response.status})`);
@@ -176,6 +177,7 @@ export async function saveGame(userId, { date, number, rounds, total, names }) {
   const payload = rounds.map((r, i) => ({
     name: names ? names[i] : undefined,
     score: r.score,
+    ...(r.sat ? { sat: true } : {}),
     tier: r.tier,
     km: Math.round(r.distanceKm * 10) / 10,
     multiplier: r.multiplier,
@@ -200,6 +202,22 @@ export async function friendsResults(userId, date) {
     .eq("game_date", date)
     .in("user_id", ids)
     .order("total", { ascending: false }));
+}
+
+// This week's league (Monday to Sunday): you and everyone who has accepted
+// your follow, ranked by points. Row-level security limits it to those.
+export async function weeklyLeague(weekStart) {
+  return unwrap(await client
+    .from("weekly_league")
+    .select("user_id, username, display_name, avatar_url, played, points, best, rank")
+    .eq("week_start", weekStart)
+    .order("rank", { ascending: true })
+    .order("username", { ascending: true }));
+}
+
+// Saves the player's time zone, so their streak follows their own date.
+export async function saveTimeZone(userId, timeZone) {
+  unwrap(await client.from("profiles").update({ time_zone: timeZone }).eq("id", userId));
 }
 
 // One player's result for a date, or null if none (or not visible to you).

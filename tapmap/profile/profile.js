@@ -3,14 +3,19 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=7";
-import { avatarElement, squarePhoto } from "/tapmap/avatar.js";
+import * as social from "/tapmap/social.js?v=8";
+import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
-import { todayKey, formatNumber, MAX_SCORE } from "/tapmap/game.js";
+import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=2";
+
+// Tiers from the saved distance, so older results (when 🎯 meant under 50 km)
+// use today's bands.
+const tierOf = (r) => (Number.isFinite(r.km) ? tierFor(r.km) : r.tier);
 
 const $ = (id) => document.getElementById(id);
 const today = todayKey();
-const DAILY_KEY = "tapmap:v4:daily";
+// (The game copies version 4 data to version 5; either counts.)
+const DAILY_KEYS = ["tapmap:v5:daily", "tapmap:v4:daily"];
 const TIER_CLASS = { "🎯": "t-bullseye", "🟩": "t-close", "🟨": "t-near", "🟧": "t-far", "🟥": "t-off" };
 
 let me = null; // signed-in user
@@ -49,9 +54,9 @@ function tierDots(rounds) {
   dots.className = "friend-tiers";
   dots.setAttribute("aria-hidden", "true");
   for (const r of rounds || []) {
-    if (!TIER_CLASS[r.tier]) continue;
+    if (!TIER_CLASS[tierOf(r)]) continue;
     const dot = document.createElement("span");
-    dot.className = `tier-dot ${TIER_CLASS[r.tier]}`;
+    dot.className = `tier-dot ${TIER_CLASS[tierOf(r)]}`;
     dots.append(dot);
   }
   return dots;
@@ -60,8 +65,10 @@ function tierDots(rounds) {
 // Have you finished today's daily? (Saved on this device or on your account.)
 async function finishedToday() {
   try {
-    const saved = JSON.parse(localStorage.getItem(DAILY_KEY));
-    if (saved && saved.date === today && Array.isArray(saved.rounds) && saved.rounds.length >= 5) return true;
+    for (const key of DAILY_KEYS) {
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (saved && saved.date === today && Array.isArray(saved.rounds) && saved.rounds.length >= 5) return true;
+    }
   } catch (e) {}
   if (!me) return false;
   try {
@@ -134,7 +141,7 @@ async function renderDetails(person, isMe) {
 const shortDate = (key) => new Date(`${key}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const ROUND_LABELS = ["Round 1", "Round 2", "Round 3", "Round 4", "Round 5"];
 const TIER_ORDER = ["🎯", "🟩", "🟨", "🟧", "🟥"];
-const TIER_LABELS = ["<50 km", "<500", "<1,500", "<3,000", "3,000+"];
+const TIER_LABELS = [`<${BULLSEYE_KM} km`, "<500", "<1,500", "<3,000", "3,000+"];
 
 function roundAverages(games) {
   return ROUND_LABELS.map((_, i) => {
@@ -162,7 +169,7 @@ function renderMyCharts(games) {
   });
   const css = getComputedStyle(document.documentElement);
   const tierColours = ["--t-bullseye", "--t-close", "--t-near", "--t-far", "--t-off"].map((v) => css.getPropertyValue(v).trim());
-  const counts = TIER_ORDER.map((t) => games.reduce((n, g) => n + (g.rounds || []).filter((r) => r.tier === t).length, 0));
+  const counts = TIER_ORDER.map((t) => games.reduce((n, g) => n + (g.rounds || []).filter((r) => tierOf(r) === t).length, 0));
   barChart($("chart-tiers"), {
     title: "How close your guesses land (rounds)",
     categories: TIER_LABELS,

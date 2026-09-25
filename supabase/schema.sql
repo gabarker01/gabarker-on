@@ -31,6 +31,25 @@ alter table public.follows alter column status set default 'pending';
 alter table public.profiles
   add column if not exists avatar_url text check (avatar_url is null or (avatar_url ~ '^https://' and char_length(avatar_url) <= 500));
 
+-- The player's time zone (e.g. "Europe/London"), set by the game, so streaks
+-- can use the player's own date. Null means UTC.
+alter table public.profiles
+  add column if not exists time_zone text check (time_zone is null or time_zone ~ '^[A-Za-z0-9_+/-]{1,64}$');
+
+-- Today's date in a time zone; UTC if the zone is missing or unknown.
+create or replace function public.local_today(tz text)
+returns date
+language plpgsql
+stable
+set search_path = ''
+as $$
+begin
+  return (now() at time zone coalesce(tz, 'UTC'))::date;
+exception when others then
+  return (now() at time zone 'UTC')::date;
+end;
+$$;
+
 -- Accepting a follow request makes it mutual: the other player follows back.
 -- (security definer: players can't otherwise create an accepted follow.)
 create or replace function public.follow_back()
@@ -68,21 +87,68 @@ create table if not exists public.games (
   game_date date not null,
   game_number integer not null check (game_number > 0),
   -- [{ "score": 0-100, "tier": "🟩", "km": 412.3, "multiplier": 1.5, "guess": { "lat": .., "lng": .. } }, ...]
+  -- (A satellite round, "sat": true, is out of 120; daily games have none.)
   rounds jsonb not null check (jsonb_typeof(rounds) = 'array' and jsonb_array_length(rounds) = 5),
-  total integer not null check (total between 0 and 1000),
+  total integer not null,
   created_at timestamptz not null default now(),
   primary key (user_id, game_date)
 );
 
 create index if not exists games_date_idx on public.games (game_date);
 
--- The TapMap number always matches the UTC date: No. 1 is 2026-09-24.
--- (NOT VALID: checks every new result without re-checking old rows.)
+-- The TapMap number always matches the game date: No. 1 is 2026-09-24. The
+-- date is the player's own local date (a new game starts at their midnight),
+-- not the UTC date. (NOT VALID: checks every new result without re-checking
+-- old rows.)
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'games_number_matches_date') then
     alter table public.games add constraint games_number_matches_date
       check (game_number = (game_date - date '2026-09-24') + 1) not valid;
+  end if;
+end $$;
+
+-- The total must be what the rounds add up to: each round's score (0 to 100,
+-- or 0 to 120 for a satellite round) times its multiplier, rounded. The most
+-- a game can score is 1,000, or 1,110 with satellite rounds (×2.5 and ×3).
+create or replace function public.game_total_ok(rounds jsonb, total integer)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  r jsonb;
+  score numeric;
+  multiplier numeric;
+  weighted numeric := 0;
+begin
+  if jsonb_typeof(rounds) is distinct from 'array' or total is null then
+    return false;
+  end if;
+  for r in select * from jsonb_array_elements(rounds) loop
+    if jsonb_typeof(r -> 'score') is distinct from 'number' or jsonb_typeof(r -> 'multiplier') is distinct from 'number' then
+      return false;
+    end if;
+    score := (r ->> 'score')::numeric;
+    multiplier := (r ->> 'multiplier')::numeric;
+    if score <> trunc(score) or score < 0 or score > (case when r ->> 'sat' = 'true' then 120 else 100 end)
+       or multiplier not in (1, 1.5, 2, 2.5, 3) then
+      return false;
+    end if;
+    weighted := weighted + score * multiplier;
+  end loop;
+  return total = round(weighted) and total between 0 and 1110;
+end;
+$$;
+
+-- Replaces the old fixed "total between 0 and 1000" check.
+alter table public.games drop constraint if exists games_total_check;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'games_total_matches_rounds') then
+    alter table public.games add constraint games_total_matches_rounds
+      check (public.game_total_ok(rounds, total)) not valid;
   end if;
 end $$;
 
@@ -144,8 +210,9 @@ create trigger on_auth_user_created
 
 -- Played, best, average and streaks per player, worked out from games so they
 -- never drift. Only your own row and those of players who accepted your
--- follow request are visible. A streak is a run of consecutive UTC dates; the current streak
--- counts only if its last game was today or yesterday.
+-- follow request are visible. A streak is a run of consecutive game dates
+-- (each player's local date). The current streak counts only if its last game
+-- was today or yesterday in that player's time zone, as in the game itself.
 drop view if exists public.profile_stats;
 create view public.profile_stats
 with (security_invoker = true)
@@ -172,8 +239,7 @@ select
   coalesce((select max(r.length) from runs r where r.user_id = p.id), 0) as max_streak,
   coalesce((
     select r.length from runs r
-    -- (dates are each player's local day, so allow for time zones)
-    where r.user_id = p.id and r.last_date >= (now() at time zone 'utc')::date - 2
+    where r.user_id = p.id and r.last_date >= public.local_today(p.time_zone) - 1
     order by r.last_date desc
     limit 1
   ), 0) as current_streak
@@ -199,6 +265,36 @@ select
   max(total) as best
 from public.games
 group by game_date, game_number;
+
+-- Weekly league: points per player for each Monday-to-Sunday week (by game
+-- date), ranked. security_invoker, so the games table's row-level security
+-- applies: you only see yourself and players who accepted your follow, and
+-- the ranking is among those.
+drop view if exists public.weekly_league;
+create view public.weekly_league
+with (security_invoker = true)
+as
+select
+  w.week_start,
+  w.user_id,
+  p.username,
+  p.display_name,
+  p.avatar_url,
+  w.played,
+  w.points,
+  w.best,
+  rank() over (partition by w.week_start order by w.points desc)::integer as rank
+from (
+  select
+    g.game_date - (extract(isodow from g.game_date)::integer - 1) as week_start,
+    g.user_id,
+    count(*)::integer as played,
+    sum(g.total)::integer as points,
+    max(g.total) as best
+  from public.games g
+  group by 1, 2
+) w
+join public.profiles p on p.id = w.user_id;
 
 -- ---------- Row-level security ----------
 
@@ -270,9 +366,9 @@ create policy "save own game" on public.games
 
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
-revoke select on public.follows, public.games, public.profile_stats from anon;
-grant select on public.follows, public.games, public.profile_stats, public.daily_summary to authenticated;
-grant update (username, display_name, avatar_url) on public.profiles to authenticated;
+revoke select on public.follows, public.games, public.profile_stats, public.weekly_league from anon;
+grant select on public.follows, public.games, public.profile_stats, public.daily_summary, public.weekly_league to authenticated;
+grant update (username, display_name, avatar_url, time_zone) on public.profiles to authenticated;
 grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;

@@ -1,15 +1,18 @@
-import { LOCATIONS } from "./locations.js";
+import { LOCATIONS } from "./locations.js?v=2";
 import {
-  ROUNDS, ROUND_PLAN, MAX_SCORE, GAME_URL,
-  todayKey, gameNumber, msUntilNextGame,
-  dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore,
-  rating, formatNumber, shareText,
+  ROUNDS, ROUND_PLAN, SATELLITE_PLAN, GAME_URL, BULLSEYE_KM,
+  todayKey, gameNumber, dateForNumber, weekStart, msUntilNextGame,
+  dailyLocations, practiceLocations, poolFor, evaluateGuess, totalScore, maxScoreFor, roundMax,
+  ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
-} from "./game.js";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=7";
+  encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
+} from "./game.js?v=2";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=7";
-import { initials, colourFor, avatarElement } from "./avatar.js";
+import * as social from "./social.js?v=8";
+import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
+import { satellitePhoto } from "./satellite.js?v=1";
+import { drawShareImage } from "./share-image.js?v=1";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -26,14 +29,35 @@ const storage = {
   },
 };
 
-const DAILY_KEY = "tapmap:v4:daily";
-const STATS_KEY = "tapmap:v4:stats";
+// Version 5 adds today's five places to the saved daily game. Version 4 data
+// is copied across once and left in place, so an older open tab still works.
+const DAILY_KEY = "tapmap:v5:daily"; // { date, number, locations, rounds }
+const STATS_KEY = "tapmap:v5:stats";
+const ARCHIVE_KEY = "tapmap:v5:archive"; // { [game number]: { locations, rounds } }
+const CHALLENGES_KEY = "tapmap:v5:challenges"; // { [challenge code]: { locations, rounds } }
+const CHALLENGE_KEY = "tapmap:v5:challenge"; // the last challenge link opened
+const LEGACY_DAILY_KEY = "tapmap:v4:daily";
+const LEGACY_STATS_KEY = "tapmap:v4:stats";
+
+function migrateStorage() {
+  if (storage.get(STATS_KEY) === null && storage.get(LEGACY_STATS_KEY)) {
+    storage.set(STATS_KEY, storage.get(LEGACY_STATS_KEY));
+  }
+  const legacy = storage.get(LEGACY_DAILY_KEY);
+  if (storage.get(DAILY_KEY) === null && legacy && Array.isArray(legacy.rounds)) {
+    // The places weren't saved in version 4; they're filled in when the game resumes.
+    // Tiers are recalculated because 🎯 now means under 25 km (it was 50).
+    const rounds = legacy.rounds.map((r) => (Number.isFinite(r.distanceKm) ? { ...r, tier: tierFor(r.distanceKm) } : r));
+    storage.set(DAILY_KEY, { date: legacy.date, number: gameNumber(legacy.date), locations: null, rounds });
+  }
+}
+migrateStorage();
 
 // ---------- Formatting ----------
 
 const KM_PER_MILE = 1.609344;
 const TIERS = {
-  "🎯": { cls: "t-bullseye", label: "Within 50 km" },
+  "🎯": { cls: "t-bullseye", label: `Within ${BULLSEYE_KM} km` },
   "🟩": { cls: "t-close", label: "Within 500 km" },
   "🟨": { cls: "t-near", label: "Within 1,500 km" },
   "🟧": { cls: "t-far", label: "Within 3,000 km" },
@@ -45,8 +69,11 @@ const formatMultiplier = (m) => `×${m}`;
 // Weighted round points can end in .5 (e.g. 91 × 1.5 = 136.5).
 const formatPoints = (n) => (Number.isInteger(n) ? formatNumber(n) : n.toFixed(1));
 const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const longDate = new Date(`${todayKey()}T12:00:00Z`).toLocaleDateString("en-GB", {
+const longDateOf = (dateKey) => new Date(`${dateKey}T12:00:00Z`).toLocaleDateString("en-GB", {
   weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
+});
+const shortDateOf = (dateKey) => new Date(`${dateKey}T12:00:00Z`).toLocaleDateString("en-GB", {
+  weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
 });
 
 function tierDot(tier) {
@@ -68,6 +95,21 @@ function globeColors() {
     arc: v("--globe-arc"),
     guess: v("--globe-guess"),
     answer: v("--globe-answer"),
+  };
+}
+
+function imageColors() {
+  const css = getComputedStyle(root);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return {
+    ink: v("--ink"),
+    soft: v("--ink-soft"),
+    faint: v("--ink-faint"),
+    accent: v("--accent"),
+    ocean: v("--globe-ocean"),
+    land: "#3a4658",
+    atmosphere: v("--globe-atmosphere"),
+    tiers: Object.fromEntries(Object.entries(TIERS).map(([tier, t]) => [tier, v(`--${t.cls}`)])),
   };
 }
 
@@ -132,10 +174,9 @@ function openOverlay(el) {
 
 const today = todayKey();
 const todayNumber = gameNumber(today);
-// Today's pool comes from the database when it can be reached, otherwise from
-// the built-in list (the database's launch set, in the same order).
-let pool = poolFor(today, LOCATIONS);
-let todaysLocations = dailyLocations(today, pool);
+// The whole location list (with each place's added and retired dates) comes
+// from the database when it can be reached, otherwise from the built-in list.
+let allLocations = LOCATIONS;
 
 const hasEnoughFor = (locations) =>
   ["easy", "medium", "hard"].every((level) =>
@@ -146,39 +187,93 @@ async function loadPool() {
     const rows = await social.fetchLocations();
     const valid = (rows || []).filter((r) =>
       r && typeof r.name === "string" && Number.isFinite(r.lat) && Number.isFinite(r.lng) && ["easy", "medium", "hard"].includes(r.difficulty));
-    const todays = poolFor(today, valid);
-    if (hasEnoughFor(todays)) {
-      pool = todays;
-      todaysLocations = dailyLocations(today, pool);
-    }
+    if (hasEnoughFor(poolFor(today, valid))) allLocations = valid;
   } catch (error) {
     console.warn("Using the built-in location list:", error);
   }
 }
 
+// What's saved about each place: enough to replay it without the list.
+const snapshot = (l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null });
+const validPlaces = (list) => Array.isArray(list) && list.length === ROUNDS
+  && list.every((l) => l && typeof l.name === "string" && Number.isFinite(l.lat) && Number.isFinite(l.lng));
+
 function loadDaily() {
   const saved = storage.get(DAILY_KEY);
   return saved && saved.date === today && Array.isArray(saved.rounds)
-    ? saved
-    : { date: today, rounds: [] };
+    ? { date: today, number: todayNumber, locations: validPlaces(saved.locations) ? saved.locations : null, rounds: saved.rounds }
+    : { date: today, number: todayNumber, locations: null, rounds: [] };
 }
 
 let daily = loadDaily();
-let game = null; // { mode, locations, rounds, index, phase, guess }
+let game = null; // { mode, plan, number, dateKey, locations, rounds, index, phase, guess, nameShown, challenge }
 
 const dailyDone = () => daily.rounds.length >= ROUNDS;
 
-function newGame(mode) {
-  if (mode === "daily") {
-    return { mode, locations: todaysLocations, rounds: daily.rounds, index: daily.rounds.length, phase: "guessing", guess: null };
+// Today's five places, fixed on this device from the moment they're first
+// used, so reaching the database (or not), or a place being added, can't
+// change them partway through the day.
+function todaysPlaces() {
+  if (!daily.locations) {
+    daily.locations = dailyLocations(today, allLocations).map(snapshot);
+    storage.set(DAILY_KEY, daily);
   }
-  return { mode, locations: practiceLocations(pool), rounds: [], index: 0, phase: "guessing", guess: null };
+  return daily.locations;
 }
+
+// Past games and challenges: unranked, saved on this device only.
+const savedMap = (key) => storage.get(key) || {};
+function saveInMap(key, id, value, keep = 60) {
+  const map = savedMap(key);
+  delete map[id];
+  map[id] = value;
+  const ids = Object.keys(map);
+  ids.slice(0, Math.max(0, ids.length - keep)).forEach((old) => { delete map[old]; });
+  storage.set(key, map);
+}
+
+function newGame(mode, options = {}) {
+  const base = { mode, plan: ROUND_PLAN, rounds: [], index: 0, phase: "guessing", guess: null, nameShown: false, challenge: options.challenge || null };
+  if (mode === "daily") {
+    return { ...base, number: todayNumber, dateKey: today, locations: todaysPlaces(), rounds: daily.rounds, index: daily.rounds.length };
+  }
+  if (mode === "archive") {
+    const number = options.number;
+    const saved = savedMap(ARCHIVE_KEY)[number];
+    const dateKey = dateForNumber(number);
+    const locations = saved && validPlaces(saved.locations)
+      ? saved.locations
+      : dailyLocations(dateKey, allLocations).map(snapshot);
+    const rounds = saved && Array.isArray(saved.rounds) ? saved.rounds : [];
+    return { ...base, number, dateKey, locations, rounds, index: rounds.length };
+  }
+  if (mode === "challenge") {
+    const saved = savedMap(CHALLENGES_KEY)[options.code];
+    const rounds = saved && Array.isArray(saved.rounds) ? saved.rounds : [];
+    return { ...base, plan: options.plan, code: options.code, locations: options.locations, rounds, index: rounds.length };
+  }
+  const pool = poolFor(today, allLocations);
+  if (mode === "satellite") return { ...base, plan: SATELLITE_PLAN, locations: practiceLocations(pool).map(snapshot) };
+  return { ...base, locations: practiceLocations(pool).map(snapshot) };
+}
+
+function saveProgress() {
+  if (game.mode === "daily") saveDaily();
+  else if (game.mode === "archive") saveInMap(ARCHIVE_KEY, game.number, { locations: game.locations, rounds: game.rounds }, 400);
+  else if (game.mode === "challenge") saveInMap(CHALLENGES_KEY, game.code, { locations: game.locations, rounds: game.rounds });
+}
+
+const MODE_LABELS = { practice: "Practice", satellite: "Satellite", challenge: "Challenge" };
+const gameLabel = (g) => {
+  if (!g || g.mode === "daily") return `No. ${todayNumber}`;
+  if (g.mode === "archive") return `No. ${g.number} · Past game`;
+  return MODE_LABELS[g.mode];
+};
 
 // ---------- Header ----------
 
 function updateHeader(totalOverride) {
-  $("game-label").textContent = game && game.mode === "practice" ? "Practice" : `No. ${todayNumber}`;
+  $("game-label").textContent = gameLabel(game);
   const playing = Boolean(game) && game.phase !== "done";
   document.querySelectorAll("#progress span").forEach((dot, i) => {
     dot.classList.toggle("is-done", Boolean(game) && i < game.rounds.length);
@@ -199,17 +294,65 @@ const prompt = $("prompt");
 const actionBar = $("action-bar");
 const confirmButton = $("confirm-button");
 const result = $("result");
+let photo = null; // the current satellite photo { url, revoke }
+let photoToken = 0;
+
+function clearPhoto() {
+  photoToken += 1;
+  if (photo) photo.revoke();
+  photo = null;
+  $("prompt-photo").hidden = true;
+  $("prompt-img").removeAttribute("src");
+  $("prompt-photo").classList.remove("is-large");
+  $("reveal-name").hidden = true;
+}
+
+// Satellite rounds start with the photo and no name. Showing the name gives
+// up the photo bonus.
+function showName(location) {
+  game.nameShown = true;
+  $("prompt-name").textContent = location.name;
+  $("prompt-name").classList.remove("is-hidden");
+  $("reveal-name").hidden = true;
+}
+
+function showPhoto(location) {
+  const token = ++photoToken;
+  $("prompt-name").textContent = "Where is this?";
+  $("prompt-name").classList.add("is-hidden");
+  $("prompt-photo").hidden = false;
+  $("prompt-photo-status").hidden = false;
+  $("prompt-photo-status").textContent = "Loading satellite photo…";
+  $("prompt-img").hidden = true;
+  $("reveal-name").hidden = false;
+  satellitePhoto(location).then((next) => {
+    if (token !== photoToken) return next.revoke();
+    photo = next;
+    $("prompt-img").src = next.url;
+    $("prompt-img").hidden = false;
+    $("prompt-photo-status").hidden = true;
+  }).catch((error) => {
+    if (token !== photoToken) return;
+    console.warn(error);
+    $("prompt-photo").hidden = true;
+    showName(location);
+    toast("The satellite photo couldn't load, so here's the name.");
+  });
+}
 
 function showRound() {
   const location = game.locations[game.index];
-  const plan = ROUND_PLAN[game.index];
+  const plan = game.plan[game.index];
   game.phase = "guessing";
   game.guess = null;
+  game.nameShown = false;
+  clearPhoto();
 
   $("prompt-round").textContent = `Round ${ROMAN[game.index]}`;
   $("prompt-difficulty").textContent = capitalise(location.difficulty);
   $("prompt-multiplier").textContent = formatMultiplier(plan.multiplier);
-  $("prompt-name").textContent = location.name;
+  if (plan.satellite) showPhoto(location);
+  else showName(location);
 
   // Replay the entrance animation each round.
   prompt.hidden = true;
@@ -248,16 +391,36 @@ function fitPadding() {
   };
 }
 
+function bonusText(round) {
+  const parts = [];
+  if (round.bullseye) {
+    parts.push(round.bonus > 0 ? `Within ${BULLSEYE_KM} km: bullseye bonus of +${round.bonus}.` : `Within ${BULLSEYE_KM} km: full marks.`);
+  }
+  if (round.sat) {
+    parts.push(round.satBonus > 0
+      ? `Guessed from the photo alone: +${round.satBonus} bonus.`
+      : "Guessed from the photo alone, but too far away for a bonus.");
+  }
+  return parts.join(" ");
+}
+
 async function confirmGuess() {
   if (!game || game.phase !== "guessing" || !game.guess) return;
   game.phase = "revealing";
   const location = game.locations[game.index];
-  const { multiplier } = ROUND_PLAN[game.index];
+  const plan = game.plan[game.index];
+  const { multiplier } = plan;
   const answer = { lat: location.lat, lng: location.lng };
-  const round = { ...evaluateGuess(game.guess, answer, multiplier), answer };
+  const satellite = Boolean(plan.satellite) && !game.nameShown;
+  const round = { ...evaluateGuess(game.guess, answer, multiplier, { satellite }), answer };
   const before = totalScore(game.rounds);
   game.rounds.push(round);
-  if (game.mode === "daily") saveDaily();
+  saveProgress();
+
+  // The name is revealed with the answer.
+  $("prompt-name").textContent = location.name;
+  $("prompt-name").classList.remove("is-hidden");
+  $("reveal-name").hidden = true;
 
   // Show the result panel first so the fit leaves room for it.
   confirmButton.hidden = true;
@@ -267,7 +430,10 @@ async function confirmGuess() {
   $("result-tier").replaceChildren(tierDot(round.tier), document.createTextNode(TIERS[round.tier].label));
   $("result-maths").textContent = `${formatMultiplier(multiplier)} · ${formatPoints(round.weighted)} pts`;
   $("result-points").textContent = "0";
+  $("result-of").textContent = `/${round.sat ? roundMax(plan) : 100}`;
   $("result-answer").textContent = location.name;
+  $("result-fact").textContent = location.notes || "";
+  $("result-fact").hidden = !location.notes;
   $("result-bonus").hidden = true;
   $("next-button").textContent = game.index === ROUNDS - 1 ? "See your results" : "Next round";
   $("next-button").disabled = true;
@@ -285,12 +451,10 @@ async function confirmGuess() {
   requestAnimationFrame(tallyTick);
   await counting;
 
-  if (round.bullseye) {
-    const bonus = $("result-bonus");
-    bonus.textContent = round.bonus > 0
-      ? `Within 25 km. Bullseye bonus of +${round.bonus}.`
-      : "Within 25 km. Full marks.";
-    bonus.hidden = false;
+  const bonus = bonusText(round);
+  if (bonus) {
+    $("result-bonus").textContent = bonus;
+    $("result-bonus").hidden = false;
   }
 
   game.phase = "revealed";
@@ -317,12 +481,155 @@ function saveDaily() {
   }
 }
 
+// ---------- Challenges ----------
+
+// Links look like /tapmap/?challenge=… and carry the five places (as short
+// codes) and the sender's round scores. They work without an account.
+const challengeKind = (g) => (g.mode === "daily" || g.mode === "archive" ? "daily" : g.plan.some((r) => r.satellite) ? "satellite" : "practice");
+
+function challengeLink(g) {
+  const code = encodeChallenge({
+    by: user && profile ? personName(profile) : null,
+    kind: challengeKind(g),
+    number: g.number,
+    places: g.locations.map((l) => l.name),
+    rounds: g.rounds,
+  });
+  return `${GAME_URL}/?challenge=${code}`;
+}
+
+// What playing a challenge means here: today's daily, a past game, or the
+// same five places as an unranked challenge. Null if the places are unknown.
+function resolveChallenge(code) {
+  const ch = decodeChallenge(code);
+  if (!ch) return null;
+  const plan = ch.kind === "satellite" ? SATELLITE_PLAN : ROUND_PLAN;
+  const sameAs = (locations) => locations.every((l, i) => l && placeCode(l.name) === ch.codes[i]);
+  if (ch.kind === "daily" && ch.number && ch.number <= todayNumber) {
+    if (ch.number === todayNumber && sameAs(todaysPlaces())) return { ch, code, plan, mode: "daily", number: todayNumber };
+    if (ch.number < todayNumber) {
+      const saved = savedMap(ARCHIVE_KEY)[ch.number];
+      const locations = saved && validPlaces(saved.locations) ? saved.locations : dailyLocations(dateForNumber(ch.number), allLocations);
+      if (sameAs(locations)) return { ch, code, plan, mode: "archive", number: ch.number };
+    }
+  }
+  const locations = resolvePlaces(ch.codes, allLocations);
+  if (!locations) return null;
+  return { ch, code, plan, mode: "challenge", locations: locations.map(snapshot) };
+}
+
+const challengerName = (ch) => ch.by || "A friend";
+const challengerTotal = ({ ch, plan }) =>
+  Math.round(ch.rounds.reduce((sum, r, i) => sum + r.score * plan[i].multiplier, 0));
+
+// Is this finished game the one the last opened challenge is about?
+function challengeFor(g) {
+  const code = storage.get(CHALLENGE_KEY);
+  if (!code || g.mode === "practice" || g.mode === "satellite") return null;
+  const resolved = resolveChallenge(code);
+  if (!resolved || resolved.mode !== g.mode) return null;
+  if (g.mode === "challenge") return resolved.code === g.code ? resolved : null;
+  return resolved.number === g.number ? resolved : null;
+}
+
+function startChallenge(resolved) {
+  $("challenge-invite").hidden = true;
+  if (resolved.mode === "daily") start("daily", { challenge: resolved });
+  else if (resolved.mode === "archive") start("archive", { number: resolved.number, challenge: resolved });
+  else start("challenge", { code: resolved.code, plan: resolved.plan, locations: resolved.locations, challenge: resolved });
+}
+
+function offerChallenge() {
+  const code = storage.get(CHALLENGE_KEY);
+  if (!code) return false;
+  const resolved = resolveChallenge(code);
+  if (!resolved) {
+    storage.set(CHALLENGE_KEY, null);
+    toast("That challenge link doesn't work any more.");
+    return false;
+  }
+  const { ch, plan } = resolved;
+  const max = maxScoreFor(plan);
+  const what = resolved.mode === "daily" ? "today's game"
+    : resolved.mode === "archive" ? `TapMap No. ${resolved.number}`
+      : ch.kind === "satellite" ? "five places in satellite practice" : "five practice places";
+  const done = resolved.mode === "daily" ? dailyDone()
+    : resolved.mode === "archive" ? ((savedMap(ARCHIVE_KEY)[resolved.number] || {}).rounds || []).length >= ROUNDS
+      : ((savedMap(CHALLENGES_KEY)[resolved.code] || {}).rounds || []).length >= ROUNDS;
+  $("challenge-title").textContent = `${challengerName(ch)} challenges you`;
+  $("challenge-text").textContent = `${challengerName(ch)} scored ${formatNumber(challengerTotal(resolved))} of ${formatNumber(max)} on ${what}. `
+    + (done ? "You've played it too. See how you compare, round by round."
+      : `Play the same five places and compare, round by round.${resolved.mode === "daily" ? " It counts as today's game." : " It's unranked, and saved on this device only."}`);
+  $("challenge-accept").textContent = done ? "See how you compare" : "Play the challenge";
+  $("challenge-accept").onclick = () => startChallenge(resolved);
+  $("challenge-skip").onclick = () => {
+    $("challenge-invite").hidden = true;
+    storage.set(CHALLENGE_KEY, null);
+    showIntro();
+  };
+  openOverlay($("challenge-invite"));
+  return true;
+}
+
+function renderComparison(finished) {
+  const section = $("challenge-compare");
+  const resolved = finished.challenge;
+  section.hidden = !resolved;
+  if (!resolved) return;
+  const { ch, plan } = resolved;
+  const them = challengerName(ch);
+  $("compare-them").textContent = them;
+  const rows = finished.rounds.map((mine, i) => {
+    const theirs = ch.rounds[i];
+    const tr = document.createElement("tr");
+    const place = document.createElement("th");
+    place.scope = "row";
+    const n = document.createElement("span");
+    n.className = "compare-n";
+    n.textContent = ROMAN[i];
+    const name = document.createElement("span");
+    name.className = "compare-name";
+    name.textContent = finished.locations[i].name;
+    const wrap = document.createElement("span");
+    wrap.className = "compare-place";
+    wrap.append(n, name);
+    place.append(wrap);
+    const cell = (round, wins) => {
+      const td = document.createElement("td");
+      if (wins) td.className = "is-winner";
+      td.append(tierDot(round.tier), document.createTextNode(` ${round.score}`));
+      return td;
+    };
+    tr.append(place, cell(theirs, theirs.score > mine.score), cell(mine, mine.score > theirs.score));
+    return tr;
+  });
+  const theirTotal = challengerTotal(resolved);
+  const myTotal = totalScore(finished.rounds);
+  const foot = document.createElement("tr");
+  foot.className = "compare-total";
+  const label = document.createElement("th");
+  label.scope = "row";
+  label.textContent = "Total";
+  const t1 = document.createElement("td");
+  t1.textContent = formatNumber(theirTotal);
+  const t2 = document.createElement("td");
+  t2.textContent = formatNumber(myTotal);
+  if (theirTotal > myTotal) t1.className = "is-winner";
+  if (myTotal > theirTotal) t2.className = "is-winner";
+  foot.append(label, t1, t2);
+  $("compare-rows").replaceChildren(...rows, foot);
+  const diff = Math.abs(myTotal - theirTotal);
+  $("compare-verdict").textContent = myTotal > theirTotal ? `You win by ${formatNumber(diff)} points.`
+    : myTotal < theirTotal ? `${them} wins by ${formatNumber(diff)} points.` : "It's a draw.";
+}
+
 // ---------- Results ----------
 
 let countdownTimer;
 
 function finishGame() {
   game.phase = "done";
+  clearPhoto();
   prompt.hidden = true;
   actionBar.hidden = true;
   globe.clear();
@@ -342,7 +649,8 @@ function breakdownRow(round, location, i) {
   name.textContent = location.name;
   const meta = document.createElement("p");
   meta.className = "meta";
-  meta.append(tierDot(round.tier), `${formatLength(round.distanceKm)} km${round.bullseye ? " · bullseye" : ""}`);
+  const notes = [round.bullseye ? "bullseye" : "", round.sat ? "from the photo" : ""].filter(Boolean);
+  meta.append(tierDot(round.tier), `${formatLength(round.distanceKm)} km${notes.map((t) => ` · ${t}`).join("")}`);
   info.append(name, meta);
 
   const score = document.createElement("p");
@@ -350,7 +658,7 @@ function breakdownRow(round, location, i) {
   score.textContent = String(round.score);
   const of = document.createElement("span");
   of.className = "of";
-  of.textContent = "/100";
+  of.textContent = round.sat ? "/120" : "/100";
   score.append(of);
   const small = document.createElement("small");
   small.textContent = `${formatMultiplier(round.multiplier)} · ${formatPoints(round.weighted)} pts`;
@@ -360,38 +668,129 @@ function breakdownRow(round, location, i) {
   return li;
 }
 
+const shareTitle = (g) => ({
+  daily: `TapMap #${g.number}`,
+  archive: `TapMap #${g.number} (past game)`,
+  practice: "TapMap Practice",
+  satellite: "TapMap Satellite",
+  challenge: "TapMap Challenge",
+}[g.mode]);
+
+const endLabel = (g) => {
+  if (g.mode === "daily") return `TapMap No. ${g.number} · ${longDateOf(today)}`;
+  if (g.mode === "archive") return `TapMap No. ${g.number} · ${longDateOf(g.dateKey)} · Unranked`;
+  return { practice: "Practice", satellite: "Satellite practice", challenge: "Challenge · Unranked" }[g.mode];
+};
+
+let shareImage = null; // { game, blob } drawn ahead so sharing is instant
+
+async function prepareShareImage(finished) {
+  const total = totalScore(finished.rounds);
+  const max = maxScoreFor(finished.plan);
+  const blob = await drawShareImage({
+    title: shareTitle(finished),
+    total,
+    max,
+    ratingText: ratingFor(total, max),
+    rounds: finished.rounds.map((r) => ({ guess: r.guess, answer: r.answer, tier: r.tier, score: r.score })),
+    colors: imageColors(),
+    url: GAME_URL,
+  });
+  shareImage = { game: finished, blob };
+  return blob;
+}
+
+async function shareImageFor(finished, text) {
+  const button = $("image-button");
+  button.disabled = true;
+  try {
+    const blob = shareImage && shareImage.game === finished ? shareImage.blob : await prepareShareImage(finished);
+    const name = `${shareTitle(finished).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}.png`;
+    const file = new File([blob], name, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], text });
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return; // they closed the share sheet
+      }
+    }
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    toast("Image saved");
+  } catch (error) {
+    console.error(error);
+    toast("Couldn't make the image. Try again.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function showEnd(finished) {
   const rounds = finished.rounds;
   const total = totalScore(rounds);
-  const practice = finished.mode === "practice";
+  const max = maxScoreFor(finished.plan);
+  const isDaily = finished.mode === "daily";
+  // Rounds saved before answers were stored get them from the places.
+  rounds.forEach((r, i) => { if (!r.answer) r.answer = { lat: finished.locations[i].lat, lng: finished.locations[i].lng }; });
+  if (!finished.challenge) finished.challenge = challengeFor(finished);
 
-  $("end-label").textContent = practice ? "Practice" : `TapMap No. ${todayNumber} · ${longDate}`;
-  $("end-rating").textContent = rating(total).label;
-  $("final-max").textContent = formatNumber(MAX_SCORE);
+  $("end-label").textContent = endLabel(finished);
+  $("end-rating").textContent = ratingFor(total, max);
+  $("final-max").textContent = formatNumber(max);
   $("final-points").textContent = "0";
   $("breakdown").replaceChildren(...rounds.map((r, i) => breakdownRow(r, finished.locations[i], i)));
+  $("unranked-note").hidden = isDaily;
+  $("unranked-note").textContent = finished.mode === "practice" || finished.mode === "satellite"
+    ? "Practice doesn't count towards your stats or streak."
+    : "Unranked: saved on this device only, and it doesn't count towards your stats or streak.";
 
   const stats = storage.get(STATS_KEY) || {};
+  $("end-stats").hidden = !isDaily;
   $("stat-played").textContent = formatNumber(stats.played || 0);
   $("stat-streak").textContent = formatNumber(currentStreak(stats, today));
   $("stat-best").textContent = formatNumber(stats.best || 0);
 
+  const practice = finished.mode === "practice";
   $("practice-button").textContent = practice ? "Practice again" : "Practice";
+  $("end-satellite-button").textContent = finished.mode === "satellite" ? "Satellite again" : "Satellite practice";
   const dailyButton = $("daily-results-button");
-  dailyButton.hidden = !practice;
+  dailyButton.hidden = isDaily;
   dailyButton.textContent = dailyDone() ? "Back to today's result" : "Play today's game";
 
-  const text = shareText({ number: todayNumber, practice, rounds, url: GAME_URL });
+  const text = shareText({ title: shareTitle(finished), rounds, max, url: GAME_URL });
   $("copy-button").onclick = async () => {
     toast((await copyText(text)) ? "Copied" : "Couldn't copy. Try again.");
   };
   const shareButton = $("share-button");
   shareButton.hidden = !navigator.share;
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
+  shareImage = null;
+  $("image-button").onclick = () => shareImageFor(finished, text);
+  $("challenge-button").onclick = async () => {
+    const link = challengeLink(finished);
+    const message = `Can you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: message });
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+      }
+    }
+    toast((await copyText(message)) ? "Challenge link copied" : "Couldn't copy. Try again.");
+  };
 
-  renderFriends(practice);
+  renderComparison(finished);
+  renderFriends(!isDaily);
+  renderLeague(!isDaily);
   updateSignInPrompts();
-  if (user) {
+  if (user && isDaily) {
     social.getStats(user.id).then((server) => {
       if (!server) return;
       $("stat-played").textContent = formatNumber(server.played);
@@ -403,6 +802,7 @@ async function showEnd(finished) {
   startCountdown();
   openOverlay($("end"));
   animateCount($("final-points"), 0, total, 1100);
+  prepareShareImage(finished).catch((error) => console.warn("Share image:", error));
 
   if (summary) summary.destroy();
   summary = null;
@@ -437,19 +837,61 @@ function startCountdown() {
   countdownTimer = setInterval(tick, 1000);
 }
 
+// ---------- Past games ----------
+
+function openArchive() {
+  const saved = savedMap(ARCHIVE_KEY);
+  const items = [];
+  for (let n = todayNumber - 1; n >= 1; n--) {
+    const entry = saved[n];
+    const played = entry && Array.isArray(entry.rounds) ? entry.rounds.length : 0;
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "archive-item";
+    const title = document.createElement("span");
+    title.className = "archive-title";
+    title.textContent = `No. ${n}`;
+    const when = document.createElement("span");
+    when.className = "archive-date";
+    when.textContent = shortDateOf(dateForNumber(n));
+    const status = document.createElement("span");
+    status.className = "archive-status";
+    if (played >= ROUNDS) {
+      status.textContent = formatNumber(totalScore(entry.rounds));
+      status.classList.add("is-done");
+    } else {
+      status.textContent = played ? `Round ${played + 1}/${ROUNDS}` : "Play";
+    }
+    button.append(title, when, status);
+    button.addEventListener("click", () => {
+      $("archive").hidden = true;
+      start("archive", { number: n });
+    });
+    li.append(button);
+    items.push(li);
+  }
+  $("archive-list").replaceChildren(...items);
+  $("archive-empty").hidden = items.length > 0;
+  openOverlay($("archive"));
+}
+
 // ---------- Starting games ----------
 
-function start(mode) {
+function start(mode, options = {}) {
   $("intro").hidden = true;
   $("end").hidden = true;
+  $("archive").hidden = true;
   clearInterval(countdownTimer);
   if (summary) {
     summary.destroy();
     summary = null;
   }
-  game = newGame(mode);
-  if (mode === "daily" && dailyDone()) {
+  game = newGame(mode, options);
+  if (game.rounds.length >= ROUNDS) {
     game.phase = "done";
+    prompt.hidden = true;
+    actionBar.hidden = true;
     updateHeader();
     showEnd(game);
     return;
@@ -459,12 +901,13 @@ function start(mode) {
 
 function showIntro({ help = false } = {}) {
   const partial = daily.rounds.length > 0 && !dailyDone();
-  $("intro-number").textContent = `No. ${todayNumber} · ${longDate}`;
+  $("intro-number").textContent = `No. ${todayNumber} · ${longDateOf(today)}`;
   $("play-button").textContent = dailyDone()
     ? "See today's result"
     : partial ? "Continue today's game" : "Play today's game";
   $("play-button").hidden = help;
   $("intro-practice-button").hidden = help;
+  $("intro-modes").hidden = help;
   $("intro-close").hidden = !help;
   updateSignInPrompts();
   openOverlay($("intro"));
@@ -480,11 +923,23 @@ $("play-button").addEventListener("click", () => start("daily"));
 $("intro-practice-button").addEventListener("click", () => start("practice"));
 $("practice-button").addEventListener("click", () => start("practice"));
 $("daily-results-button").addEventListener("click", () => start("daily"));
+$("intro-archive-button").addEventListener("click", openArchive);
+$("end-archive-button").addEventListener("click", openArchive);
+$("intro-satellite-button").addEventListener("click", () => start("satellite"));
+$("end-satellite-button").addEventListener("click", () => start("satellite"));
+$("archive-close").addEventListener("click", () => { $("archive").hidden = true; });
+$("reveal-name").addEventListener("click", () => {
+  if (game && game.phase === "guessing") showName(game.locations[game.index]);
+});
+$("prompt-img").addEventListener("click", () => $("prompt-photo").classList.toggle("is-large"));
 $("help-button").addEventListener("click", () => showIntro({ help: Boolean(game && game.phase !== "done") }));
 $("intro-close").addEventListener("click", () => { $("intro").hidden = true; });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !$("intro").hidden && !$("intro-close").hidden) $("intro").hidden = true;
+  if (event.key !== "Escape") return;
+  if (!$("intro").hidden && !$("intro-close").hidden) $("intro").hidden = true;
+  if (!$("archive").hidden) $("archive").hidden = true;
 });
+
 
 // ---------- Accounts & friends ----------
 
@@ -565,7 +1020,7 @@ async function syncDaily() {
   try {
     await social.saveGame(user.id, {
       date: today, number: todayNumber, rounds: daily.rounds, total: totalScore(daily.rounds),
-      names: todaysLocations.map((l) => l.name),
+      names: todaysPlaces().map((l) => l.name),
     });
   } catch (error) {
     console.error(error);
@@ -630,7 +1085,8 @@ function friendGuessCard(person, round) {
   stats.append(score, of);
   const meta = document.createElement("p");
   meta.className = "friend-card-meta";
-  if (TIERS[round.tier]) meta.append(tierDot(round.tier));
+  const tier = Number.isFinite(round.km) ? tierFor(round.km) : round.tier;
+  if (TIERS[tier]) meta.append(tierDot(tier));
   const km = Number.isFinite(round.km) ? `${formatLength(round.km)} km away` : "";
   const where = `${Math.abs(round.guess.lat).toFixed(1)}°${round.guess.lat >= 0 ? "N" : "S"}, ${Math.abs(round.guess.lng).toFixed(1)}°${round.guess.lng >= 0 ? "E" : "W"}`;
   meta.append(` ${[km, where].filter(Boolean).join(" · ")}`);
@@ -721,9 +1177,9 @@ function afterInvite() {
 
 // ---------- Results screen: friends today ----------
 
-async function renderFriends(practice) {
+async function renderFriends(notDaily) {
   const section = $("friends");
-  section.hidden = practice || !social.socialEnabled();
+  section.hidden = notDaily || !social.socialEnabled();
   if (section.hidden) return;
   $("friends-signin").hidden = Boolean(user);
   $("friends-list").replaceChildren();
@@ -748,7 +1204,10 @@ async function renderFriends(practice) {
       const tiers = document.createElement("span");
       tiers.className = "friend-tiers";
       tiers.setAttribute("aria-hidden", "true");
-      for (const r of row.rounds || []) if (TIERS[r.tier]) tiers.append(tierDot(r.tier));
+      for (const r of row.rounds || []) {
+        const tier = Number.isFinite(r.km) ? tierFor(r.km) : r.tier;
+        if (TIERS[tier]) tiers.append(tierDot(tier));
+      }
       const total = document.createElement("span");
       total.className = "friend-total";
       total.textContent = formatNumber(row.total);
@@ -759,6 +1218,63 @@ async function renderFriends(practice) {
   } catch (error) {
     console.error(error);
   }
+}
+
+// ---------- Results screen: this week's league ----------
+
+// Monday to Sunday, you and the players who accepted your follow, by points.
+async function renderLeague(notDaily) {
+  const section = $("league");
+  section.hidden = true;
+  if (notDaily || !user || !social.socialEnabled()) return;
+  const monday = weekStart(today);
+  const sunday = new Date(Date.parse(monday) + 6 * 86400000).toISOString().slice(0, 10);
+  $("league-dates").textContent = `${shortDateOf(monday)} – ${shortDateOf(sunday)}`;
+  try {
+    const rows = await social.weeklyLeague(monday);
+    if (!rows.length) return;
+    $("league-list").replaceChildren(...rows.map((row) => {
+      const you = row.user_id === user.id;
+      const person = you && profile ? profile : { id: row.user_id, username: row.username, display_name: row.display_name, avatar_url: row.avatar_url };
+      const li = document.createElement("li");
+      if (you) li.className = "is-you";
+      const rank = document.createElement("span");
+      rank.className = "league-rank";
+      rank.textContent = String(row.rank);
+      const who = document.createElement("a");
+      who.className = "person-link";
+      who.href = profileUrl(person.username);
+      who.append(avatarElement(person, "sm"));
+      const name = document.createElement("span");
+      name.className = "friend-name";
+      name.textContent = you ? "You" : personName(person);
+      who.append(name);
+      const played = document.createElement("span");
+      played.className = "league-played";
+      played.textContent = `${row.played} ${row.played === 1 ? "day" : "days"}`;
+      const points = document.createElement("span");
+      points.className = "friend-total";
+      points.textContent = formatNumber(row.points);
+      li.append(rank, who, played, points);
+      return li;
+    }));
+    $("league-empty").hidden = rows.some((r) => r.user_id !== user.id);
+    section.hidden = false;
+  } catch (error) {
+    // (Hidden until setup.sql has been re-run to create weekly_league.)
+    console.warn("Weekly league:", error);
+  }
+}
+
+// Saves the player's time zone to their profile (when it changes), so the
+// streak on their profile uses their own date, like the game does.
+function saveTimeZone() {
+  let zone = null;
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
+  if (!user || !zone) return;
+  const key = `tapmap:v5:tz:${user.id}`;
+  if (store.get(key) === zone) return;
+  social.saveTimeZone(user.id, zone).then(() => store.set(key, zone)).catch((error) => console.warn("Time zone:", error));
 }
 
 // Signed-out players get a clear way to sign in on the intro and results screens.
@@ -793,12 +1309,16 @@ async function onSignedIn(nextUser) {
     await syncDaily();
     loadFriendGames();
     refreshRequestBadge();
+    saveTimeZone();
   }
   updateAccountButton();
   updateSignInPrompts();
   if (user) $("account").hidden = true;
   else if (!$("account").hidden) renderAccount();
-  if (!$("end").hidden && game) renderFriends(game.mode === "practice");
+  if (!$("end").hidden && game) {
+    renderFriends(game.mode !== "daily");
+    renderLeague(game.mode !== "daily");
+  }
   if (user && !(await offerInvite())) afterInvite();
 }
 
@@ -981,13 +1501,16 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !$("account").hidden) $("account").hidden = true;
 });
 
-// Read ?invite= and ?signin= once, then tidy the address bar.
+// Read ?invite=, ?signin= and ?challenge= once, then tidy the address bar.
 const params = new URLSearchParams(window.location.search);
 const pendingSignIn = params.has("signin");
+const openedChallenge = Boolean(params.get("challenge") && decodeChallenge(params.get("challenge")));
+if (openedChallenge) storage.set(CHALLENGE_KEY, params.get("challenge"));
+else if (params.has("challenge")) window.addEventListener("load", () => toast("That challenge link isn't complete. Ask for it again."));
 if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
   store.set(INVITE_KEY, params.get("invite").toLowerCase());
 }
-if (params.has("invite") || params.has("signin")) {
+if (params.has("invite") || params.has("signin") || params.has("challenge")) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 // The profile button is always there (it opens sign-in until you're signed in).
@@ -1002,6 +1525,7 @@ async function boot() {
   window.tapmapReady = true;
   updateHeader();
   bootSocial();
+  if (openedChallenge && offerChallenge()) return;
   if (daily.rounds.length > 0) start("daily");
   else showIntro();
 }
