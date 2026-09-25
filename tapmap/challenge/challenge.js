@@ -24,12 +24,15 @@ function toast(text) {
   toastTimer = setTimeout(() => el.classList.remove("is-visible"), 1800);
 }
 
+// What kind of game the challenge is, for the heading and the sentence.
+const KIND_LABELS = { daily: "Daily game", practice: "Random places", photo: "Photos" };
 function describe(row) {
   if (row.kind === "daily" && row.game_number) {
     const date = new Date(`${dateForNumber(row.game_number)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
-    return `TapMap No. ${row.game_number} (${date})`;
+    return `TapMap No. ${row.game_number}, the daily game for ${date}`;
   }
-  return row.kind === "photo" ? "five places shown as photos" : "five random places";
+  if (row.kind === "photo") return "five places shown only as photos";
+  return "five random places, named each round";
 }
 
 function resultRow(rank, person, total, { you = false, sender = false, note = "" } = {}) {
@@ -89,6 +92,7 @@ export async function showChallenge(id) {
   const tooEarly = row.kind === "daily" && row.game_number > gameNumber(todayKey());
 
   document.title = `${senderName}'s challenge · TapMap`;
+  $("challenge-eyebrow").textContent = `Challenge · ${KIND_LABELS[row.kind] || "Practice"}`;
   $("challenge-heading").textContent = isSender ? "Your challenge" : `${senderName} challenges you`;
   $("challenge-lead").textContent = `${isSender ? "You" : senderName} scored ${formatNumber(row.total)} of ${formatNumber(MAX_SCORE)} on ${describe(row)}.`
     + (isSender ? " Share it and see how everyone does." : " Play the same five places and see how you compare, round by round.")

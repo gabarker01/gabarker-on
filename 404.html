@@ -199,7 +199,7 @@
 
     <!-- A challenge: /tapmap/challenge/{id} -->
     <section id="challenge-view" hidden>
-      <p class="eyebrow">Challenge</p>
+      <p id="challenge-eyebrow" class="eyebrow">Challenge</p>
       <h1 id="challenge-heading" class="sheet-title"></h1>
       <p id="challenge-lead" class="lead"></p>
       <div class="profile-actions">
@@ -235,7 +235,7 @@
       // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
       window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
     } else if (challenge) {
-      import("/tapmap/challenge/challenge.js?v=3").then((m) => m.showChallenge(challenge[1]));
+      import("/tapmap/challenge/challenge.js?v=4").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;
