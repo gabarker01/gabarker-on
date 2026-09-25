@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="TapMap, a daily geography game. Five places, one globe. Tap where you think each one is.">
+  <meta name="author" content="George Barker">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:title" content="TapMap, the daily geography game">
+  <meta property="og:description" content="Five places, one globe. Tap where you think each one is.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gabarker.com/tapmap/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b0d12'/%3E%3Ccircle cx='18' cy='22' r='12' fill='%231c2a3d'/%3E%3Cellipse cx='18' cy='22' rx='5' ry='12' fill='none' stroke='%23f1ece2' stroke-opacity='.3' stroke-width='.8'/%3E%3Cpath d='M6 22h24' stroke='%23f1ece2' stroke-opacity='.3' stroke-width='.8'/%3E%3Cpath d='M10 27C13 15 23 10 28.5 11.5' fill='none' stroke='%23d9b26a' stroke-width='1.6' stroke-linecap='round' stroke-dasharray='1.4 2.6'/%3E%3Cpath d='M29 14.5c-.6-2.1-3.4-3.3-3.4-6a3.4 3.4 0 0 1 6.8 0c0 2.7-2.8 3.9-3.4 6z' fill='%23d9b26a'/%3E%3C/svg%3E">
+  <title>TapMap · A daily geography game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="tapmap.css?v=16">
+</head>
+<body>
+  <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
+
+  <header class="topbar">
+    <a class="wordmark" href="/tapmap/" aria-label="TapMap home">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <radialGradient id="mark-sphere" cx="38%" cy="32%" r="75%">
+            <stop offset="0" stop-color="var(--mark-light)"/>
+            <stop offset="1" stop-color="var(--mark-deep)"/>
+          </radialGradient>
+          <clipPath id="mark-clip"><circle cx="18" cy="21" r="14"/></clipPath>
+        </defs>
+        <circle cx="18" cy="21" r="16.5" fill="none" stroke="var(--accent)" stroke-opacity="0.35" stroke-width="0.8"/>
+        <circle cx="18" cy="21" r="14" fill="url(#mark-sphere)"/>
+        <g clip-path="url(#mark-clip)" fill="none" stroke="var(--mark-line)" stroke-width="0.7">
+          <ellipse cx="18" cy="21" rx="6" ry="14"/>
+          <path d="M4 21h28M5.8 14.5c7.4 2.2 17 2.2 24.4 0M5.8 27.5c7.4-2.2 17-2.2 24.4 0"/>
+        </g>
+        <path class="mark-arc" d="M9 27C13 13 24 9 29.5 10.5" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1.2 2.6"/>
+        <path d="M30 13.2c-.5-1.9-3.1-3-3.1-5.5a3.1 3.1 0 0 1 6.2 0c0 2.5-2.6 3.6-3.1 5.5z" fill="var(--accent)"/>
+        <circle cx="30" cy="7.7" r="1.1" fill="var(--paper)"/>
+      </svg>
+      <span class="wordmark-text">
+        <span class="wordmark-name">Tap<em>Map</em></span>
+        <span id="game-label" class="wordmark-edition"></span>
+      </span>
+    </a>
+    <div class="status">
+      <div id="progress" class="progress" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p id="tally" class="tally" aria-live="polite"></p>
+    </div>
+    <div class="topbar-actions">
+      <button id="account-button" class="ghost-button account-button" type="button" aria-label="Sign in" hidden>
+        <svg class="icon-person" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 19.5c1.2-3.4 4-5 7-5s5.8 1.6 7 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span id="account-avatar" class="account-avatar" hidden></span>
+        <span id="request-badge" class="request-badge" hidden></span>
+      </button>
+      <button id="help-button" class="ghost-button" type="button" aria-label="How to play">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section id="prompt" class="panel prompt" aria-live="polite" hidden>
+    <p class="prompt-meta">
+      <span id="prompt-round"></span>
+      <span class="sep" aria-hidden="true"></span>
+      <span id="prompt-difficulty"></span>
+      <span class="sep" aria-hidden="true"></span>
+      <span id="prompt-multiplier" class="multiplier"></span>
+    </p>
+    <h1 id="prompt-name" class="prompt-name"></h1>
+    <div id="prompt-photo" class="prompt-photo" hidden>
+      <img id="prompt-img" alt="Satellite photo of the place to find. Tap to enlarge." width="512" height="512" hidden>
+      <p id="prompt-photo-status" class="prompt-photo-status"></p>
+    </div>
+    <button id="reveal-name" class="link-button" type="button" hidden>Show the name (no photo bonus)</button>
+  </section>
+
+  <div class="zoom-controls" role="group" aria-label="Zoom">
+    <button id="zoom-in" class="ghost-button" type="button" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 6v12M6 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <button id="zoom-out" class="ghost-button" type="button" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <section id="action-bar" class="panel action-bar" hidden>
+    <p id="tap-help" class="tap-help">Tap the globe to place your pin</p>
+    <button id="confirm-button" class="primary-button" type="button" disabled>Confirm</button>
+
+    <div id="result" class="result" hidden>
+      <div class="result-grid">
+        <div>
+          <p class="result-distance"><span id="result-km"></span><span class="unit">km</span></p>
+          <p class="result-sub"><span id="result-mi"></span><span class="sep" aria-hidden="true"></span> <span id="result-tier" class="tier"></span></p>
+        </div>
+        <div class="result-points">
+          <p class="points"><span id="result-points">0</span><span id="result-of" class="of">/100</span></p>
+          <p id="result-maths" class="result-sub"></p>
+        </div>
+      </div>
+      <p id="result-bonus" class="result-bonus" hidden></p>
+      <p class="result-answer"><span class="label">Answer</span> <span id="result-answer"></span></p>
+      <p id="result-fact" class="result-fact" hidden></p>
+      <button id="next-button" class="primary-button" type="button">Next round</button>
+    </div>
+  </section>
+
+  <!-- Intro -->
+  <div id="intro" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+      <p class="eyebrow" id="intro-number"></p>
+      <h2 id="intro-title" class="sheet-title">Five places.<br><em>One globe.</em></h2>
+      <ol class="steps">
+        <li><span class="step-n">i</span><p>Tap the globe where you think the place is. Tap again to move your pin, then confirm.</p></li>
+        <li><span class="step-n">ii</span><p>Each round is scored out of <strong>100</strong>. The closer you land, the more you score, with a small bonus inside 25&nbsp;km.</p></li>
+        <li><span class="step-n">iii</span><p>Rounds grow harder and weigh more, from <strong>×1</strong> to <strong>×3</strong>, for a game total out of <strong>1,000</strong>.</p></li>
+        <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight, your time.</p></li>
+      </ol>
+      <ul class="legend" aria-label="Distance bands">
+        <li><span class="tier-dot t-bullseye"></span>Under 25 km</li>
+        <li><span class="tier-dot t-close"></span>500</li>
+        <li><span class="tier-dot t-near"></span>1,500</li>
+        <li><span class="tier-dot t-far"></span>3,000</li>
+        <li><span class="tier-dot t-off"></span>Beyond</li>
+      </ul>
+      <button id="play-button" class="primary-button" type="button">Play today's game</button>
+      <button id="intro-practice-button" class="secondary-button" type="button">Practice</button>
+      <div id="intro-modes" class="mode-row">
+        <button id="intro-archive-button" class="chip-button" type="button">Past games</button>
+        <button id="intro-satellite-button" class="chip-button" type="button">Satellite practice</button>
+      </div>
+      <div id="intro-signin" class="signin-cta" hidden>
+        <p>Save your streak, see your stats and play with friends.</p>
+        <button id="intro-signin-button" class="cta-button" type="button">Sign in or create account</button>
+      </div>
+      <button id="intro-close" class="secondary-button" type="button" hidden>Back to the game</button>
+      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="end" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <p class="eyebrow" id="end-label"></p>
+      <h2 id="end-title" class="final"><span id="final-points">0</span> <span class="final-of">of <span id="final-max">1,000</span></span></h2>
+      <p id="end-rating" class="rating"></p>
+
+      <div id="summary-globe" class="summary-globe" role="img" aria-label="Globe showing all five guesses and answers"></div>
+
+      <div class="share-row">
+        <button id="copy-button" class="primary-button" type="button">Copy result</button>
+        <button id="share-button" class="secondary-button" type="button" hidden>Share</button>
+        <div class="mode-row">
+          <button id="image-button" class="chip-button" type="button">Share image</button>
+          <button id="challenge-button" class="chip-button" type="button">Challenge a friend</button>
+        </div>
+      </div>
+
+      <p id="unranked-note" class="unranked-note" hidden></p>
+
+      <section id="challenge-compare" class="compare" hidden>
+        <h3 class="section-label">Challenge</h3>
+        <p id="compare-verdict" class="compare-verdict"></p>
+        <table class="compare-table">
+          <thead><tr><th scope="col">Round</th><th scope="col" id="compare-them">Them</th><th scope="col">You</th></tr></thead>
+          <tbody id="compare-rows"></tbody>
+        </table>
+      </section>
+
+      <div id="end-signin" class="signin-cta end-signin" hidden>
+        <p><strong>Save today's score.</strong> Create a free account to keep your streak, track your stats and compare with friends.</p>
+        <button id="end-signin-button" class="cta-button" type="button">Create account or sign in</button>
+      </div>
+
+      <ol id="breakdown" class="breakdown"></ol>
+
+      <section id="friends" class="friends" hidden>
+        <h3 class="section-label">Friends today</h3>
+        <ol id="friends-list" class="friends-list"></ol>
+        <p id="friends-empty" class="friends-empty" hidden>Nobody you follow has played today yet.</p>
+        <button id="friends-signin" class="link-button centered" type="button" hidden>Sign in to compare with friends</button>
+      </section>
+
+      <section id="league" class="friends league" hidden>
+        <h3 class="section-label">This week <span id="league-dates" class="section-note"></span></h3>
+        <ol id="league-list" class="friends-list league-list"></ol>
+        <p id="league-empty" class="friends-empty" hidden>Nobody you follow has played this week yet.</p>
+      </section>
+
+      <dl id="end-stats" class="stats">
+        <div><dt>Played</dt><dd id="stat-played">0</dd></div>
+        <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
+        <div><dt>Best</dt><dd id="stat-best">0</dd></div>
+      </dl>
+      <p id="next-game" class="next-game"></p>
+
+      <button id="practice-button" class="secondary-button" type="button">Practice</button>
+      <div class="mode-row">
+        <button id="end-archive-button" class="chip-button" type="button">Past games</button>
+        <button id="end-satellite-button" class="chip-button" type="button">Satellite practice</button>
+      </div>
+      <button id="daily-results-button" class="link-button centered" type="button" hidden>Back to today's result</button>
+      <p class="colophon">George Barker · <a href="/">gabarker.com</a><br><span class="credit">Imagery © Esri, Maxar, Earthstar Geographics</span></p>
+    </div>
+  </div>
+
+  <!-- Past games -->
+  <div id="archive" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+      <p class="eyebrow">Past games</p>
+      <h2 id="archive-title" class="sheet-title">Play an<br><em>earlier day.</em></h2>
+      <p class="lead">Past games are unranked. They're saved on this device only and don't count towards your stats or streak.</p>
+      <ol id="archive-list" class="archive-list"></ol>
+      <p id="archive-empty" class="friends-empty" hidden>No past games yet. Tomorrow, today's game joins the archive.</p>
+      <button id="archive-close" class="secondary-button" type="button">Close</button>
+    </div>
+  </div>
+
+  <!-- Challenge link -->
+  <div id="challenge-invite" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="challenge-title">
+      <p class="eyebrow">Challenge</p>
+      <h2 id="challenge-title" class="sheet-title"></h2>
+      <p id="challenge-text" class="lead"></p>
+      <button id="challenge-accept" class="primary-button" type="button">Play the challenge</button>
+      <button id="challenge-skip" class="secondary-button" type="button">Not now</button>
+    </div>
+  </div>
+
+  <!-- Account -->
+  <div id="account" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="account-title">
+      <div id="account-signed-out">
+        <p class="eyebrow">Account</p>
+        <h2 id="account-title" class="sheet-title">Keep your<br><em>streak.</em></h2>
+        <p class="lead">Sign in to save your results, track your stats across devices and follow friends.</p>
+        <p id="invite-note" class="invite-note" hidden></p>
+        <div id="provider-buttons" class="provider-buttons"></div>
+        <form id="email-form" class="email-form" hidden novalidate>
+          <p class="field-label or-label">Or use a username</p>
+          <label for="email-input" class="field-label">Username</label>
+          <input id="email-input" class="field" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="username" required aria-describedby="username-error">
+          <p id="username-error" class="field-error" role="alert" hidden></p>
+          <label for="password-input" class="field-label">Password <span class="hint">at least 8 characters</span></label>
+          <input id="password-input" class="field" type="password" autocomplete="current-password" minlength="8" required aria-describedby="password-error">
+          <p id="password-error" class="field-error" role="alert" hidden></p>
+          <button id="password-sign-in" class="primary-button form-button" type="submit">Sign in</button>
+          <button id="password-sign-up" class="secondary-button" type="button">Create account</button>
+          <p class="form-note">Usernames are 3–20 lowercase letters, numbers or _. There's no email, so keep your password safe: it can't be reset.</p>
+        </form>
+      </div>
+
+      <form id="recovery-form" class="email-form recovery-form" hidden novalidate>
+        <p class="eyebrow">Account</p>
+        <h2 class="sheet-title">New <em>password.</em></h2>
+        <label for="new-password" class="field-label">New password <span class="hint">at least 8 characters</span></label>
+        <input id="new-password" class="field" type="password" autocomplete="new-password" minlength="8" required>
+        <p id="new-password-error" class="field-error" role="alert" hidden></p>
+        <button class="primary-button form-button" type="submit">Save password</button>
+      </form>
+
+      <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
+      <button id="account-close" class="secondary-button" type="button">Close</button>
+    </div>
+  </div>
+
+  <!-- Invite: follow the person who shared the link -->
+  <div id="invite-prompt" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <div class="account-head">
+        <span id="invite-avatar"></span>
+        <div>
+          <p class="eyebrow">Invitation</p>
+          <h2 id="invite-title" class="sheet-title account-name"></h2>
+          <p id="invite-handle" class="account-handle"></p>
+        </div>
+      </div>
+      <p id="invite-text" class="lead"></p>
+      <button id="invite-follow" class="primary-button" type="button">Send follow request</button>
+      <button id="invite-skip" class="secondary-button" type="button">Not now</button>
+      <p id="invite-message" class="account-message" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <p id="load-error" class="load-error" role="alert" hidden>
+    TapMap couldn't load. Check your connection and refresh the page.
+  </p>
+
+  <script type="module" src="tapmap.js?v=20"></script>
+  <script>
+    setTimeout(() => {
+      if (!window.tapmapReady) document.getElementById("load-error").hidden = false;
+    }, 15000);
+  </script>
+</body>
+</html>

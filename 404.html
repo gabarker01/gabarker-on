@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" class="profile-root">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex">
+  <title>TapMap</title>
+  <!-- GitHub Pages serves this page for any unknown address. It renders
+       TapMap profiles at /tapmap/profile/{username}; anything else gets a
+       normal "not found" message. All paths here are absolute. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b0d12'/%3E%3Ccircle cx='18' cy='22' r='12' fill='%231c2a3d'/%3E%3Cpath d='M10 27C13 15 23 10 28.5 11.5' fill='none' stroke='%23d9b26a' stroke-width='1.6' stroke-linecap='round' stroke-dasharray='1.4 2.6'/%3E%3Cpath d='M29 14.5c-.6-2.1-3.4-3.3-3.4-6a3.4 3.4 0 0 1 6.8 0c0 2.7-2.8 3.9-3.4 6z' fill='%23d9b26a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=16">
+</head>
+<body class="profile-page">
+  <header class="profile-bar">
+    <a class="wordmark" href="/tapmap/" aria-label="Back to TapMap">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <radialGradient id="mark-sphere" cx="38%" cy="32%" r="75%">
+            <stop offset="0" stop-color="var(--mark-light)"/>
+            <stop offset="1" stop-color="var(--mark-deep)"/>
+          </radialGradient>
+          <clipPath id="mark-clip"><circle cx="18" cy="21" r="14"/></clipPath>
+        </defs>
+        <circle cx="18" cy="21" r="16.5" fill="none" stroke="var(--accent)" stroke-opacity="0.35" stroke-width="0.8"/>
+        <circle cx="18" cy="21" r="14" fill="url(#mark-sphere)"/>
+        <g clip-path="url(#mark-clip)" fill="none" stroke="var(--mark-line)" stroke-width="0.7">
+          <ellipse cx="18" cy="21" rx="6" ry="14"/>
+          <path d="M4 21h28M5.8 14.5c7.4 2.2 17 2.2 24.4 0M5.8 27.5c7.4-2.2 17-2.2 24.4 0"/>
+        </g>
+        <path class="mark-arc" d="M9 27C13 13 24 9 29.5 10.5" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1.2 2.6"/>
+        <path d="M30 13.2c-.5-1.9-3.1-3-3.1-5.5a3.1 3.1 0 0 1 6.2 0c0 2.5-2.6 3.6-3.1 5.5z" fill="var(--accent)"/>
+        <circle cx="30" cy="7.7" r="1.1" fill="var(--paper)"/>
+      </svg>
+      <span class="wordmark-text">
+        <span class="wordmark-name">Tap<em>Map</em></span>
+      </span>
+    </a>
+    <a class="chip-button" href="/tapmap/">Play today's game</a>
+  </header>
+
+  <main class="profile-main">
+    <!-- Not a profile address -->
+    <section id="not-found" hidden>
+      <p class="eyebrow">404</p>
+      <h1 class="sheet-title">Page not <em>found.</em></h1>
+      <p class="lead">There's nothing at this address.</p>
+      <a class="primary-button link-as-button" href="/tapmap/">Go to TapMap</a>
+    </section>
+
+    <p id="profile-loading" class="profile-note">Loading…</p>
+
+    <!-- No such player -->
+    <section id="no-player" hidden>
+      <p class="eyebrow">Player</p>
+      <h1 class="sheet-title">No one <em>here.</em></h1>
+      <p id="no-player-text" class="lead"></p>
+      <a class="primary-button link-as-button" href="/tapmap/">Go to TapMap</a>
+    </section>
+
+    <!-- A profile (yours or someone else's) -->
+    <section id="profile" hidden>
+      <div class="account-head">
+        <span id="profile-avatar"></span>
+        <div>
+          <p id="profile-eyebrow" class="eyebrow">Player</p>
+          <h1 id="profile-name" class="sheet-title account-name"></h1>
+          <p id="profile-handle" class="account-handle"></p>
+        </div>
+      </div>
+
+      <div id="photo-controls" class="photo-controls" hidden>
+        <label class="chip-button" for="photo-input">Change photo</label>
+        <input id="photo-input" type="file" accept="image/*" hidden>
+        <button id="photo-remove" class="chip-button" type="button" hidden>Remove photo</button>
+        <p id="photo-error" class="field-error" role="alert" hidden></p>
+      </div>
+
+      <div class="profile-actions">
+        <button id="profile-action" class="primary-button" type="button" hidden></button>
+        <button id="invite-button" class="primary-button" type="button" hidden>Invite a friend</button>
+      </div>
+      <p id="profile-private" class="profile-note" hidden></p>
+
+      <div id="profile-details" hidden>
+        <dl class="stats account-stats">
+          <div><dt>Played</dt><dd id="stat-played">–</dd></div>
+          <div><dt>Streak</dt><dd id="stat-streak">–</dd></div>
+          <div><dt>Best</dt><dd id="stat-best">–</dd></div>
+          <div><dt>Average</dt><dd id="stat-average">–</dd></div>
+        </dl>
+
+        <h2 class="section-label">Today</h2>
+        <div id="profile-today" class="person-today"></div>
+
+        <!-- Your own charts -->
+        <section id="my-charts" class="charts" hidden>
+          <h2 class="section-label">Your charts</h2>
+          <div id="chart-scores"></div>
+          <div id="chart-rounds"></div>
+          <div id="chart-tiers"></div>
+        </section>
+
+        <!-- You compared with this player -->
+        <section id="compare" class="charts" hidden>
+          <h2 id="compare-title" class="section-label">You vs them</h2>
+          <dl id="head-to-head" class="stats h2h"></dl>
+          <div id="chart-compare-scores"></div>
+          <div id="chart-compare-rounds"></div>
+        </section>
+
+        <h2 class="section-label">Recent games</h2>
+        <ol id="history" class="history"></ol>
+        <p id="history-empty" class="friends-empty" hidden>No games yet.</p>
+      </div>
+
+      <!-- Only on your own profile -->
+      <div id="own-sections" hidden>
+        <section id="requests-section" hidden>
+          <h2 class="section-label">Follow requests</h2>
+          <ul id="requests-list" class="people-list"></ul>
+        </section>
+
+        <h2 class="section-label">Following</h2>
+        <ul id="following-list" class="people-list"></ul>
+        <p id="following-empty" class="friends-empty">You're not following anyone yet. Follows start as requests: once someone accepts, you'll see their profile and scores.</p>
+
+        <h2 class="section-label">Followers</h2>
+        <ul id="followers-list" class="people-list"></ul>
+        <p id="followers-empty" class="friends-empty">Nobody follows you yet. Invite a friend to get started.</p>
+
+        <h2 class="section-label">Find people</h2>
+        <label for="people-search" class="field-label">Search by username or name</label>
+        <input id="people-search" class="field" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. george">
+        <p id="search-status" class="field-hint" role="status" aria-live="polite"></p>
+        <ul id="people-results" class="people-list"></ul>
+
+        <h2 class="section-label">Profile</h2>
+        <form id="profile-form" class="profile-form" novalidate>
+          <label for="display-name" class="field-label">Display name</label>
+          <input id="display-name" class="field" type="text" maxlength="40" required>
+          <p id="display-name-error" class="field-error" role="alert" hidden></p>
+          <label for="username" class="field-label">Username <span class="hint">3–20 letters, numbers or _</span> <span id="username-lock" class="hint" hidden>· used to sign in, so it can't change</span></label>
+          <input id="username" class="field" type="text" maxlength="20" autocapitalize="off" spellcheck="false" required>
+          <p id="username-field-error" class="field-error" role="alert" hidden></p>
+          <button class="secondary-button" type="submit">Save profile</button>
+        </form>
+
+        <button id="sign-out" class="link-button centered" type="button">Sign out</button>
+      </div>
+
+      <!-- Signed out, looking at someone -->
+      <div id="signed-out-note" hidden>
+        <p class="profile-note">Sign in to follow and see their scores.</p>
+        <a id="sign-in-link" class="primary-button link-as-button" href="/tapmap/?signin=1">Sign in</a>
+      </div>
+      <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module">
+    const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
+    if (match) {
+      import("/tapmap/profile/profile.js?v=4").then((m) => m.showProfile(decodeURIComponent(match[1])));
+    } else {
+      document.getElementById("profile-loading").hidden = true;
+      document.getElementById("not-found").hidden = false;
+      document.title = "Page not found · TapMap";
+    }
+  </script>
+</body>
+</html>

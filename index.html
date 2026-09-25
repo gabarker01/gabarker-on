@@ -3,30 +3,85 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Something new is on the way.">
-  <title>Coming Soon</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="description" content="gabarker.com: the personal site of George Barker. Launching soon.">
+  <meta name="author" content="George Barker">
+  <meta property="og:title" content="gabarker.com">
+  <meta property="og:description" content="The personal site of George Barker. Launching soon.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gabarker.com">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b5bdb'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='16' font-weight='700' fill='%23fff' text-anchor='middle'%3EGB%3C/text%3E%3C/svg%3E">
+  <title>gabarker.com</title>
+  <script>
+    // Apply a saved theme before first paint to avoid a flash.
+    document.documentElement.classList.add("js");
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
-  <main class="container">
-    <p class="eyebrow">Under construction</p>
-    <h1>Something new is <span class="accent">coming soon</span>.</h1>
-    <p class="lead">
-      We're working on it. Check back shortly, or leave your email and we'll let you know when it's live.
-    </p>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-    <form id="notify-form" class="notify" novalidate>
-      <label for="email" class="visually-hidden">Email address</label>
-      <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
-      <button type="submit">Notify me</button>
-    </form>
-    <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="gabarker.com home">
+        <span class="brand-mark" aria-hidden="true">GB</span>
+        <span class="brand-name">gabarker.com</span>
+      </a>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <section class="hero reveal">
+      <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Under construction</p>
+      <h1>Something new is <span class="accent">coming soon</span>.</h1>
+      <p class="lead">
+        gabarker.com is being built. Leave your email and you'll get a note when it launches.
+      </p>
+
+      <form id="notify-form" class="notify" novalidate>
+        <label for="email" class="visually-hidden">Email address</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+        <button type="submit">Notify me</button>
+      </form>
+      <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="preview reveal" aria-labelledby="preview-heading">
+      <h2 id="preview-heading" class="section-label">What's coming</h2>
+      <ul class="cards">
+        <li class="card">
+          <svg class="card-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <h3>About</h3>
+          <p>Background, experience and the work George focuses on.</p>
+        </li>
+        <li class="card">
+          <svg class="card-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <h3>Work</h3>
+          <p>Selected projects and case studies.</p>
+        </li>
+        <li class="card">
+          <svg class="card-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 7l9 6 9-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <h3>Contact</h3>
+          <p>A simple way to get in touch.</p>
+        </li>
+      </ul>
+    </section>
   </main>
 
   <footer class="footer">
-    <p>&copy; <span id="year"></span> All rights reserved.</p>
+    <p class="footer-name">George Barker</p>
+    <p>&copy; <span id="year"></span> gabarker.com. All rights reserved.</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>
