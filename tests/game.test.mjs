@@ -8,13 +8,16 @@ import {
 } from "../tapmap/game.js";
 import { LOCATIONS } from "../tapmap/locations.js";
 
-test("one bullseye distance: the 🎯 band and the bonus both stop at 25 km", () => {
-  assert.equal(BULLSEYE_KM, 25);
-  assert.equal(tierFor(24.9), "🎯");
-  assert.equal(scoreRound(24.9).bullseye, true);
-  assert.equal(tierFor(25), "🟩");
-  assert.equal(scoreRound(25).bullseye, false);
-  assert.equal(tierFor(40), "🟩"); // was 🎯 when the band was 50 km
+test("within 20 km is a bullseye: full marks, and the 🎯 band", () => {
+  assert.equal(BULLSEYE_KM, 20);
+  assert.equal(tierFor(19.9), "🎯");
+  assert.equal(scoreRound(19.9).score, 100);
+  assert.equal(scoreRound(15).score, 100);
+  assert.equal(scoreRound(0).score, 100);
+  assert.equal(tierFor(20), "🟩");
+  assert.equal(scoreRound(20).bullseye, false);
+  assert.equal(scoreRound(20).score, 99); // just outside: no jump to speak of
+  assert.equal(tierFor(40), "🟩");
 });
 
 test("every rating has an emoji, out of the game's own maximum", () => {

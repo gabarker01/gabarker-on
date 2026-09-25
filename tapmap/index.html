@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=22">
+  <link rel="stylesheet" href="tapmap.css?v=23">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -189,12 +189,12 @@
       <h2 id="intro-title" class="sheet-title">Five places.<br><em>One globe.</em></h2>
       <ol class="steps">
         <li><span class="step-n">i</span><p>Tap the globe where you think the place is. Tap again to move your pin, then confirm.</p></li>
-        <li><span class="step-n">ii</span><p>Each round is scored out of <strong>100</strong>. The closer you land, the more you score, with a small bonus inside 25&nbsp;km.</p></li>
+        <li><span class="step-n">ii</span><p>Each round is scored out of <strong>100</strong>. The closer you land, the more you score, and anywhere within 20&nbsp;km scores full marks.</p></li>
         <li><span class="step-n">iii</span><p>Rounds grow harder and weigh more, from <strong>×1</strong> to <strong>×3</strong>, for a game total out of <strong>1,000</strong>.</p></li>
         <li><span class="step-n">iv</span><p>Everyone plays the same five places each day. A new game begins at midnight, your time.</p></li>
       </ol>
       <ul class="legend" aria-label="Distance bands">
-        <li><span class="tier-dot t-bullseye"></span>Under 25 km</li>
+        <li><span class="tier-dot t-bullseye"></span>Under 20 km</li>
         <li><span class="tier-dot t-close"></span>500</li>
         <li><span class="tier-dot t-near"></span>1,500</li>
         <li><span class="tier-dot t-far"></span>3,000</li>
@@ -283,7 +283,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=30"></script>
+  <script type="module" src="tapmap.js?v=31"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

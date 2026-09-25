@@ -144,8 +144,16 @@ function globeZoom(container, fraction = 0.86) {
 function attachHalo(map, container) {
   const halo = document.createElement("div");
   halo.className = "globe-halo";
+  // Hidden until the globe has been drawn: measured any earlier (while the
+  // style or tiles load), it came out far too big and showed as a second
+  // glow around the Earth.
+  halo.style.opacity = "0";
   container.prepend(halo);
+  let ready = false;
+  let queued = false;
   const update = () => {
+    queued = false;
+    if (!ready) return;
     // Measure the globe's silhouette: the furthest projected point along the
     // centre meridian (perspective makes it smaller than the zoom alone implies).
     const c = map.getCenter();
@@ -155,12 +163,25 @@ function attachHalo(map, container) {
       const p = map.project([c.lng, Math.max(-89.9, c.lat - d)]);
       radius = Math.max(radius, Math.hypot(p.x - centre.x, p.y - centre.y));
     }
+    if (!Number.isFinite(radius) || radius <= 0) return;
     halo.style.width = halo.style.height = `${radius * 1.98}px`;
     halo.style.opacity = String(Math.max(0, Math.min(1, 1 - (map.getZoom() - 2.5) / 2)));
   };
-  map.on("zoom", update);
-  map.once("load", update);
-  update();
+  const schedule = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(update);
+  };
+  // After the first frame of the globe is on screen, keep it in step with
+  // zooming, moving and window resizes.
+  map.once("render", () => {
+    ready = true;
+    schedule();
+  });
+  map.on("zoom", schedule);
+  map.on("move", schedule);
+  map.on("resize", schedule);
+  map.once("load", schedule);
 }
 
 // Resolves once the style is ready to use. Tiles (e.g. satellite imagery) keep
@@ -332,7 +353,9 @@ export async function createGlobe(container, { onTap, reducedMotion = false, col
   async function reveal(guess, answer, padding, friends = []) {
     const coords = greatCircle(guess, answer);
     const friendLines = friends.map((f) => greatCircle(f.guess, answer));
-    const bounds = [coords, ...friendLines].flat().reduce(
+    // The view fits your guess and the answer only; other players' pins are
+    // shown wherever they are, but don't pull the view away.
+    const bounds = coords.reduce(
       (b, c) => b.extend(c),
       new maplibregl.LngLatBounds(coords[0], coords[0]),
     );

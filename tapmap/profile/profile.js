@@ -3,10 +3,10 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=13";
+import * as social from "/tapmap/social.js?v=14";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
-import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=7";
+import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=8";
 
 // Tiers from the saved distance, so older results (when 🎯 meant under 50 km)
 // use today's bands.
@@ -320,6 +320,7 @@ async function runSearch() {
 
 function renderHead(person, isMe) {
   $("profile-avatar").replaceChildren(avatarElement(person, "lg"));
+  $("profile-avatar").onclick = () => showPhoto(person);
   $("profile-eyebrow").textContent = isMe ? "Your profile" : "Player";
   $("profile-name").textContent = personName(person);
   $("profile-handle").textContent = `@${person.username}`;
@@ -355,6 +356,9 @@ async function render() {
   $("own-sections").hidden = !isMe;
   $("invite-button").hidden = !isMe;
   $("share-profile-button").hidden = !isMe;
+  $("challenge-person").hidden = isMe;
+  $("challenge-person").onclick = () => openChallengeSheet(person);
+  $("their-people").hidden = true;
   $("signed-out-note").hidden = Boolean(me);
   $("profile-action").hidden = true;
   message("");
@@ -387,6 +391,7 @@ async function render() {
     return;
   }
 
+  renderTheirPeople(person);
   const state = await renderFollowButton(person);
   if (wantsFollow && !state) offerFollow(person);
   wantsFollow = false;
@@ -398,6 +403,87 @@ async function render() {
     : "Their scores and stats are private. Follow to send a request.";
   if (visible) await renderDetails(person, false);
 }
+
+// ---------- Profile photo, larger ----------
+
+function showPhoto(person) {
+  const inner = $("photo-view-close");
+  if (person.avatar_url) {
+    const img = document.createElement("img");
+    img.src = person.avatar_url;
+    img.alt = `${personName(person)}'s profile photo`;
+    inner.replaceChildren(img);
+  } else {
+    const big = avatarElement(person, "lg");
+    big.classList.add("avatar-xl");
+    inner.replaceChildren(big);
+  }
+  $("photo-view").hidden = false;
+}
+$("photo-view").addEventListener("click", () => { $("photo-view").hidden = true; });
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  $("photo-view").hidden = true;
+  $("challenge-sheet").hidden = true;
+});
+
+// ---------- Challenge this player ----------
+
+// Play a game (today's, random places or photos), then send them the same
+// five places. Signed in, the challenge is addressed to them and waits in
+// the Challenges list on their profile.
+function openChallengeSheet(person) {
+  const name = personName(person);
+  const to = encodeURIComponent(person.username);
+  $("challenge-sheet-title").textContent = `Challenge ${name}`;
+  $("challenge-sheet-text").textContent = me
+    ? `Pick a game and play it. At the end, tap Challenge @${person.username}: it's sent to their profile, and you can share the link too.`
+    : `Pick a game and play it, then send ${name} the link from the results screen.`;
+  $("challenge-daily").href = `/tapmap/?to=${to}`;
+  $("challenge-random").href = `/tapmap/?play=practice&to=${to}`;
+  $("challenge-photo").href = `/tapmap/?play=photo&to=${to}`;
+  $("challenge-sheet").hidden = false;
+}
+$("challenge-sheet-close").addEventListener("click", () => { $("challenge-sheet").hidden = true; });
+
+// ---------- Someone else's followers and following ----------
+
+let theirPeople = null; // { person, followers, following }
+
+async function renderTheirPeople(person) {
+  $("their-people-body").hidden = true;
+  ["followers-count-button", "following-count-button"].forEach((id) => $(id).setAttribute("aria-expanded", "false"));
+  if (!me) return; // (visible to signed-in players)
+  try {
+    const [followers, following] = await Promise.all([social.listFollowers(person.id), social.listFollowing(person.id)]);
+    theirPeople = { person, followers, following: following.filter((p) => p.status === "accepted") };
+  } catch (error) {
+    console.warn("Follows:", error);
+    return;
+  }
+  $("followers-count").textContent = formatNumber(theirPeople.followers.length);
+  $("following-count").textContent = formatNumber(theirPeople.following.length);
+  $("followers-count-button").lastElementChild.textContent = theirPeople.followers.length === 1 ? "follower" : "followers";
+  $("their-people").hidden = false;
+}
+
+function showTheirPeople(which) {
+  const button = $(`${which}-count-button`);
+  const open = button.getAttribute("aria-expanded") !== "true";
+  ["followers-count-button", "following-count-button"].forEach((id) => $(id).setAttribute("aria-expanded", "false"));
+  $("their-people-body").hidden = !open;
+  if (!open || !theirPeople) return;
+  button.setAttribute("aria-expanded", "true");
+  const { person, followers, following } = theirPeople;
+  const people = which === "followers" ? followers : following;
+  const name = personName(person);
+  $("their-people-title").textContent = which === "followers" ? `Following ${name}` : `${name} follows`;
+  $("their-people-list").replaceChildren(...people.map((p) => personRow(p, [], p.id === me.id ? "you" : "")));
+  $("their-people-empty").hidden = people.length > 0;
+  $("their-people-empty").textContent = which === "followers" ? `Nobody follows ${name} yet.` : `${name} doesn't follow anyone yet.`;
+}
+$("followers-count-button").addEventListener("click", () => showTheirPeople("followers"));
+$("following-count-button").addEventListener("click", () => showTheirPeople("following"));
 
 // ---------- Challenges (your own profile) ----------
 
@@ -431,19 +517,30 @@ async function renderChallenges() {
       theirName: best ? personName(best.profiles) : "",
     });
   }
+  const playedIds = new Set(data.played.map((r) => r.challenges && r.challenges.id));
+  for (const c of data.received || []) {
+    if (playedIds.has(c.id)) continue; // listed below with your score
+    const from = c.by_name || (c.profiles ? personName(c.profiles) : "A friend");
+    entries.push({ id: c.id, when: c.created_at, title: kindLabel(c), sub: `From ${from} · waiting for you`, mine: null, theirs: c.total, theirName: from, waiting: true });
+  }
   for (const r of data.played) {
     const c = r.challenges;
     if (!c || c.created_by === me.id) continue; // already listed as sent
     const from = c.by_name || (c.profiles ? personName(c.profiles) : "A friend");
     entries.push({ id: c.id, when: r.created_at, title: kindLabel(c), sub: `From ${from}`, mine: r.total, theirs: c.total, theirName: from });
   }
-  entries.sort((a, b) => (a.when < b.when ? 1 : -1));
+  // Challenges waiting for you first, then newest first.
+  entries.sort((a, b) => (a.waiting !== b.waiting ? (a.waiting ? -1 : 1) : a.when < b.when ? 1 : -1));
+  const waiting = entries.filter((e) => e.waiting).length;
 
-  const won = entries.filter((e) => e.theirs !== null && e.mine > e.theirs).length;
-  const decided = entries.filter((e) => e.theirs !== null).length;
-  $("challenges-summary").textContent = entries.length
-    ? `${entries.length} challenge${entries.length === 1 ? "" : "s"} sent and played${decided ? ` · won ${won} of ${decided}` : ""}.`
-    : "Challenges you've sent and played.";
+  const won = entries.filter((e) => e.theirs !== null && e.mine !== null && e.mine > e.theirs).length;
+  const decided = entries.filter((e) => e.theirs !== null && e.mine !== null).length;
+  $("challenges-summary").textContent = waiting
+    ? `${waiting} challenge${waiting === 1 ? "" : "s"} waiting for you. Tap to see.`
+    : entries.length
+      ? `${entries.length} challenge${entries.length === 1 ? "" : "s"} sent and played${decided ? ` · won ${won} of ${decided}` : ""}.`
+      : "Challenges you've sent and played.";
+  $("challenges-toggle").classList.toggle("has-waiting", waiting > 0);
   $("challenges-list").replaceChildren(...entries.map((e) => {
     const li = document.createElement("li");
     const link = document.createElement("a");
@@ -460,14 +557,22 @@ async function renderChallenges() {
     text.append(title, sub);
     const status = document.createElement("span");
     status.className = "archive-status";
-    status.textContent = e.theirs === null ? formatNumber(e.mine) : `${formatNumber(e.mine)} v ${formatNumber(e.theirs)}`;
-    if (e.theirs !== null && e.mine !== e.theirs) status.classList.add(e.mine > e.theirs ? "is-done" : "is-lost");
-    status.title = e.theirs === null ? "Your score" : `You ${e.mine}, ${e.theirName} ${e.theirs}`;
+    if (e.waiting) {
+      status.textContent = "Play";
+      status.classList.add("is-done");
+      status.title = `${e.theirName} scored ${e.theirs}`;
+    } else {
+      status.textContent = e.theirs === null ? formatNumber(e.mine) : `${formatNumber(e.mine)} v ${formatNumber(e.theirs)}`;
+      if (e.theirs !== null && e.mine !== e.theirs) status.classList.add(e.mine > e.theirs ? "is-done" : "is-lost");
+      status.title = e.theirs === null ? "Your score" : `You ${e.mine}, ${e.theirName} ${e.theirs}`;
+    }
     link.append(text, status);
     li.append(link);
     return li;
   }));
   $("challenges-empty").hidden = entries.length > 0;
+  // Something waiting for you: open the list.
+  if (waiting && $("challenges-body").hidden) $("challenges-toggle").click();
 }
 
 $("challenges-toggle").addEventListener("click", () => {

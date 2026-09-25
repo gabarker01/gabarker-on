@@ -1,10 +1,10 @@
 // The challenge page, /tapmap/challenge/{id} (served by /404.html): who sent
 // it and their score, a button to play it, and everyone's results that you
 // can see (you sent it or played it).
-import * as social from "/tapmap/social.js?v=13";
+import * as social from "/tapmap/social.js?v=14";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
-import { signInHref } from "/tapmap/account-button.js?v=2";
-import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=7";
+import { signInHref } from "/tapmap/account-button.js?v=3";
+import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 const RESULTS_KEY = "tapmap:v5:challenge-results"; // your results on this device (see tapmap.js)
@@ -122,15 +122,12 @@ export async function showChallenge(id) {
 
   // Results: the sender, then everyone you're allowed to see.
   const rows = [{ person: sender || { username: "", display_name: senderName }, total: row.total, sender: true, you: isSender }];
+  // Everyone's results are public with the link, signed in or not.
   let results = [];
-  let canSee = false;
-  if (me) {
-    try {
-      results = await social.challengeResults(id);
-      canSee = isSender || results.some((r) => r.user_id === me.id);
-    } catch (error) {
-      console.warn(error);
-    }
+  try {
+    results = await social.fetchChallengeResults(id);
+  } catch (error) {
+    console.warn(error);
   }
   for (const r of results) {
     if (r.user_id === row.created_by) continue; // the sender is already listed
@@ -155,16 +152,15 @@ export async function showChallenge(id) {
     others.textContent = `+ ${shown} more ${shown === 1 ? "person" : "people"} played without an account.`;
   }).catch(() => {});
 
+  // Signed out: results aren't saved under your name, so offer sign-in.
   const note = $("challenge-results-note");
-  note.hidden = canSee;
-  if (me) {
-    note.textContent = "Play it to see everyone else's results.";
-  } else {
+  note.hidden = Boolean(me);
+  if (!me) {
     // "Sign in" opens sign-in / create account, then comes back here.
     const link = document.createElement("a");
     link.href = "/tapmap/?signin=1";
     link.textContent = "Sign in";
     link.addEventListener("click", () => signInHref(`/tapmap/challenge/${id}`));
-    note.replaceChildren(link, " before you play to save your result and see everyone else's.");
+    note.replaceChildren(link, " before you play to save your result under your name.");
   }
 }

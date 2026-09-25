@@ -7,10 +7,10 @@ import {
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=7";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
+} from "./game.js?v=8";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=9";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=13";
+import * as social from "./social.js?v=14";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -472,7 +472,7 @@ function fitPadding() {
 function bonusText(round) {
   const parts = [];
   if (round.bullseye) {
-    parts.push(round.bonus > 0 ? `Within ${BULLSEYE_KM} km: bullseye bonus of +${round.bonus}.` : `Within ${BULLSEYE_KM} km: full marks.`);
+    parts.push(`Bullseye! Within ${BULLSEYE_KM} km: full marks.`);
   }
   return parts.join(" ");
 }
@@ -544,12 +544,16 @@ function nextRound() {
   }
 }
 
+// Today's game being saved to the account, so the stats shown afterwards
+// include it (otherwise the streak read back from the server is a day behind).
+let dailySaving = null;
+
 function saveDaily() {
   daily.rounds = game.rounds;
   storage.set(DAILY_KEY, daily);
   if (dailyDone()) {
     storage.set(STATS_KEY, recordDailyResult(storage.get(STATS_KEY) || {}, today, totalScore(daily.rounds)));
-    if (user) syncDaily();
+    if (user) dailySaving = syncDaily();
     else saveAnonymousDaily();
   }
 }
@@ -615,6 +619,8 @@ function challengeFromRow(row) {
   return {
     by: row.by_name || (row.profiles ? personName(row.profiles) : null),
     username: row.profiles ? row.profiles.username : null,
+    avatarUrl: row.profiles ? row.profiles.avatar_url || null : null,
+    createdBy: row.created_by || null,
     kind: row.kind,
     number: row.game_number || undefined,
     codes: places.map((l) => placeCode(l.name)),
@@ -672,8 +678,19 @@ function challengeFor(g) {
   return resolved.number === g.number ? resolved : null;
 }
 
+// Everyone else who has played this saved challenge, for their pins.
+let challengePlayers = { id: null, rows: [] };
+function loadChallengePlayers(resolved) {
+  if (!resolved || !resolved.id || challengePlayers.id === resolved.id) return;
+  challengePlayers = { id: resolved.id, rows: [] };
+  social.fetchChallengeResults(resolved.id)
+    .then((rows) => { if (challengePlayers.id === resolved.id) challengePlayers.rows = rows || []; })
+    .catch((error) => console.warn("Challenge players:", error));
+}
+
 function startChallenge(resolved) {
   $("challenge-invite").hidden = true;
+  loadChallengePlayers(resolved);
   if (resolved.mode === "daily") start("daily", { challenge: resolved });
   else if (resolved.mode === "archive") start("archive", { number: resolved.number, challenge: resolved });
   else start("challenge", { code: resolved.code, plan: resolved.plan, locations: resolved.locations, challenge: resolved });
@@ -714,14 +731,24 @@ function offerChallenge() {
 // Saves the game as a challenge in the database (once per game) and shares
 // its /tapmap/challenge/{id} link. If the database can't be reached, the
 // challenge goes in the link itself instead.
+// Opened from "Challenge" on someone's profile (?to=username): the next game
+// you finish is sent to them.
+let challengeTarget = null; // { username, id? }
+
 async function shareChallenge(finished, total) {
   const button = $("challenge-button");
   let link = finished.challengeUrl;
   let fresh = false;
+  const target = finished.challengeTarget;
   if (!link) {
     button.disabled = true;
     try {
+      if (target && user && !target.id) {
+        const person = await social.getProfileByUsername(target.username).catch(() => null);
+        if (person) target.id = person.id;
+      }
       const id = await social.createChallenge({
+        challengedUser: target && target.id,
         userId: user ? user.id : null,
         byName: user && profile ? personName(profile) : null,
         kind: challengeKind(finished),
@@ -740,8 +767,13 @@ async function shareChallenge(finished, total) {
     finished.challengeUrl = link;
     button.textContent = "Share challenge link";
     fresh = true;
+    if (target && target.id && link.includes("/challenge/")) {
+      toast(`Sent to @${target.username}: it's waiting on their profile`);
+      challengeTarget = null;
+    }
   }
-  const message = `Can you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
+  const message = `${target ? `@${target.username}, can` : "Can"} you beat my ${formatNumber(total)} on ${shareTitle(finished)}? Same five places: ${link}`;
+  if (fresh && target && target.id) return; // sent to their profile; tap again to share the link too
   if (navigator.share) {
     try {
       await navigator.share({ text: message });
@@ -1020,7 +1052,11 @@ async function showEnd(finished) {
   shareButton.onclick = () => navigator.share({ text }).catch(() => {});
   shareImage = null;
   $("image-button").onclick = () => shareImageFor(finished, text);
-  $("challenge-button").textContent = finished.challengeUrl ? "Share challenge link" : "Challenge a friend";
+  // From someone's profile: this game is the one to send them.
+  if (!finished.challengeUrl && challengeTarget && !finished.challengeTarget && (finished.mode !== "challenge")) finished.challengeTarget = challengeTarget;
+  $("challenge-button").textContent = finished.challengeUrl ? "Share challenge link"
+    : finished.challengeTarget ? `Challenge @${finished.challengeTarget.username}` : "Challenge a friend";
+  $("challenge-button").classList.toggle("is-target", Boolean(finished.challengeTarget && !finished.challengeUrl));
   $("challenge-button").onclick = () => shareChallenge(finished, total);
 
   renderComparison(finished);
@@ -1029,7 +1065,7 @@ async function showEnd(finished) {
   renderLeague(!isDaily);
   updateSignInPrompts();
   if (user && isDaily) {
-    social.getStats(user.id).then((server) => {
+    Promise.resolve(dailySaving).catch(() => {}).then(() => social.getStats(user.id)).then((server) => {
       if (!server) return;
       $("stat-played").textContent = formatNumber(server.played);
       $("stat-streak").textContent = formatNumber(server.current_streak);
@@ -1252,17 +1288,36 @@ function challengerForRound(index) {
   const round = resolved && resolved.ch.rounds[index];
   if (!round || !round.guess) return [];
   const { ch } = resolved;
-  const person = { id: ch.username || ch.by || "challenger", username: ch.username || "", display_name: challengerName(ch) };
+  const person = { id: ch.username || ch.by || "challenger", username: ch.username || "", display_name: challengerName(ch), avatar_url: ch.avatarUrl || null };
   // Already shown as a friend's pin (same player, daily game)?
   if (ch.username && game.mode === "daily" && friendGames.some((row) => row.profiles && row.profiles.username === ch.username)) return [];
-  return [{
+  const pins = [{
     guess: round.guess,
     initials: initials(person),
     colour: colourFor(person),
-    avatarUrl: null,
+    avatarUrl: person.avatar_url,
     name: challengerName(ch),
     details: () => challengerGuessCard(person, round),
   }];
+  // Everyone else who has already played this challenge, with their photo.
+  if (resolved.id && challengePlayers.id === resolved.id) {
+    for (const row of challengePlayers.rows) {
+      const other = row.profiles;
+      const theirs = (row.rounds || [])[index];
+      if (!other || !theirs || !theirs.guess || !Number.isFinite(theirs.guess.lat)) continue;
+      if ((user && row.user_id === user.id) || row.user_id === ch.createdBy) continue;
+      if (game.mode === "daily" && friendGames.some((f) => f.user_id === row.user_id)) continue;
+      pins.push({
+        guess: theirs.guess,
+        initials: initials(other),
+        colour: colourFor(other),
+        avatarUrl: other.avatar_url || null,
+        name: personName(other),
+        details: () => friendGuessCard(other, theirs),
+      });
+    }
+  }
+  return pins;
 }
 
 // The card shown when the challenger's pin is tapped.
@@ -1770,6 +1825,7 @@ const pendingSignIn = params.has("signin");
 // Links from the practice page: ?play=practice, ?play=photo, ?play=archive&n=3.
 // (?play=satellite is the old name for photo practice.)
 const playParam = params.get("play") === "satellite" ? "photo" : params.get("play");
+if (/^[a-z0-9_]{3,20}$/.test(params.get("to") || "")) challengeTarget = { username: params.get("to") };
 const playNumber = Number(params.get("n"));
 // ?c={id}: the Play button on a /tapmap/challenge/{id} page.
 const challengeId = /^[a-z0-9]{6,16}$/.test(params.get("c") || "") ? params.get("c") : null;
@@ -1779,7 +1835,7 @@ else if (params.has("challenge")) window.addEventListener("load", () => toast("T
 if (params.get("invite") && /^[a-z0-9_]{3,20}$/i.test(params.get("invite"))) {
   store.set(INVITE_KEY, params.get("invite").toLowerCase());
 }
-if (["invite", "signin", "challenge", "c", "play", "n"].some((key) => params.has(key))) {
+if (["invite", "signin", "challenge", "c", "play", "n", "to"].some((key) => params.has(key))) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 // The profile button is always there (it opens sign-in until you're signed in).

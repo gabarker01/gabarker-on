@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=22">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=23">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -69,7 +69,7 @@
     <!-- A profile (yours or someone else's) -->
     <section id="profile" hidden>
       <div class="account-head">
-        <span id="profile-avatar"></span>
+        <button id="profile-avatar" class="avatar-button" type="button" aria-label="View profile photo"></button>
         <div>
           <p id="profile-eyebrow" class="eyebrow">Player</p>
           <h1 id="profile-name" class="sheet-title account-name"></h1>
@@ -88,6 +88,20 @@
         <button id="profile-action" class="primary-button" type="button" hidden></button>
         <button id="invite-button" class="primary-button" type="button" hidden>Invite a friend</button>
         <button id="share-profile-button" class="secondary-button" type="button" hidden>Share profile</button>
+        <button id="challenge-person" class="secondary-button" type="button" hidden>Challenge</button>
+      </div>
+
+      <!-- Someone else's followers and following -->
+      <div id="their-people" hidden>
+        <div class="follow-counts">
+          <button id="followers-count-button" class="count-button" type="button" aria-expanded="false"><strong id="followers-count">0</strong> <span>followers</span></button>
+          <button id="following-count-button" class="count-button" type="button" aria-expanded="false"><strong id="following-count">0</strong> <span>following</span></button>
+        </div>
+        <div id="their-people-body" hidden>
+          <h2 id="their-people-title" class="section-label"></h2>
+          <ul id="their-people-list" class="people-list"></ul>
+          <p id="their-people-empty" class="friends-empty" hidden></p>
+        </div>
       </div>
       <p id="profile-private" class="profile-note" hidden></p>
 
@@ -133,6 +147,7 @@
             <span class="practice-arrow" aria-hidden="true">↓</span>
           </button>
           <div id="challenges-body" class="past-days" hidden>
+            <a class="secondary-button link-as-button" href="/tapmap/practice/">New challenge: play a game, then send it</a>
             <ol id="challenges-list" class="archive-list"></ol>
             <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. After any game, tap Challenge a friend on the results screen.</p>
           </div>
@@ -177,6 +192,35 @@
         <a id="sign-in-link" class="primary-button link-as-button" href="/tapmap/?signin=1">Sign in</a>
       </div>
       <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
+
+      <!-- Profile photo, larger -->
+      <div id="photo-view" class="overlay photo-view" hidden>
+        <button id="photo-view-close" class="photo-view-inner" type="button" aria-label="Close"></button>
+      </div>
+
+      <!-- Challenge this player -->
+      <div id="challenge-sheet" class="overlay" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="challenge-sheet-title">
+          <p class="eyebrow">Challenge</p>
+          <h2 id="challenge-sheet-title" class="sheet-title"></h2>
+          <p id="challenge-sheet-text" class="lead"></p>
+          <ul class="practice-options">
+            <li><a id="challenge-daily" class="practice-option" href="/tapmap/">
+              <span class="practice-name">Today's game</span>
+              <span id="challenge-daily-text" class="practice-text">Play today's game, then send them your result to beat.</span>
+              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
+            <li><a id="challenge-random" class="practice-option" href="/tapmap/">
+              <span class="practice-name">Random places</span>
+              <span class="practice-text">Five random places, easy to hard.</span>
+              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
+            <li><a id="challenge-photo" class="practice-option" href="/tapmap/">
+              <span class="practice-name">Photos</span>
+              <span class="practice-text">Five places shown only as photos.</span>
+              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
+          </ul>
+          <button id="challenge-sheet-close" class="secondary-button" type="button">Not now</button>
+        </div>
+      </div>
 
       <!-- Opened from a "Follow me on TapMap" link: offer to follow -->
       <div id="follow-prompt" class="overlay" hidden>
@@ -226,17 +270,17 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
-    import("/tapmap/account-button.js?v=2").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
+    import("/tapmap/account-button.js?v=3").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
     const path = window.location.pathname;
     const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=13").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=14").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else if (challenge && !path.startsWith("/tapmap/")) {
       // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
       window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
     } else if (challenge) {
-      import("/tapmap/challenge/challenge.js?v=5").then((m) => m.showChallenge(challenge[1]));
+      import("/tapmap/challenge/challenge.js?v=6").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

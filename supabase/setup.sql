@@ -370,6 +370,12 @@ create table if not exists public.challenges (
 
 create index if not exists challenges_created_by_idx on public.challenges (created_by, created_at desc);
 
+-- A challenge sent to a particular player (from their profile). It shows in
+-- their Challenges list until they play it.
+alter table public.challenges
+  add column if not exists challenged_user uuid references public.profiles (id) on delete set null;
+create index if not exists challenges_challenged_user_idx on public.challenges (challenged_user, created_at desc);
+
 -- One result per player per challenge (signed-in players; others keep theirs
 -- on their device).
 create table if not exists public.challenge_results (
@@ -449,10 +455,12 @@ create policy "edit own profile" on public.profiles
   with check ((select auth.uid()) = id);
 
 drop policy if exists "follows are public" on public.follows;
+-- Accepted follows are visible to signed-in players (who follows whom, on
+-- profiles); requests still pending only to the two players involved.
 drop policy if exists "see your follows" on public.follows;
 create policy "see your follows" on public.follows
   for select to authenticated
-  using ((select auth.uid()) in (follower_id, followee_id));
+  using ((select auth.uid()) in (follower_id, followee_id) or status = 'accepted');
 
 drop policy if exists "follow as yourself" on public.follows;
 create policy "follow as yourself" on public.follows
@@ -507,12 +515,17 @@ create policy "challenges are public" on public.challenges
 drop policy if exists "create a challenge" on public.challenges;
 create policy "create a challenge" on public.challenges
   for insert to anon, authenticated
-  with check (created_by is null or created_by = (select auth.uid()));
+  with check (
+    (created_by is null and challenged_user is null)
+    or created_by = (select auth.uid())
+  );
 
+-- Results are as public as the challenge link itself: anyone playing it sees
+-- the other players' pins and scores.
 drop policy if exists "see challenge results" on public.challenge_results;
 create policy "see challenge results" on public.challenge_results
-  for select to authenticated
-  using ((select auth.uid()) = user_id or public.can_see_challenge_results(challenge_id));
+  for select to anon, authenticated
+  using (true);
 
 drop policy if exists "save own challenge result" on public.challenge_results;
 create policy "save own challenge result" on public.challenge_results
@@ -550,8 +563,9 @@ grant insert, delete on public.follows to authenticated;
 grant update (status) on public.follows to authenticated;
 grant insert on public.games to authenticated;
 grant select, insert on public.challenges to anon, authenticated;
-revoke select, insert on public.challenge_results from anon;
-grant select, insert on public.challenge_results to authenticated;
+revoke insert on public.challenge_results from anon;
+grant select on public.challenge_results to anon, authenticated;
+grant insert on public.challenge_results to authenticated;
 revoke execute on function public.can_see_challenge_results(text) from anon;
 grant execute on function public.can_see_challenge_results(text) to authenticated;
 

@@ -115,9 +115,26 @@ const challengeRounds = (rounds) => rounds.map((r) => ({
   ...(r.guess ? { guess: { lat: +r.guess.lat.toFixed(4), lng: +r.guess.lng.toFixed(4) } } : {}),
 }));
 
+// Everyone's results for a challenge, with their profiles (public, like the
+// challenge). Plain REST, for the other players' pins while you play it.
+export async function fetchChallengeResults(id, timeoutMs = 8000) {
+  if (!socialEnabled()) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/challenge_results?challenge_id=eq.${encodeURIComponent(id)}&select=user_id,total,rounds,profiles(id,username,display_name,avatar_url)`,
+      { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
+    );
+    return response.ok ? await response.json() : [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Saves a finished game as a challenge and returns its id. Works signed out
 // (the challenge is then anonymous).
-export async function createChallenge({ userId, byName, kind, number, places, rounds, total }) {
+export async function createChallenge({ userId, byName, kind, number, places, rounds, total, challengedUser }) {
   const row = {
     created_by: userId || null,
     by_name: byName || null,
@@ -126,6 +143,7 @@ export async function createChallenge({ userId, byName, kind, number, places, ro
     places: places.map((l) => ({ name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty, notes: l.notes || null, photo: l.photo || null })),
     rounds: challengeRounds(rounds),
     total,
+    ...(challengedUser && userId ? { challenged_user: challengedUser } : {}),
   };
   return unwrap(await client.from("challenges").insert(row).select("id").single()).id;
 }
@@ -147,7 +165,7 @@ export async function challengeResults(challengeId) {
 // Your challenges for your profile: ones you sent (with everyone's results)
 // and ones you played (with the sender's score).
 export async function myChallenges(userId, limit = 50) {
-  const [sent, played] = await Promise.all([
+  const [sent, played, received] = await Promise.all([
     client.from("challenges")
       .select("id, kind, game_number, total, created_at, challenge_results(user_id, total, profiles(username, display_name))")
       .eq("created_by", userId)
@@ -158,8 +176,15 @@ export async function myChallenges(userId, limit = 50) {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit),
+    // Sent to you from your profile (whether or not you've played them yet).
+    client.from("challenges")
+      .select("id, kind, game_number, total, by_name, created_by, created_at, profiles!created_by(username, display_name)")
+      .eq("challenged_user", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
   ]);
-  return { sent: unwrap(sent), played: unwrap(played) };
+  // (Before setup.sql adds challenged_user, that query fails: no received list.)
+  return { sent: unwrap(sent), played: unwrap(played), received: received.error ? [] : received.data };
 }
 
 // ---------- Auth ----------

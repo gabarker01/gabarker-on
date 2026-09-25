@@ -13,8 +13,7 @@ export const ROUND_PLAN = [
 ];
 export const ROUNDS = ROUND_PLAN.length;
 export const ROUND_MAX = 100;
-export const BULLSEYE_KM = 25; // the 🎯 band and the bonus both use this
-export const BULLSEYE_BONUS = 5;
+export const BULLSEYE_KM = 20; // within this, full marks (the 🎯 band)
 
 // Photo practice: the same easy-to-hard rounds as the daily game, but each
 // place is shown only as a photo of the landmark (the name appears once you've
@@ -211,13 +210,13 @@ export const haversineKm = (a, b) => {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-// Round score out of 100: round(100 × e^(−d/2000)), plus a 5-point bullseye
-// bonus under 25 km, capped at 100. It counts towards the game total × the
-// round's multiplier. (`photo` only marks a round played from a photo.)
+// Round score out of 100: full marks within 20 km (a bullseye), otherwise
+// round(100 × e^(−d/2000)), which is 99 at 20 km and falls smoothly from
+// there. It counts towards the game total × the round's multiplier. (`photo` only marks a round played from a photo.)
 export const scoreRound = (distanceKm, multiplier = 1, { photo = false } = {}) => {
   const base = Math.round(ROUND_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const score = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
+  const score = bullseye ? ROUND_MAX : base;
   return { base, bonus: score - base, bullseye, sat: photo, score, multiplier, weighted: score * multiplier };
 };
 

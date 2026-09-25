@@ -28,7 +28,7 @@
   --globe-guess: #f1ece2;
   --globe-answer: #d9b26a;
 
-  --t-bullseye: #d9b26a;
+  --t-bullseye: #3ee08a;
   --t-close: #6fb592;
   --t-near: #e0c46a;
   --t-far: #e3925d;
@@ -524,7 +524,8 @@ a:focus-visible {
   border-radius: 50%;
 }
 
-.t-bullseye { background: var(--t-bullseye); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-bullseye) 25%, transparent); }
+/* A bullseye (within 20 km) is bright green with a glow. */
+.t-bullseye { background: var(--t-bullseye); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-bullseye) 30%, transparent), 0 0 10px 2px color-mix(in srgb, var(--t-bullseye) 70%, transparent); }
 .t-close { background: var(--t-close); }
 .t-near { background: var(--t-near); }
 .t-far { background: var(--t-far); }
@@ -2420,4 +2421,90 @@ a.ghost-button {
 .profile-note a {
   color: var(--accent);
   text-underline-offset: 3px;
+}
+
+/* Profile photo: tap for a larger view */
+.avatar-button {
+  flex: none;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: zoom-in;
+}
+
+.photo-view {
+  z-index: 20;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.photo-view-inner {
+  display: grid;
+  place-items: center;
+  width: min(86vw, 86vh, 520px);
+  aspect-ratio: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: zoom-out;
+}
+
+.photo-view-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.avatar.avatar-xl {
+  width: min(70vw, 320px);
+  height: min(70vw, 320px);
+  font-size: min(24vw, 7rem);
+}
+
+/* Someone else's followers / following */
+.follow-counts {
+  display: flex;
+  gap: 18px;
+  margin: 14px 0 4px;
+}
+
+.count-button {
+  padding: 4px 0;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 4px;
+}
+
+.count-button strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.count-button[aria-expanded="true"] {
+  color: var(--ink);
+  text-decoration-color: var(--accent);
+}
+
+/* A challenge waiting for you */
+.practice-option.has-waiting {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.practice-option.has-waiting .practice-text {
+  color: var(--accent);
+}
+
+/* The results screen's challenge button, when sending to a particular player */
+.chip-button.is-target {
+  color: var(--primary-ink);
+  background: var(--primary);
+  border-color: transparent;
 }

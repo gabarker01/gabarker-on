@@ -186,11 +186,12 @@ screen ranks those players for the current week.
 **Challenge a friend** (on any results screen) saves the game in `challenges`
 and shares `https://gabarker.com/tapmap/challenge/{id}` (`/challenge/{id}`
 works too). Anyone with the link can see the challenge and play it, signed in
-or not. Signed-in players' results go in `challenge_results`, which the
-sender and everyone who played that challenge can see; signed-out players'
+or not. Signed-in players' results go in `challenge_results`, which anyone with
+the challenge link can see (their pins show while you play it); signed-out players'
 results stay on their device (and are saved when they next sign in). Your
 profile lists the challenges you've sent and played, separately from your
-daily games.
+daily games. From someone's profile, **Challenge** sends them the next game
+you finish (`challenges.challenged_user`); it waits in their Challenges list.
 
 ```sql
 -- Newest challenges and how many have played each
@@ -225,7 +226,7 @@ results and adds "+ N more played without an account".
 | Table | Contents | Who can read | Who can write |
 | --- | --- | --- | --- |
 | `profiles` | username, display name, photo, time zone | everyone (for search) | the owner (update only) |
-| `follows` | follower, followee, status (`pending` / `accepted`) | the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
+| `follows` | follower, followee, status (`pending` / `accepted`) | accepted: signed-in players; pending: the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
 | `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
 
