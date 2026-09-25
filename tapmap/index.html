@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=17">
+  <link rel="stylesheet" href="tapmap.css?v=18">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -73,12 +73,18 @@
       <span class="sep" aria-hidden="true"></span>
       <span id="prompt-multiplier" class="multiplier"></span>
     </p>
-    <h1 id="prompt-name" class="prompt-name"></h1>
-    <div id="prompt-photo" class="prompt-photo" hidden>
-      <img id="prompt-img" alt="Satellite photo of the place to find. Tap to enlarge." width="512" height="512" hidden>
-      <p id="prompt-photo-status" class="prompt-photo-status"></p>
+    <div class="prompt-body">
+      <div class="prompt-text">
+        <h1 id="prompt-name" class="prompt-name"></h1>
+        <button id="photo-size" class="link-button photo-size" type="button" hidden>Minimise photo</button>
+      </div>
+      <div id="prompt-photo" class="prompt-photo" hidden>
+        <button id="photo-frame" class="photo-frame" type="button" aria-label="Minimise the photo">
+          <img id="prompt-img" alt="Satellite photo of the place to find" width="512" height="512" hidden>
+          <span id="prompt-photo-status" class="prompt-photo-status"></span>
+        </button>
+      </div>
     </div>
-    <button id="reveal-name" class="link-button" type="button" hidden>Show the name (no photo bonus)</button>
   </section>
 
   <div class="zoom-controls" role="group" aria-label="Zoom">
@@ -276,7 +282,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=21"></script>
+  <script type="module" src="tapmap.js?v=22"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

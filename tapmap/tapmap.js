@@ -6,7 +6,7 @@ import {
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=3";
+} from "./game.js?v=4";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
 import * as social from "./social.js?v=8";
@@ -297,23 +297,34 @@ const result = $("result");
 let photo = null; // the current satellite photo { url, revoke }
 let photoToken = 0;
 
+// The satellite photo can be minimised to a thumbnail, so the question panel
+// is about the size of a normal one and more of the globe is free to tap.
+// The choice is remembered for the next rounds.
+const PHOTO_MIN_KEY = "tapmap:v5:photo-min";
+function setPhotoMinimised(min) {
+  prompt.classList.toggle("is-photo-min", min);
+  $("photo-size").textContent = min ? "Show larger photo" : "Minimise photo";
+  $("photo-frame").setAttribute("aria-label", min ? "Show a larger photo" : "Minimise the photo");
+  storage.set(PHOTO_MIN_KEY, min);
+}
+const togglePhoto = () => setPhotoMinimised(!prompt.classList.contains("is-photo-min"));
+
 function clearPhoto() {
   photoToken += 1;
   if (photo) photo.revoke();
   photo = null;
   $("prompt-photo").hidden = true;
+  $("photo-size").hidden = true;
   $("prompt-img").removeAttribute("src");
-  $("prompt-photo").classList.remove("is-large");
-  $("reveal-name").hidden = true;
+  prompt.classList.remove("is-photo-min");
 }
 
-// Satellite rounds start with the photo and no name. Showing the name gives
-// up the photo bonus.
+// Satellite rounds show only the photo; the name appears once you've guessed
+// (or straight away if the photo can't load, with no photo bonus).
 function showName(location) {
   game.nameShown = true;
   $("prompt-name").textContent = location.name;
   $("prompt-name").classList.remove("is-hidden");
-  $("reveal-name").hidden = true;
 }
 
 function showPhoto(location) {
@@ -321,10 +332,11 @@ function showPhoto(location) {
   $("prompt-name").textContent = "Where is this?";
   $("prompt-name").classList.add("is-hidden");
   $("prompt-photo").hidden = false;
+  $("photo-size").hidden = false;
+  setPhotoMinimised(Boolean(storage.get(PHOTO_MIN_KEY)));
   $("prompt-photo-status").hidden = false;
   $("prompt-photo-status").textContent = "Loading satellite photo…";
   $("prompt-img").hidden = true;
-  $("reveal-name").hidden = false;
   satellitePhoto(location).then((next) => {
     if (token !== photoToken) return next.revoke();
     photo = next;
@@ -334,7 +346,7 @@ function showPhoto(location) {
   }).catch((error) => {
     if (token !== photoToken) return;
     console.warn(error);
-    $("prompt-photo").hidden = true;
+    clearPhoto();
     showName(location);
     toast("The satellite photo couldn't load, so here's the name.");
   });
@@ -396,11 +408,7 @@ function bonusText(round) {
   if (round.bullseye) {
     parts.push(round.bonus > 0 ? `Within ${BULLSEYE_KM} km: bullseye bonus of +${round.bonus}.` : `Within ${BULLSEYE_KM} km: full marks.`);
   }
-  if (round.sat) {
-    parts.push(round.satBonus > 0
-      ? `Guessed from the photo alone: +${round.satBonus} bonus.`
-      : "Guessed from the photo alone, but too far away for a bonus.");
-  }
+  if (round.sat && round.satBonus > 0) parts.push(`Photo bonus: +${round.satBonus}.`);
   return parts.join(" ");
 }
 
@@ -420,7 +428,6 @@ async function confirmGuess() {
   // The name is revealed with the answer.
   $("prompt-name").textContent = location.name;
   $("prompt-name").classList.remove("is-hidden");
-  $("reveal-name").hidden = true;
 
   // Show the result panel first so the fit leaves room for it.
   confirmButton.hidden = true;
@@ -893,10 +900,8 @@ $("zoom-in").addEventListener("click", () => globe.zoomIn());
 $("zoom-out").addEventListener("click", () => globe.zoomOut());
 $("play-button").addEventListener("click", () => start("daily"));
 $("daily-results-button").addEventListener("click", () => start("daily"));
-$("reveal-name").addEventListener("click", () => {
-  if (game && game.phase === "guessing") showName(game.locations[game.index]);
-});
-$("prompt-img").addEventListener("click", () => $("prompt-photo").classList.toggle("is-large"));
+$("photo-frame").addEventListener("click", togglePhoto);
+$("photo-size").addEventListener("click", togglePhoto);
 $("help-button").addEventListener("click", () => showIntro({ help: true }));
 $("intro-close").addEventListener("click", () => { $("intro").hidden = true; });
 document.addEventListener("keydown", (event) => {

@@ -24,11 +24,12 @@ test("every rating has an emoji, out of the game's own maximum", () => {
   assert.equal(rating(1080, SATELLITE_MAX_SCORE).label, "Cartographer");
 });
 
-test("satellite practice: five hard photo rounds, each out of 120, 1,200 in all", () => {
+test("satellite practice: a photo every round, easy to hard, each out of 120, 1,200 in all", () => {
   assert.equal(MAX_SCORE, 1000);
   assert.equal(maxScoreFor(ROUND_PLAN), 1000);
   assert.equal(SATELLITE_MAX_SCORE, 1200);
-  assert.ok(SATELLITE_PLAN.every((r) => r.satellite && r.difficulty === "hard"));
+  assert.ok(SATELLITE_PLAN.every((r) => r.satellite));
+  assert.deepEqual(SATELLITE_PLAN.map((r) => r.difficulty), ROUND_PLAN.map((r) => r.difficulty));
   assert.deepEqual(SATELLITE_PLAN.map((r) => r.multiplier), ROUND_PLAN.map((r) => r.multiplier));
   const perfect = scoreRound(0, 3, { satellite: true });
   assert.equal(perfect.score, 120);
@@ -40,11 +41,11 @@ test("satellite practice: five hard photo rounds, each out of 120, 1,200 in all"
   assert.equal(totalScore(rounds), 1200);
 });
 
-test("satellite practice picks five different hard places", () => {
+test("satellite practice picks five different places, easy to hard", () => {
   for (let i = 0; i < 50; i++) {
     const picks = practiceLocations(poolFor("2026-10-05", LOCATIONS), Math.random, SATELLITE_PLAN);
     assert.equal(picks.length, 5);
-    assert.ok(picks.every((l) => l && l.difficulty === "hard"));
+    assert.deepEqual(picks.map((l) => l.difficulty), ["easy", "medium", "medium", "hard", "hard"]);
     assert.equal(new Set(picks.map((l) => l.name)).size, 5);
   }
 });

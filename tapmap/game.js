@@ -16,12 +16,13 @@ export const ROUND_MAX = 100;
 export const BULLSEYE_KM = 25; // the 🎯 band and the bonus both use this
 export const BULLSEYE_BONUS = 5;
 
-// Satellite practice: five hard places, each shown first as a satellite
-// photo with no name. Guessing from the photo alone earns up to 20 extra
-// points (scaled by distance like the round score), so each round is out of
-// 120 and the game is out of 1,200.
+// Satellite practice: the same easy-to-hard rounds as the daily game, but
+// each place is shown only as a satellite photo (the name appears once you've
+// guessed). Guessing from the photo earns up to 20 extra points (scaled by
+// distance like the round score), so each round is out of 120 and the game is
+// out of 1,200.
 export const SATELLITE_BONUS = 20;
-export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, difficulty: "hard", satellite: true }));
+export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, satellite: true }));
 
 export const roundMax = (plan) => ROUND_MAX + (plan.satellite ? SATELLITE_BONUS : 0);
 export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + roundMax(r) * r.multiplier, 0);

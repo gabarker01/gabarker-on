@@ -1960,32 +1960,91 @@ body.profile-page {
   color: var(--ink-soft);
 }
 
+/* Full size: name, photo, then the minimise link, in a column. */
+.prompt-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.prompt-text {
+  display: contents;
+}
+
 .prompt-photo {
-  position: relative;
-  width: min(100%, 200px);
-  aspect-ratio: 1;
+  order: 1;
   margin: 10px 0 0;
+}
+
+.photo-size {
+  order: 2;
+  align-self: flex-start;
+}
+
+.photo-frame {
+  position: relative;
+  display: block;
+  width: min(100%, 220px, 30vh);
+  aspect-ratio: 1;
+  padding: 0;
   overflow: hidden;
   background: var(--space);
   border: 1px solid var(--panel-edge);
   border-radius: 14px;
-  transition: width 0.25s ease;
+  cursor: pointer;
+  transition: width 0.25s ease, border-radius 0.25s ease;
 }
 
-.prompt-photo.is-large {
-  width: min(100%, 340px, 42vh);
-}
-
-.prompt-photo img {
+.photo-frame img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  cursor: zoom-in;
 }
 
-.prompt-photo.is-large img {
-  cursor: zoom-out;
+/* Minimised: a thumbnail beside the question, about the height of a normal prompt. */
+.prompt.is-photo-min .prompt-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.prompt.is-photo-min .prompt-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.prompt.is-photo-min .prompt-photo {
+  flex: none;
+  order: -1;
+  margin: 6px 0 0;
+}
+
+.prompt.is-photo-min .photo-frame {
+  width: 54px;
+  border-radius: 10px;
+}
+
+.prompt.is-photo-min .prompt-name {
+  margin-top: 2px;
+  font-size: 1.45rem;
+}
+
+.prompt.is-photo-min .photo-size {
+  margin-top: 0;
+  padding: 2px 0 0;
+  min-height: 24px;
+  font-size: 0.8rem;
+}
+
+.prompt.is-photo-min .prompt-photo {
+  margin-top: 4px;
+}
+
+.prompt.is-photo-min .prompt-photo-status {
+  font-size: 0;
 }
 
 .prompt-photo-status {
