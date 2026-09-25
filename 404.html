@@ -84,6 +84,7 @@
       <div class="profile-actions">
         <button id="profile-action" class="primary-button" type="button" hidden></button>
         <button id="invite-button" class="primary-button" type="button" hidden>Invite a friend</button>
+        <button id="share-profile-button" class="secondary-button" type="button" hidden>Share profile</button>
       </div>
       <p id="profile-private" class="profile-note" hidden></p>
 
@@ -156,10 +157,28 @@
 
       <!-- Signed out, looking at someone -->
       <div id="signed-out-note" hidden>
-        <p class="profile-note">Sign in to follow and see their scores.</p>
+        <p id="signed-out-text" class="profile-note">Sign in to follow and see their scores.</p>
         <a id="sign-in-link" class="primary-button link-as-button" href="/tapmap/?signin=1">Sign in</a>
       </div>
       <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
+
+      <!-- Opened from a "Follow me on TapMap" link: offer to follow -->
+      <div id="follow-prompt" class="overlay" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="follow-prompt-title">
+          <div class="account-head">
+            <span id="follow-prompt-avatar"></span>
+            <div>
+              <p class="eyebrow">Follow</p>
+              <h2 id="follow-prompt-title" class="sheet-title account-name"></h2>
+              <p id="follow-prompt-handle" class="account-handle"></p>
+            </div>
+          </div>
+          <p id="follow-prompt-text" class="lead"></p>
+          <button id="follow-prompt-yes" class="primary-button" type="button">Send follow request</button>
+          <button id="follow-prompt-no" class="secondary-button" type="button">Not now</button>
+          <p id="follow-prompt-message" class="account-message" role="status" aria-live="polite"></p>
+        </div>
+      </div>
     </section>
 
     <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
@@ -170,7 +189,7 @@
   <script type="module">
     const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=8").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=9").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

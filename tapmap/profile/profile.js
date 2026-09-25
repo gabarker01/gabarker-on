@@ -354,6 +354,7 @@ async function render() {
   $("profile").hidden = false;
   $("own-sections").hidden = !isMe;
   $("invite-button").hidden = !isMe;
+  $("share-profile-button").hidden = !isMe;
   $("signed-out-note").hidden = Boolean(me);
   $("profile-action").hidden = true;
   message("");
@@ -361,7 +362,14 @@ async function render() {
   if (!me) {
     $("profile-details").hidden = true;
     $("profile-private").hidden = true;
+    // Signing in goes through the invite flow: create an account or sign in,
+    // then asked whether to follow this player, then back to this page.
     localStorage.setItem("tapmap:next", profileUrl(person.username));
+    $("sign-in-link").href = `/tapmap/?invite=${encodeURIComponent(person.username)}`;
+    $("sign-in-link").textContent = "Create account or sign in";
+    $("signed-out-text").textContent = wantsFollow
+      ? `${personName(person)} shared their TapMap profile. Create a free account or sign in to follow them and see each other's scores.`
+      : "Sign in to follow and see their scores.";
     return;
   }
 
@@ -380,6 +388,8 @@ async function render() {
   }
 
   const state = await renderFollowButton(person);
+  if (wantsFollow && !state) offerFollow(person);
+  wantsFollow = false;
   const visible = state === "accepted";
   $("profile-details").hidden = !visible;
   $("profile-private").hidden = visible;
@@ -388,6 +398,65 @@ async function render() {
     : "Their scores and stats are private. Follow to send a request.";
   if (visible) await renderDetails(person, false);
 }
+
+// ---------- Follow links ----------
+
+// A shared profile link ("Follow me on TapMap") ends in ?follow=1: the page
+// then asks whether to follow, as an invite link does.
+let wantsFollow = new URLSearchParams(window.location.search).has("follow");
+if (wantsFollow) window.history.replaceState(null, "", window.location.pathname);
+
+function offerFollow(person) {
+  $("follow-prompt-avatar").replaceChildren(avatarElement(person, "lg"));
+  $("follow-prompt-title").textContent = personName(person);
+  $("follow-prompt-handle").textContent = `@${person.username}`;
+  $("follow-prompt-text").textContent = `Follow ${personName(person)} on TapMap? Once they accept, you'll follow each other and see each other's scores.`;
+  $("follow-prompt-message").textContent = "";
+  $("follow-prompt-yes").onclick = async () => {
+    $("follow-prompt-yes").disabled = true;
+    try {
+      await social.requestFollow(me.id, person.id);
+      $("follow-prompt").hidden = true;
+      toast(`Follow request sent to @${person.username}`);
+      await render();
+    } catch (error) {
+      $("follow-prompt-message").textContent = errorText(error);
+    } finally {
+      $("follow-prompt-yes").disabled = false;
+    }
+  };
+  $("follow-prompt-no").onclick = () => { $("follow-prompt").hidden = true; };
+  $("follow-prompt").hidden = false;
+  $("follow-prompt-yes").focus({ preventScroll: true });
+}
+
+async function shareText(text, copiedMessage) {
+  if (navigator.share) {
+    try {
+      // The link is inside the text, so apps like WhatsApp show one message.
+      await navigator.share({ text });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  toast(copiedMessage);
+}
+
+$("share-profile-button").addEventListener("click", () => {
+  const url = `${window.location.origin}${profileUrl(myProfile.username)}?follow=1`;
+  shareText(`Follow me on TapMap: ${url}`, "Profile link copied");
+});
 
 // ---------- Actions ----------
 
@@ -425,30 +494,10 @@ $("photo-remove").addEventListener("click", async () => {
   }
 });
 
-$("invite-button").addEventListener("click", async () => {
+$("invite-button").addEventListener("click", () => {
   const url = `${window.location.origin}/tapmap/?invite=${encodeURIComponent(myProfile.username)}`;
   const first = personName(myProfile).trim().split(/\s+/)[0];
-  const text = `${first} has invited you to play TapMap, the daily geography game. Sign up here: ${url}`;
-  if (navigator.share) {
-    try {
-      // The link is inside the text, so apps like WhatsApp show one message.
-      await navigator.share({ text });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (error) {
-    const area = document.createElement("textarea");
-    area.value = text;
-    document.body.append(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
-  }
-  toast("Invite copied");
+  shareText(`${first} has invited you to play TapMap, the daily geography game. Sign up here: ${url}`, "Invite copied");
 });
 
 $("profile-form").addEventListener("submit", async (event) => {
