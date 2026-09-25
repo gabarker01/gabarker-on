@@ -1,7 +1,7 @@
 // The challenge page, /tapmap/challenge/{id} (served by /404.html): who sent
 // it and their score, a button to play it, and everyone's results that you
 // can see (you sent it or played it).
-import * as social from "/tapmap/social.js?v=11";
+import * as social from "/tapmap/social.js?v=12";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
 import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=7";
 

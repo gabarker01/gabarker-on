@@ -338,3 +338,142 @@ from (values
   ('Danakil Depression, Ethiopia', 'Dallol (hydrothermal field)')
 ) as v (name, photo)
 where l.name = v.name and (l.photo is null or trim(l.photo) = '');
+
+-- ---------- Photo practice places ----------
+
+-- Photo practice uses its own places, chosen for how recognisable the photo
+-- is (easy = famous at a glance, medium = well-known sights, hard = striking
+-- but less famous). photo is the Wikipedia article whose main photo is shown.
+-- Add rows in the Table Editor like locations; retire with retired_on.
+create table if not exists public.photo_places (
+  id bigint generated always as identity primary key,
+  name text not null unique check (char_length(trim(name)) between 2 and 120),
+  lat double precision not null check (lat between -90 and 90),
+  lng double precision not null check (lng between -180 and 180),
+  difficulty text not null check (difficulty in ('easy', 'medium', 'hard')),
+  photo text not null check (char_length(photo) between 1 and 200),
+  notes text,
+  added_on date not null default (now() at time zone 'utc')::date,
+  retired_on date,
+  created_at timestamptz not null default now(),
+  check (retired_on is null or retired_on > added_on)
+);
+
+alter table public.photo_places enable row level security;
+
+drop policy if exists "photo places are public" on public.photo_places;
+create policy "photo places are public" on public.photo_places
+  for select to anon, authenticated using (true);
+
+grant select on public.photo_places to anon, authenticated;
+
+-- The starting set (102: 33 easy, 41 medium, 28 hard). Only adds places that
+-- aren't there yet.
+insert into public.photo_places (name, lat, lng, difficulty, photo, notes, added_on)
+select name, lat, lng, difficulty, photo, notes, date '2026-09-01'
+from (values
+  (1, 'Eiffel Tower, Paris, France', 48.8584, 2.2945, 'easy', 'Eiffel Tower', 'Built for the 1889 World''s Fair, it was only meant to stand for 20 years.'),
+  (2, 'Statue of Liberty, New York, USA', 40.6892, -74.0445, 'easy', 'Statue of Liberty', 'A gift from France, dedicated in 1886. Its copper skin is thinner than 2.5 mm.'),
+  (3, 'Big Ben, London, UK', 51.5007, -0.1246, 'easy', 'Big Ben', 'Big Ben is the great bell, not the tower, which has been called Elizabeth Tower since 2012.'),
+  (4, 'Sydney Opera House, Australia', -33.8568, 151.2153, 'easy', 'Sydney Opera House', 'Its roof sails are covered in over a million tiles made in Sweden.'),
+  (5, 'Taj Mahal, Agra, India', 27.1751, 78.0421, 'easy', 'Taj Mahal', 'Shah Jahan built it as a tomb for his wife Mumtaz Mahal. Work began in 1632.'),
+  (6, 'Colosseum, Rome, Italy', 41.8902, 12.4922, 'easy', 'Colosseum', 'It could seat an estimated 50,000 to 80,000 spectators.'),
+  (7, 'Golden Gate Bridge, San Francisco, USA', 37.8199, -122.4783, 'easy', 'Golden Gate Bridge', 'Its colour, International Orange, was chosen to stand out in the fog.'),
+  (8, 'Christ the Redeemer, Rio de Janeiro, Brazil', -22.9519, -43.2105, 'easy', 'Christ the Redeemer (statue)', 'Finished in 1931, the statue is 30 m tall, not counting its pedestal.'),
+  (9, 'Leaning Tower of Pisa, Italy', 43.723, 10.3966, 'easy', 'Leaning Tower of Pisa', 'It started to lean in the 1170s, while it was still being built, because the ground is soft.'),
+  (10, 'Great Pyramid of Giza, Egypt', 29.9792, 31.1342, 'easy', 'Great Pyramid of Giza', 'It was the tallest human-made structure on Earth for more than 3,800 years.'),
+  (11, 'Tower Bridge, London, UK', 51.5055, -0.0754, 'easy', 'Tower Bridge', 'Opened in 1894, its roadway lifts to let tall ships pass underneath.'),
+  (12, 'Burj Khalifa, Dubai, UAE', 25.1972, 55.2744, 'easy', 'Burj Khalifa', 'At 828 m, it has been the world''s tallest building since 2010.'),
+  (13, 'Mount Rushmore, South Dakota, USA', 43.8791, -103.4591, 'easy', 'Mount Rushmore', 'Each of the four presidents'' faces is about 18 m tall.'),
+  (14, 'Arc de Triomphe, Paris, France', 48.8738, 2.295, 'easy', 'Arc de Triomphe', 'Napoleon ordered it in 1806, but it wasn''t finished until 1836.'),
+  (15, 'Saint Basil''s Cathedral, Moscow, Russia', 55.7525, 37.6231, 'easy', 'Saint Basil''s Cathedral', 'Built in the 1550s for Ivan the Terrible, it stands at the end of Red Square.'),
+  (16, 'Machu Picchu, Peru', -13.1631, -72.545, 'easy', 'Machu Picchu', 'The Inca built this citadel in the 15th century, about 2,430 m above sea level.'),
+  (17, 'Empire State Building, New York, USA', 40.7484, -73.9857, 'easy', 'Empire State Building', 'Built in just over a year and finished in 1931, it was the world''s tallest building for nearly 40 years.'),
+  (18, 'Hollywood Sign, Los Angeles, USA', 34.1341, -118.3215, 'easy', 'Hollywood Sign', 'It first read "Hollywoodland", an advert for a housing development in 1923.'),
+  (19, 'Sagrada Família, Barcelona, Spain', 41.4036, 2.1744, 'easy', 'Sagrada Família', 'Gaudí''s basilica has been under construction since 1882.'),
+  (20, 'Brandenburg Gate, Berlin, Germany', 52.5163, 13.3777, 'easy', 'Brandenburg Gate', 'Built in the 1790s, it stood right by the Berlin Wall from 1961 to 1989.'),
+  (21, 'Space Needle, Seattle, USA', 47.6205, -122.3493, 'easy', 'Space Needle', 'It was built for the 1962 World''s Fair.'),
+  (22, 'Parthenon, Athens, Greece', 37.9715, 23.7267, 'easy', 'Parthenon', 'This temple to Athena was finished in the 5th century BC.'),
+  (23, 'Stonehenge, England', 51.1789, -1.8262, 'easy', 'Stonehenge', 'Its smaller bluestones were brought from the Preseli Hills in Wales, more than 200 km away.'),
+  (24, 'Niagara Falls, Canada/USA', 43.0896, -79.0849, 'easy', 'Niagara Falls', 'Horseshoe Falls, on the Canadian side, carries about 90% of the river''s water.'),
+  (25, 'Petronas Towers, Kuala Lumpur, Malaysia', 3.1579, 101.7116, 'easy', 'Petronas Towers', 'They were the world''s tallest buildings from 1998 to 2004.'),
+  (26, 'Mount Fuji, Japan', 35.3606, 138.7274, 'easy', 'Mount Fuji', 'Japan''s highest peak, at 3,776 m. It last erupted in 1707.'),
+  (27, 'Tokyo Tower, Japan', 35.6586, 139.7454, 'easy', 'Tokyo Tower', 'Inspired by the Eiffel Tower, it''s painted white and orange for air safety.'),
+  (28, 'Neuschwanstein Castle, Germany', 47.5576, 10.7498, 'easy', 'Neuschwanstein Castle', 'This 19th-century castle inspired Disney''s Sleeping Beauty castle.'),
+  (29, 'Grand Canyon, Arizona, USA', 36.1069, -112.1129, 'easy', 'Grand Canyon', 'The Colorado River carved it up to 1.8 km deep.'),
+  (30, 'Angkor Wat, Cambodia', 13.4125, 103.867, 'easy', 'Angkor Wat', 'The world''s largest religious monument, and it''s on Cambodia''s flag.'),
+  (31, 'CN Tower, Toronto, Canada', 43.6426, -79.3871, 'easy', 'CN Tower', 'It was the world''s tallest free-standing structure for more than 30 years.'),
+  (32, 'Marina Bay Sands, Singapore', 1.2834, 103.8607, 'easy', 'Marina Bay Sands', 'A 340 m-long SkyPark sits across the tops of its three towers.'),
+  (33, 'Great Wall of China', 40.3587, 116.02, 'easy', 'Great Wall of China', 'Its sections together run for more than 20,000 km.'),
+  (34, 'Al-Khazneh, Petra, Jordan', 30.3222, 35.4515, 'medium', 'Al-Khazneh', 'The Treasury, carved into Petra''s rock face, appears in Indiana Jones and the Last Crusade.'),
+  (35, 'Chichén Itzá, Mexico', 20.6843, -88.5678, 'medium', 'Chichen Itza', 'At the equinoxes, shadows make a serpent that seems to slide down El Castillo''s steps.'),
+  (36, 'Moai, Easter Island, Chile', -27.1127, -109.3497, 'medium', 'Moai', 'The Rapa Nui people carved nearly 1,000 moai statues here.'),
+  (37, 'Hagia Sophia, Istanbul, Turkey', 41.0086, 28.9802, 'medium', 'Hagia Sophia', 'Built as a cathedral in 537, it has also been a mosque and a museum.'),
+  (38, 'Alhambra, Granada, Spain', 37.1761, -3.5881, 'medium', 'Alhambra', 'A palace and fortress built by the Nasrid rulers of Granada.'),
+  (39, 'Mont-Saint-Michel, France', 48.6361, -1.5115, 'medium', 'Mont-Saint-Michel', 'At high tide, the sea can cut this abbey island off from the mainland.'),
+  (40, 'Matterhorn, Switzerland/Italy', 45.9763, 7.6586, 'medium', 'Matterhorn', 'The first ascent, in 1865, ended in tragedy: four of the seven climbers died on the way down.'),
+  (41, 'Oia, Santorini, Greece', 36.4618, 25.3753, 'medium', 'Oia, Greece', 'Its white houses and blue domes sit on the rim of Santorini''s caldera.'),
+  (42, 'Table Mountain, Cape Town, South Africa', -33.9628, 18.4098, 'medium', 'Table Mountain', 'Its flat top is about 3 km wide and often covered by a "tablecloth" of cloud.'),
+  (43, 'Uluru, Australia', -25.3444, 131.0369, 'medium', 'Uluru', 'This sandstone monolith rises about 348 m above the flat desert around it.'),
+  (44, 'Kinkaku-ji, Kyoto, Japan', 35.0394, 135.7292, 'medium', 'Kinkaku-ji', 'The Golden Pavilion''s top two floors are covered in gold leaf.'),
+  (45, 'Burj Al Arab, Dubai, UAE', 25.1412, 55.1853, 'medium', 'Burj Al Arab', 'Shaped like a sail, it stands on its own artificial island.'),
+  (46, 'Sheikh Zayed Grand Mosque, Abu Dhabi, UAE', 24.4128, 54.475, 'medium', 'Sheikh Zayed Grand Mosque', 'Its main prayer hall has one of the world''s largest hand-knotted carpets.'),
+  (47, 'Charles Bridge, Prague, Czechia', 50.0865, 14.4114, 'medium', 'Charles Bridge', 'Begun in 1357, the stone bridge is lined with 30 statues.'),
+  (48, 'Hallgrímskirkja, Reykjavík, Iceland', 64.1417, -21.9266, 'medium', 'Hallgrímskirkja', 'Its design was inspired by Iceland''s basalt columns.'),
+  (49, 'Potala Palace, Lhasa, Tibet, China', 29.6578, 91.1169, 'medium', 'Potala Palace', 'The Dalai Lama''s winter palace has more than 1,000 rooms.'),
+  (50, 'Gateway Arch, St. Louis, USA', 38.6247, -90.1848, 'medium', 'Gateway Arch', 'At 192 m, it''s the world''s tallest arch.'),
+  (51, 'Victoria Falls, Zambia/Zimbabwe', -17.9243, 25.8572, 'medium', 'Victoria Falls', 'Its local name, Mosi-oa-Tunya, means "the smoke that thunders".'),
+  (52, 'Iguazu Falls, Argentina/Brazil', -25.6953, -54.4367, 'medium', 'Iguazu Falls', 'It is a chain of about 275 waterfalls on the border of Argentina and Brazil.'),
+  (53, 'Half Dome, Yosemite, USA', 37.7459, -119.5332, 'medium', 'Half Dome', 'Its sheer granite face rises about 1,400 m above Yosemite Valley.'),
+  (54, 'Moraine Lake, Banff, Canada', 51.3217, -116.186, 'medium', 'Moraine Lake', 'Its bright blue colour comes from rock flour ground by glaciers.'),
+  (55, 'Plitvice Lakes, Croatia', 44.8654, 15.582, 'medium', 'Plitvice Lakes National Park', 'Sixteen terraced lakes are linked by waterfalls.'),
+  (56, 'Cliffs of Moher, Ireland', 52.9715, -9.4309, 'medium', 'Cliffs of Moher', 'They rise up to 214 m above the Atlantic.'),
+  (57, 'Edinburgh Castle, Scotland', 55.9486, -3.1999, 'medium', 'Edinburgh Castle', 'It stands on the plug of an extinct volcano.'),
+  (58, 'Wat Arun, Bangkok, Thailand', 13.7437, 100.4889, 'medium', 'Wat Arun', 'The Temple of Dawn''s spires are decorated with pieces of Chinese porcelain.'),
+  (59, 'Borobudur, Java, Indonesia', -7.6079, 110.2038, 'medium', 'Borobudur', 'The world''s largest Buddhist temple was built in the 9th century.'),
+  (60, 'Shwedagon Pagoda, Yangon, Myanmar', 16.7983, 96.1497, 'medium', 'Shwedagon Pagoda', 'Its golden stupa is covered in gold plates and topped with thousands of diamonds.'),
+  (61, 'Ha Long Bay, Vietnam', 20.9101, 107.1839, 'medium', 'Ha Long Bay', 'About 1,600 limestone islands and islets rise out of its water.'),
+  (62, 'Meteora, Greece', 39.7217, 21.6306, 'medium', 'Meteora', 'Its monasteries sit on top of huge rock pillars.'),
+  (63, 'Dubrovnik, Croatia', 42.6507, 18.0944, 'medium', 'Dubrovnik', 'Medieval walls nearly 2 km long surround its old town.'),
+  (64, 'Château Frontenac, Quebec City, Canada', 46.8118, -71.2052, 'medium', 'Château Frontenac', 'It''s often called the most photographed hotel in the world.'),
+  (65, 'Golden Temple, Amritsar, India', 31.62, 74.8765, 'medium', 'Golden Temple', 'Sikhism''s holiest gurdwara, its kitchen serves free meals to tens of thousands of people a day.'),
+  (66, 'Temple of Heaven, Beijing, China', 39.8822, 116.4066, 'medium', 'Temple of Heaven', 'China''s emperors came here to pray for good harvests.'),
+  (67, 'Lake Bled, Slovenia', 46.3625, 14.0938, 'medium', 'Lake Bled', 'A church stands on the lake''s tiny island, reached by rowing boat.'),
+  (68, 'Hallstatt, Austria', 47.5622, 13.6493, 'medium', 'Hallstatt', 'Salt has been mined here for thousands of years.'),
+  (69, 'Grand Canal, Venice, Italy', 45.438, 12.3358, 'medium', 'Grand Canal (Venice)', 'Venice''s main waterway is crossed by just four bridges.'),
+  (70, 'Pamukkale, Turkey', 37.9204, 29.1212, 'medium', 'Pamukkale', 'Its white terraces are made of travertine left behind by hot springs.'),
+  (71, 'Cologne Cathedral, Germany', 50.9413, 6.9583, 'medium', 'Cologne Cathedral', 'It took more than 600 years to finish, from 1248 to 1880.'),
+  (72, 'Florence Cathedral, Italy', 43.7731, 11.256, 'medium', 'Florence Cathedral', 'Brunelleschi''s dome, finished in 1436, is still the largest brick dome ever built.'),
+  (73, 'Atomium, Brussels, Belgium', 50.8949, 4.3415, 'medium', 'Atomium', 'Built for the 1958 World''s Fair, it models an iron crystal magnified 165 billion times.'),
+  (74, 'Tian Tan Buddha, Hong Kong', 22.254, 113.905, 'medium', 'Tian Tan Buddha', 'This 34 m bronze Buddha sits on Lantau Island.'),
+  (75, 'Bagan, Myanmar', 21.1717, 94.8585, 'hard', 'Bagan', 'More than 2,000 Buddhist temples and pagodas still stand on its plain.'),
+  (76, 'Salar de Uyuni, Bolivia', -20.1338, -67.4891, 'hard', 'Salar de Uyuni', 'After rain, the world''s largest salt flat becomes a giant mirror.'),
+  (77, 'Church of Saint George, Lalibela, Ethiopia', 12.0317, 39.0473, 'hard', 'Church of Saint George, Lalibela', 'Like Lalibela''s other medieval churches, it was carved downwards out of solid rock.'),
+  (78, 'Registan, Samarkand, Uzbekistan', 39.6547, 66.9758, 'hard', 'Registan', 'Three madrasas covered in tiles frame this Silk Road square.'),
+  (79, 'Paro Taktsang, Bhutan', 27.4919, 89.3632, 'hard', 'Paro Taktsang', 'The Tiger''s Nest monastery clings to a cliff about 900 m above the Paro valley.'),
+  (80, 'Djinguereber Mosque, Timbuktu, Mali', 16.7758, -3.0106, 'hard', 'Djinguereber Mosque', 'Built of mud in 1327, it helped make Timbuktu a great centre of learning.'),
+  (81, 'Great Mosque of Djenné, Mali', 13.9053, -4.5553, 'hard', 'Great Mosque of Djenné', 'The largest mud-brick building in the world, it''s re-plastered by the town every year.'),
+  (82, 'Deadvlei, Namibia', -24.7593, 15.2924, 'hard', 'Deadvlei', 'Dead camel thorn trees, centuries old, stand on a white clay pan among red dunes.'),
+  (83, 'Avenue of the Baobabs, Madagascar', -20.2507, 44.4186, 'hard', 'Avenue of the Baobabs', 'Giant baobab trees, some hundreds of years old, line this dirt road.'),
+  (84, 'Dragon''s blood trees, Socotra, Yemen', 12.4634, 53.8237, 'hard', 'Dracaena cinnabari', 'These umbrella-shaped trees grow nowhere else in the world.'),
+  (85, 'Chocolate Hills, Bohol, Philippines', 9.8297, 124.1398, 'hard', 'Chocolate Hills', 'More than 1,200 grassy mounds here turn brown in the dry season.'),
+  (86, 'Darvaza Gas Crater, Turkmenistan', 40.2525, 58.4397, 'hard', 'Darvaza gas crater', 'Nicknamed the Door to Hell, this crater has been burning since it was set alight in 1971.'),
+  (87, 'Mount Roraima, Venezuela/Brazil/Guyana', 5.1433, -60.7625, 'hard', 'Mount Roraima', 'Venezuela, Brazil and Guyana meet on its flat top.'),
+  (88, 'Angel Falls, Venezuela', 5.9701, -62.5362, 'hard', 'Angel Falls', 'At 979 m, it''s the world''s tallest waterfall with an unbroken drop.'),
+  (89, 'Sigiriya, Sri Lanka', 7.957, 80.7603, 'hard', 'Sigiriya', 'A 5th-century king built his palace on top of this rock, about 180 m high.'),
+  (90, 'Wadi Rum, Jordan', 29.5759, 35.42, 'hard', 'Wadi Rum', 'This red desert valley has stood in for Mars in several films.'),
+  (91, 'Göbekli Tepe, Turkey', 37.2231, 38.9225, 'hard', 'Göbekli Tepe', 'Its carved stone pillars were raised about 11,000 years ago, before farming began.'),
+  (92, 'Svalbard Global Seed Vault, Norway', 78.2382, 15.4913, 'hard', 'Svalbard Global Seed Vault', 'It keeps backup copies of seeds from almost every country.'),
+  (93, 'Kaieteur Falls, Guyana', 5.1753, -59.4803, 'hard', 'Kaieteur Falls', 'It has a single drop of 226 m and is one of the world''s most powerful waterfalls.'),
+  (94, 'Ellora Caves, India', 20.0258, 75.178, 'hard', 'Ellora Caves', 'Its Kailasa temple was carved downwards out of a single rock.'),
+  (95, 'Hampi, India', 15.335, 76.46, 'hard', 'Hampi', 'These are the ruins of Vijayanagara, one of the world''s largest cities around 1500.'),
+  (96, 'Mount Bromo, Java, Indonesia', -7.9425, 112.953, 'hard', 'Mount Bromo', 'This active volcano rises from a vast sea of volcanic sand.'),
+  (97, 'Tsingy de Bemaraha, Madagascar', -18.6667, 44.7167, 'hard', 'Tsingy de Bemaraha National Park', 'Its forest of razor-sharp limestone pinnacles is almost impossible to cross.'),
+  (98, 'Fish River Canyon, Namibia', -27.59, 17.61, 'hard', 'Fish River Canyon', 'One of the largest canyons in the world, it''s about 160 km long.'),
+  (99, 'Trolltunga, Norway', 60.1242, 6.74, 'hard', 'Trolltunga', 'This rock ledge juts out about 700 m above a lake.'),
+  (100, 'Ushuaia, Argentina', -54.8019, -68.303, 'hard', 'Ushuaia', 'It is often called the southernmost city in the world.'),
+  (101, 'Nuuk, Greenland', 64.1814, -51.6941, 'hard', 'Nuuk', 'Greenland''s capital was founded in 1728 and is one of the smallest capitals in the world.'),
+  (102, 'Longyearbyen, Svalbard, Norway', 78.2232, 15.6267, 'hard', 'Longyearbyen', 'The Svalbard Global Seed Vault is here, holding seeds from around the world.')
+) as seed (n, name, lat, lng, difficulty, photo, notes)
+order by n
+on conflict (name) do nothing;

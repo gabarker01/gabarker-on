@@ -127,6 +127,23 @@ select id, name, difficulty, added_on from public.locations order by id desc lim
 select * from public.locations where name ilike '%peru%';
 ```
 
+## Photo practice places
+
+Photo practice uses its own table, `photo_places` (102 to start: 33 easy,
+41 medium, 28 hard), graded by how recognisable the photo is rather than how
+well known the name is. Each row's `photo` is the English Wikipedia article
+whose main photo is shown (e.g. `Al-Khazneh` for Petra's Treasury). Add rows
+the same way as locations:
+
+```sql
+insert into public.photo_places (name, lat, lng, difficulty, photo, notes)
+values ('Sydney Harbour Bridge, Australia', -33.8523, 151.2108, 'easy',
+        'Sydney Harbour Bridge', 'Locals call it "the Coathanger".');
+```
+
+If an article's picture is a flag, map or drawing, the round shows a
+satellite view instead, so pick articles whose main picture is a photo.
+
 ## Profiles and invites
 
 - Every player has a page at `https://gabarker.com/tapmap/profile/{username}`

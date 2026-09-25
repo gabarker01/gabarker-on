@@ -65,7 +65,25 @@ export async function fetchLocations(timeoutMs = 5000) {
   }
 }
 
+// The places for photo practice (see photo_places in supabase/locations.sql).
+export async function fetchPhotoPlaces(timeoutMs = 5000) {
+  if (!socialEnabled()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/photo_places?select=*&order=id.asc`, { headers: { apikey: SUPABASE_KEY }, signal: controller.signal });
+    if (!response.ok) throw new Error(`Photo places request failed (${response.status})`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---------- Challenges ----------
+
+// (A challenge reaches profiles two ways: its sender, created_by, and the
+// players, through challenge_results. The API won't guess which, so the
+// embeds below name created_by.)
 
 // One challenge by id, with the sender's profile. Plain REST (challenges are
 // public), so it works signed out and without waiting for the auth library.
@@ -73,11 +91,14 @@ export async function fetchChallenge(id, timeoutMs = 8000) {
   if (!socialEnabled()) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const get = (select) => fetch(
+    `${SUPABASE_URL}/rest/v1/challenges?id=eq.${encodeURIComponent(id)}&select=${select}`,
+    { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
+  );
   try {
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/challenges?id=eq.${encodeURIComponent(id)}&select=*,profiles(username,display_name,avatar_url)`,
-      { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
-    );
+    let response = await get("*,profiles!created_by(username,display_name,avatar_url)");
+    // If the sender's profile can't be included, the challenge itself is enough.
+    if (!response.ok && response.status === 400) response = await get("*");
     if (!response.ok) throw new Error(`Challenge request failed (${response.status})`);
     const rows = await response.json();
     return rows[0] || null;
@@ -136,7 +157,7 @@ export async function myChallenges(userId, limit = 50) {
       .order("created_at", { ascending: false })
       .limit(limit),
     client.from("challenge_results")
-      .select("total, created_at, challenges(id, kind, game_number, total, by_name, created_by, created_at, profiles(username, display_name))")
+      .select("total, created_at, challenges(id, kind, game_number, total, by_name, created_by, created_at, profiles!created_by(username, display_name))")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit),

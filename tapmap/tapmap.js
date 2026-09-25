@@ -1,4 +1,5 @@
 import { LOCATIONS } from "./locations.js?v=4";
+import { PHOTO_PLACES } from "./photo-places.js?v=1";
 import {
   ROUNDS, ROUND_PLAN, PHOTO_PLAN, GAME_URL, BULLSEYE_KM,
   todayKey, gameNumber, dateForNumber, weekStart, msUntilNextGame,
@@ -9,7 +10,7 @@ import {
 } from "./game.js?v=7";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=8";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=11";
+import * as social from "./social.js?v=12";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -179,6 +180,8 @@ const todayNumber = gameNumber(today);
 // The whole location list (with each place's added and retired dates) comes
 // from the database when it can be reached, otherwise from the built-in list.
 let allLocations = LOCATIONS;
+// Photo practice has its own places, picked for how recognisable the photo is.
+let photoPlaces = PHOTO_PLACES;
 
 const hasEnoughFor = (locations) =>
   ["easy", "medium", "hard"].every((level) =>
@@ -188,7 +191,7 @@ const hasEnoughFor = (locations) =>
 // database's copy wins, but where it's empty (e.g. before setup.sql has been
 // re-run) the built-in one is used, and places saved on the device before
 // facts existed get them too.
-const BUILT_IN = new Map(LOCATIONS.map((l) => [l.name, l]));
+const BUILT_IN = new Map([...PHOTO_PLACES, ...LOCATIONS].map((l) => [l.name, l]));
 const withDetails = (l) => {
   const known = BUILT_IN.get(l.name);
   if (!known) return l;
@@ -205,6 +208,17 @@ async function loadPool() {
     if (hasEnoughFor(poolFor(today, valid))) allLocations = valid.map(withDetails);
   } catch (error) {
     console.warn("Using the built-in location list:", error);
+  }
+}
+
+async function loadPhotoPlaces() {
+  try {
+    const rows = await social.fetchPhotoPlaces();
+    const valid = (rows || []).filter((r) =>
+      r && typeof r.name === "string" && typeof r.photo === "string" && Number.isFinite(r.lat) && Number.isFinite(r.lng) && ["easy", "medium", "hard"].includes(r.difficulty));
+    if (hasEnoughFor(poolFor(today, valid))) photoPlaces = valid.map(withDetails);
+  } catch (error) {
+    console.warn("Using the built-in photo places:", error);
   }
 }
 
@@ -270,7 +284,11 @@ function newGame(mode, options = {}) {
     return { ...base, plan: options.plan, code: options.code, locations: options.locations, rounds, index: rounds.length };
   }
   const pool = poolFor(today, allLocations);
-  if (mode === "photo") return { ...base, plan: PHOTO_PLAN, locations: practiceLocations(pool, Math.random, PHOTO_PLAN).map(snapshot) };
+  if (mode === "photo") {
+    const photoPool = poolFor(today, photoPlaces);
+    const from = hasEnoughFor(photoPool) ? photoPool : pool;
+    return { ...base, plan: PHOTO_PLAN, locations: practiceLocations(from, Math.random, PHOTO_PLAN).map(snapshot) };
+  }
   return { ...base, locations: practiceLocations(pool).map(snapshot) };
 }
 
@@ -604,7 +622,7 @@ function resolveChallenge(entry) {
     }
   }
   // Saved challenges carry their places; link codes are looked up by name.
-  const locations = ch.places ? savedPlaces(ch.places) : resolvePlaces(ch.codes, allLocations);
+  const locations = ch.places ? savedPlaces(ch.places) : resolvePlaces(ch.codes, [...allLocations, ...photoPlaces]);
   if (!locations) return null;
   return { ch, code, id, plan, mode: "challenge", locations: locations.map(snapshot) };
 }
@@ -1723,7 +1741,7 @@ if (social.socialEnabled()) $("account-button").hidden = false;
 // ---------- Boot ----------
 
 async function boot() {
-  const poolReady = loadPool();
+  const poolReady = Promise.all([loadPool(), loadPhotoPlaces()]);
   globe = await createGlobe($("globe"), { onTap: onGlobeTap, reducedMotion, colors: globeColors() });
   await poolReady;
   window.tapmapReady = true;
