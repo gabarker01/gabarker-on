@@ -1,9 +1,9 @@
 // The challenge page, /tapmap/challenge/{id} (served by /404.html): who sent
 // it and their score, a button to play it, and everyone's results that you
 // can see (you sent it or played it).
-import * as social from "/tapmap/social.js?v=14";
+import * as social from "/tapmap/social.js?v=15";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
-import { signInHref } from "/tapmap/account-button.js?v=3";
+import { signInHref } from "/tapmap/account-button.js?v=4";
 import { formatNumber, gameNumber, todayKey, dateForNumber, MAX_SCORE } from "/tapmap/game.js?v=8";
 
 const $ = (id) => document.getElementById(id);
@@ -59,7 +59,24 @@ function resultRow(rank, person, total, { you = false, sender = false, note = ""
   return li;
 }
 
+// Played it already, or it's yours: the challenge's results (your score and
+// globe, and everyone in it) are on the game page, at this same address.
+const CREATED_KEY = "tapmap:v5:created-challenges"; // challenges made on this device (see tapmap.js)
+function showResults(id) {
+  window.location.replace(`/tapmap/?c=${encodeURIComponent(id)}`);
+}
+function playedHere(id) {
+  try {
+    const played = (JSON.parse(localStorage.getItem(RESULTS_KEY)) || {})[id];
+    const made = (JSON.parse(localStorage.getItem(CREATED_KEY)) || {})[id];
+    return Boolean((played && Array.isArray(played.rounds) && played.rounds.length >= 5) || made);
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function showChallenge(id) {
+  if (playedHere(id)) return showResults(id);
   const loading = $("profile-loading");
   let row = null;
   try {
@@ -85,6 +102,8 @@ export async function showChallenge(id) {
   const sender = row.profiles || null;
   const senderName = row.by_name || (sender ? personName(sender) : "A friend");
   const isSender = Boolean(me && row.created_by === me.id);
+  // Your own practice challenge: straight to its results.
+  if (isSender && row.kind !== "daily") return showResults(id);
   const url = `${window.location.origin}/tapmap/challenge/${id}`;
   const mine = localResult(id);
   // A daily-game challenge for a future date (the sender's time zone is ahead)
@@ -129,6 +148,8 @@ export async function showChallenge(id) {
   } catch (error) {
     console.warn(error);
   }
+  // Played it (on another device): its results.
+  if (me && row.kind !== "daily" && results.some((r) => r.user_id === me.id)) return showResults(id);
   for (const r of results) {
     if (r.user_id === row.created_by) continue; // the sender is already listed
     rows.push({ person: r.profiles, total: r.total, you: Boolean(me && r.user_id === me.id) });

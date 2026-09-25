@@ -8,7 +8,8 @@
 import * as maplibregl from "https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.mjs";
 import { createSpace } from "./space.js";
 
-const LAND = "land-110m.geojson?v=1";
+// (Relative to this file, so it works whatever the page address is.)
+const LAND = new URL("./land-110m.geojson?v=1", import.meta.url).href;
 const IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 export const IMAGERY_CREDIT = "Imagery © Esri, Maxar, Earthstar Geographics";
 const EMPTY = { type: "FeatureCollection", features: [] };

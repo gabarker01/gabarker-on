@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="tapmap.css?v=24">
+  <link rel="stylesheet" href="tapmap.css?v=25">
 </head>
 <body>
   <div id="globe" class="globe" role="application" aria-label="Globe. Tap to place your guess, drag to turn, pinch or scroll to zoom."></div>
@@ -121,18 +121,17 @@
   <!-- Results -->
   <div id="end" class="overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <!-- A challenge's results (at /tapmap/challenge/{id}): share it first -->
+      <div id="challenge-ready" class="challenge-ready" hidden>
+        <button id="challenge-share" class="primary-button" type="button" disabled>Share challenge</button>
+        <p id="challenge-ready-text" class="challenge-ready-text"></p>
+      </div>
+
       <p class="eyebrow" id="end-label"></p>
       <h2 id="end-title" class="final"><span id="final-points">0</span> <span class="final-of">of <span id="final-max">1,000</span></span></h2>
       <p id="end-rating" class="rating"></p>
 
       <div id="summary-globe" class="summary-globe" role="img" aria-label="Globe showing all five guesses and answers"></div>
-
-      <!-- A game played to challenge someone: saved and ready to send -->
-      <div id="challenge-ready" class="challenge-ready" hidden>
-        <p class="eyebrow">Challenge</p>
-        <p id="challenge-ready-text" class="challenge-ready-text"></p>
-        <button id="challenge-share" class="primary-button" type="button" disabled>Share challenge</button>
-      </div>
 
       <div class="share-row">
         <button id="copy-button" class="primary-button" type="button">Copy result</button>
@@ -151,7 +150,12 @@
           <thead><tr><th scope="col">Round</th><th scope="col" id="compare-them">Them</th><th scope="col">You</th></tr></thead>
           <tbody id="compare-rows"></tbody>
         </table>
-        <a id="compare-link" class="link-button centered" href="/tapmap/" hidden>See everyone's results</a>
+      </section>
+
+      <section id="challenge-players" class="friends" hidden>
+        <h3 class="section-label">In this challenge</h3>
+        <ol id="challenge-players-list" class="friends-list league-list"></ol>
+        <p id="challenge-players-anon" class="friends-empty" hidden></p>
       </section>
 
       <div id="end-signin" class="signin-cta end-signin" hidden>
@@ -289,7 +293,7 @@
     TapMap couldn't load. Check your connection and refresh the page.
   </p>
 
-  <script type="module" src="tapmap.js?v=32"></script>
+  <script type="module" src="tapmap.js?v=34"></script>
   <script>
     setTimeout(() => {
       if (!window.tapmapReady) document.getElementById("load-error").hidden = false;

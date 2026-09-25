@@ -8,9 +8,9 @@ import {
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
 } from "./game.js?v=8";
-import { createGlobe, createSummaryGlobe } from "./map.js?v=9";
+import { createGlobe, createSummaryGlobe } from "./map.js?v=10";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=14";
+import * as social from "./social.js?v=15";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -39,6 +39,7 @@ const ARCHIVE_KEY = "tapmap:v5:archive"; // { [game number]: { locations, rounds
 const CHALLENGES_KEY = "tapmap:v5:challenges"; // { [challenge key]: { locations, rounds } }
 const CHALLENGE_KEY = "tapmap:v5:challenge"; // the last challenge opened: a link code, or { id, ch }
 const CHALLENGE_RESULTS_KEY = "tapmap:v5:challenge-results"; // { [challenge id]: { rounds, total, saved } }
+const CREATED_CHALLENGES_KEY = "tapmap:v5:created-challenges"; // { [challenge id]: { at } } made on this device
 const LEGACY_DAILY_KEY = "tapmap:v4:daily";
 const LEGACY_STATS_KEY = "tapmap:v4:stats";
 
@@ -610,6 +611,19 @@ function challengeLink(g) {
   return `${GAME_URL}/?challenge=${code}`;
 }
 
+// The sender's rounds from a saved challenge, as full rounds for the results
+// screen (your own challenge, opened on another device).
+function roundsFromChallenge(ch, locations, plan) {
+  return ch.rounds.map((r, i) => {
+    const answer = { lat: locations[i].lat, lng: locations[i].lng };
+    return {
+      guess: r.guess || answer, answer, distanceKm: r.distanceKm, score: r.score, tier: r.tier,
+      bullseye: r.distanceKm < BULLSEYE_KM, bonus: 0, sat: Boolean(plan[i].photo),
+      multiplier: plan[i].multiplier, weighted: r.score * plan[i].multiplier,
+    };
+  });
+}
+
 // A challenge row from the database, in the same shape as a decoded link.
 function challengeFromRow(row) {
   if (!row) return null;
@@ -755,6 +769,10 @@ async function createChallengeFor(finished, total) {
     });
     finished.challengeUrl = `${GAME_URL}/challenge/${id}`;
     finished.challengeSent = Boolean(target && target.id);
+    finished.challengeId = id;
+    // Kept on this device, so opening the challenge link again shows these results.
+    saveInMap(CHALLENGES_KEY, `id:${id}`, { locations: finished.locations, rounds: finished.rounds });
+    saveInMap(CREATED_CHALLENGES_KEY, id, { at: Date.now() }, 200);
   } catch (error) {
     // If the database can't be reached, the challenge goes in the link itself.
     console.warn("Couldn't save the challenge, so it goes in the link:", error);
@@ -762,29 +780,41 @@ async function createChallengeFor(finished, total) {
   }
 }
 
-// The big "Share challenge" block on a challenge game's results screen.
+// A challenge's results screen, at /tapmap/challenge/{id}: Share challenge at
+// the top, then your score and globe, the round-by-round comparison (if it
+// was someone else's challenge) and everyone who has played it. For a game
+// played to challenge someone (sendAsChallenge), the challenge is saved (and
+// sent to that player's profile) first.
 async function showChallengeReady(finished, total) {
   const block = $("challenge-ready");
-  block.hidden = !finished.sendAsChallenge;
+  const isChallenge = Boolean(finished.sendAsChallenge || finished.challenge);
+  block.hidden = !isChallenge;
+  $("challenge-players").hidden = true;
   // Share challenge is the main button here; Copy result steps back.
-  $("copy-button").classList.toggle("primary-button", !finished.sendAsChallenge);
-  $("copy-button").classList.toggle("secondary-button", Boolean(finished.sendAsChallenge));
-  if (!finished.sendAsChallenge) return;
-  const target = finished.sendAsChallenge.target;
+  $("copy-button").classList.toggle("primary-button", !isChallenge);
+  $("copy-button").classList.toggle("secondary-button", isChallenge);
+  if (!isChallenge) return;
+  const target = finished.sendAsChallenge && finished.sendAsChallenge.target;
   const button = $("challenge-share");
   const text = $("challenge-ready-text");
   button.disabled = true;
   button.textContent = "Getting your challenge ready…";
-  text.textContent = target ? `Your challenge for @${target.username}.` : "Your challenge is ready to send.";
-  if (!finished.challengeUrl) {
+  text.textContent = "";
+  if (finished.challenge) {
+    // Someone's challenge you've played (or your own, opened again).
+    finished.challengeId = finished.challenge.id || null;
+    finished.challengeUrl ||= finished.challenge.id ? `${GAME_URL}/challenge/${finished.challenge.id}` : challengeLink(finished);
+  } else if (!finished.challengeUrl) {
     if (!finished.challengeSaving) finished.challengeSaving = createChallengeFor(finished, total);
     await finished.challengeSaving;
   }
   if (game !== finished) return;
+  // The results live at the challenge's own address.
+  if (finished.challengeId) window.history.replaceState(null, "", `/tapmap/challenge/${finished.challengeId}`);
   text.textContent = finished.challengeSent
     ? `Sent to @${target.username}: it's waiting on their profile. Share the link with them too.`
     : target ? `Share it with @${target.username}: same five places, can they beat ${formatNumber(total)}?`
-      : `Send it to anyone: same five places, can they beat ${formatNumber(total)}?`;
+      : `Same five places for anyone you send it to. Can they beat ${formatNumber(total)}?`;
   button.textContent = "Share challenge";
   button.disabled = false;
   button.onclick = async () => {
@@ -799,6 +829,73 @@ async function showChallengeReady(finished, total) {
     }
     toast((await copyText(message)) ? "Challenge link copied" : "Couldn't copy. Try again.");
   };
+  renderChallengePlayers(finished, total);
+}
+
+// Everyone in the challenge, best first: whoever sent it, everyone who has
+// played it, and you (from this device if your result isn't saved yet).
+async function renderChallengePlayers(finished, total) {
+  const id = finished.challengeId;
+  if (!id) return;
+  const resolved = finished.challenge;
+  const own = !resolved || resolved.own;
+  // (Sign-in may still be loading: the saved session says who you are.)
+  const uid = user ? user.id : social.cachedUserId();
+  const rows = [];
+  if (own) {
+    rows.push({ person: profile || { id: "you", username: "", display_name: "You" }, total, you: true, note: "sent it" });
+  } else {
+    const { ch } = resolved;
+    rows.push({
+      person: { id: ch.createdBy || ch.username || "sender", username: ch.username || "", display_name: challengerName(ch), avatar_url: ch.avatarUrl || null },
+      total: challengerTotal(resolved), you: Boolean(uid && ch.createdBy === uid), note: "sent it", senderId: ch.createdBy,
+    });
+  }
+  let results = [];
+  try { results = await social.fetchChallengeResults(id); } catch (e) {}
+  if (game !== finished) return;
+  const senderId = own ? uid : resolved.ch.createdBy;
+  for (const r of results) {
+    if (!r.profiles || (senderId && r.user_id === senderId)) continue;
+    rows.push({ person: r.profiles, total: r.total, you: Boolean(uid && r.user_id === uid) });
+  }
+  if (!own && !rows.some((r) => r.you)) rows.push({ person: profile || { id: "you", username: "", display_name: "You" }, total, you: true });
+  rows.sort((a, b) => b.total - a.total);
+  let rank = 0;
+  let last = null;
+  $("challenge-players-list").replaceChildren(...rows.map((r, i) => {
+    if (r.total !== last) rank = i + 1;
+    last = r.total;
+    const li = document.createElement("li");
+    if (r.you) li.className = "is-you";
+    const n = document.createElement("span");
+    n.className = "league-rank";
+    n.textContent = String(rank);
+    const who = document.createElement(r.person.username ? "a" : "span");
+    who.className = "person-link";
+    if (r.person.username) who.href = profileUrl(r.person.username);
+    who.append(avatarElement(r.person, "sm"));
+    const name = document.createElement("span");
+    name.className = "friend-name";
+    name.textContent = r.you ? "You" : personName(r.person);
+    who.append(name);
+    const note = document.createElement("span");
+    note.className = "league-played";
+    note.textContent = r.note || "";
+    const score = document.createElement("span");
+    score.className = "friend-total";
+    score.textContent = formatNumber(r.total);
+    li.append(n, who, note, score);
+    return li;
+  }));
+  $("challenge-players").hidden = false;
+  social.anonymousChallengePlayers(id).then((count) => {
+    if (game !== finished) return;
+    // (Your own result from this device, signed out, is already listed as "You".)
+    const others = !user && !own ? count - 1 : count;
+    $("challenge-players-anon").hidden = others < 1;
+    $("challenge-players-anon").textContent = `+ ${others} more ${others === 1 ? "person" : "people"} played without an account.`;
+  }).catch(() => {});
 }
 
 // Your result for a saved challenge: kept on the device, and saved to your
@@ -843,8 +940,9 @@ async function syncChallengeResults() {
 function renderComparison(finished) {
   const section = $("challenge-compare");
   const resolved = finished.challenge;
-  section.hidden = !resolved;
-  if (!resolved) return;
+  // (Your own challenge: nothing to compare with, just who has played it.)
+  section.hidden = !resolved || resolved.own;
+  if (!resolved || resolved.own) return;
   const { ch, plan } = resolved;
   const them = challengerName(ch);
   $("compare-them").textContent = them;
@@ -887,8 +985,6 @@ function renderComparison(finished) {
   if (myTotal > theirTotal) t2.className = "is-winner";
   foot.append(label, t1, t2);
   $("compare-rows").replaceChildren(...rows, foot);
-  $("compare-link").hidden = !resolved.id;
-  if (resolved.id) $("compare-link").href = `/tapmap/challenge/${resolved.id}`;
   const diff = Math.abs(myTotal - theirTotal);
   $("compare-verdict").textContent = myTotal > theirTotal ? `You win by ${formatNumber(diff)} points.`
     : myTotal < theirTotal ? `${them} wins by ${formatNumber(diff)} points.` : "It's a draw.";
@@ -902,6 +998,29 @@ async function playSavedChallenge(id) {
     storage.set(CHALLENGE_KEY, { id, ch });
     const resolved = resolveChallenge(openedChallengeEntry());
     if (!resolved) throw new Error("This challenge's places aren't available");
+    // Your own challenge (made on this device or signed in as its sender):
+    // its results, with the rounds you played when you made it.
+    resolved.own = Boolean(savedMap(CREATED_CHALLENGES_KEY)[id] || (user && ch.createdBy === user.id) || (ch.createdBy && social.cachedUserId && social.cachedUserId() === ch.createdBy));
+    if (resolved.own && resolved.mode === "challenge") {
+      const saved = savedMap(CHALLENGES_KEY)[resolved.code];
+      if (!saved || !Array.isArray(saved.rounds) || saved.rounds.length < ROUNDS) {
+        saveInMap(CHALLENGES_KEY, resolved.code, { locations: resolved.locations, rounds: roundsFromChallenge(ch, resolved.locations, resolved.plan) });
+      }
+    }
+    // Played it signed in on another device: your saved result, not a replay.
+    const uid = user ? user.id : social.cachedUserId();
+    if (!resolved.own && resolved.mode === "challenge" && uid) {
+      const saved = savedMap(CHALLENGES_KEY)[resolved.code];
+      if (!saved || !Array.isArray(saved.rounds) || saved.rounds.length < ROUNDS) {
+        const mine = (await social.fetchChallengeResults(id).catch(() => [])).find((r) => r.user_id === uid);
+        if (mine && Array.isArray(mine.rounds) && mine.rounds.length === ROUNDS) {
+          const theirs = { rounds: mine.rounds.map((r) => ({ score: r.score, distanceKm: r.km, tier: tierFor(r.km), guess: r.guess || null })) };
+          saveInMap(CHALLENGES_KEY, resolved.code, { locations: resolved.locations, rounds: roundsFromChallenge(theirs, resolved.locations, resolved.plan) });
+        }
+      }
+    }
+    // Played at the challenge's own address.
+    window.history.replaceState(null, "", `/tapmap/challenge/${id}`);
     startChallenge(resolved);
     return true;
   } catch (error) {
@@ -1036,7 +1155,9 @@ async function showEnd(finished) {
   $("unranked-note").hidden = isDaily;
   $("unranked-note").textContent = finished.mode === "practice" || finished.mode === "photo"
     ? "Practice doesn't count towards your stats or streak."
-    : "Unranked: saved on this device only, and it doesn't count towards your stats or streak.";
+    : finished.mode === "challenge"
+      ? "Challenges don't count towards your stats or streak."
+      : "Unranked: saved on this device only, and it doesn't count towards your stats or streak.";
 
   const stats = storage.get(STATS_KEY) || {};
   $("end-stats").hidden = !isDaily;
@@ -1649,6 +1770,8 @@ async function onSignedIn(nextUser) {
     renderFriends(game.mode !== "daily");
     renderLeague(game.mode !== "daily");
     if (game.mode === "daily") refreshEndStats();
+    // A challenge's results: now we know who you are (and your photo).
+    if (game.challengeId) renderChallengePlayers(game, totalScore(game.rounds));
   }
   if (user && !(await offerInvite())) afterInvite();
 }

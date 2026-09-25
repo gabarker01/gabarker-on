@@ -3,7 +3,7 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=14";
+import * as social from "/tapmap/social.js?v=15";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
 import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=8";
@@ -333,6 +333,12 @@ async function renderFollowButton(person) {
   button.hidden = false;
   button.disabled = false;
   button.className = state ? "secondary-button" : "primary-button";
+  // Following them: Challenge is the main button, above Unfollow. Otherwise
+  // Follow comes first.
+  const challenge = $("challenge-person");
+  challenge.className = state === "accepted" ? "primary-button" : "secondary-button";
+  if (state === "accepted") button.before(challenge);
+  else button.after(challenge);
   button.textContent = state === "accepted" ? "Unfollow" : state === "pending" ? "Cancel request" : "Follow";
   button.onclick = async () => {
     button.disabled = true;

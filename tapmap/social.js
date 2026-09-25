@@ -79,6 +79,22 @@ export async function fetchPhotoPlaces(timeoutMs = 5000) {
   }
 }
 
+// The signed-in user's id from the saved session on this device, without
+// waiting for the auth library (null if not signed in). Only a hint: the
+// session isn't checked with the server.
+export function cachedUserId() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!/^sb-.*-auth-token$/.test(key)) continue;
+      const session = JSON.parse(localStorage.getItem(key));
+      const id = session && (session.user ? session.user.id : session.currentSession && session.currentSession.user && session.currentSession.user.id);
+      if (id) return id;
+    }
+  } catch (e) {}
+  return null;
+}
+
 // ---------- Challenges ----------
 
 // (A challenge reaches profiles two ways: its sender, created_by, and the
