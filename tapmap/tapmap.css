@@ -2571,3 +2571,57 @@ a.chip-button {
 #new-challenge {
   margin-bottom: 16px;
 }
+
+/* Privacy policy and terms */
+.legal h2 {
+  margin: 30px 0 8px;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.legal h3 {
+  margin: 16px 0 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.legal p,
+.legal li {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.legal p {
+  margin: 0 0 12px;
+}
+
+.legal ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.legal li {
+  margin-bottom: 6px;
+}
+
+.legal strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.legal a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.legal .colophon {
+  margin-top: 36px;
+}
+
+.legal .colophon a {
+  color: inherit;
+}
