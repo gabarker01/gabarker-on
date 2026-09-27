@@ -6,14 +6,15 @@
   --rule: #dad5c9;
   --card: #fbf9f4;
   --accent: #a8742a;
-  --grid: rgba(27, 26, 23, 0.045);
+  --grid: rgba(27, 26, 23, 0.05);
+  --grid-glow: rgba(168, 116, 42, 0.3);
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #121210;
     --ink: #ecebe6;
     --soft: #aaa69c;
@@ -21,8 +22,21 @@
     --rule: #2c2b27;
     --card: #181816;
     --accent: #d9b26a;
-    --grid: rgba(236, 235, 230, 0.035);
+    --grid: rgba(236, 235, 230, 0.04);
+    --grid-glow: rgba(217, 178, 106, 0.28);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121210;
+  --ink: #ecebe6;
+  --soft: #aaa69c;
+  --faint: #74716a;
+  --rule: #2c2b27;
+  --card: #181816;
+  --accent: #d9b26a;
+  --grid: rgba(236, 235, 230, 0.04);
+  --grid-glow: rgba(217, 178, 106, 0.28);
 }
 
 *,
@@ -43,21 +57,80 @@ body {
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  /* Faint graph-paper grid, fading out down the page */
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(to bottom, transparent, var(--bg) 70vh),
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
-  background-position: 0 0, -1px -1px, -1px -1px;
+  background: var(--bg);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 a {
   color: inherit;
 }
 
+/* ---------- Grid and theme toggle ---------- */
+
+.grid,
+.grid-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+.grid {
+  z-index: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.35) 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.grid-glow {
+  --x: 50%;
+  --y: 30%;
+  background-image:
+    linear-gradient(var(--grid-glow) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-glow) 1px, transparent 1px);
+  -webkit-mask-image: radial-gradient(260px circle at var(--x) var(--y), #000, transparent 70%);
+  mask-image: radial-gradient(260px circle at var(--x) var(--y), #000, transparent 70%);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--soft);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.3s ease;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  color: var(--ink);
+  border-color: var(--faint);
+}
+
+.theme-toggle .icon-sun,
+[data-active-theme="dark"] .theme-toggle .icon-moon {
+  display: none;
+}
+
+[data-active-theme="dark"] .theme-toggle .icon-sun {
+  display: block;
+}
+
 .page {
+  position: relative;
+  z-index: 1;
   max-width: 680px;
   margin: 0 auto;
   padding: 104px 24px 48px;
@@ -89,43 +162,6 @@ a {
 .intro h1 em {
   font-style: italic;
   color: var(--accent);
-}
-
-.route {
-  display: block;
-  width: 100%;
-  height: 48px;
-  margin-top: 22px;
-  color: var(--accent);
-  opacity: 0.8;
-}
-
-.route path {
-  stroke-dashoffset: 0;
-  animation: travel 40s linear infinite;
-}
-
-.route-pin {
-  position: absolute;
-  right: 5%;
-  bottom: 22px;
-  width: 16px;
-  height: 22px;
-  color: var(--accent);
-}
-
-.route-start {
-  position: absolute;
-  left: -2px;
-  bottom: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-@keyframes travel {
-  to { stroke-dashoffset: -360; }
 }
 
 /* ---------- Projects ---------- */
@@ -245,7 +281,7 @@ h2 {
   border: 1px solid var(--rule);
   border-radius: 12px;
   background: #0b0d12;
-  transition: transform 0.25s ease;
+  transition: border-color 0.2s ease;
 }
 
 .project-art svg {
@@ -273,7 +309,7 @@ h2 {
 
 .project:hover .project-art,
 .project:focus-visible .project-art {
-  transform: rotate(-4deg) scale(1.03);
+  border-color: var(--accent);
 }
 
 .project:focus-visible {
@@ -346,7 +382,6 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .route path,
   .tm-arc {
     animation: none;
   }
