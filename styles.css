@@ -146,14 +146,10 @@ a {
   letter-spacing: -0.02em;
 }
 
-.intro h1 span {
-  color: var(--accent);
-}
-
 /* ---------- Projects ---------- */
 
 section {
-  margin-top: 64px;
+  margin-top: 40px;
 }
 
 .section-head {
