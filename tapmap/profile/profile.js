@@ -3,7 +3,7 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=16";
+import * as social from "/tapmap/social.js?v=17";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
 import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=8";
@@ -549,7 +549,7 @@ async function renderChallenges() {
       ? `${entries.length} challenge${entries.length === 1 ? "" : "s"} sent and played${decided ? ` · won ${won} of ${decided}` : ""}.`
       : "Challenges you've sent and played.";
   $("challenges-toggle").classList.toggle("has-waiting", waiting > 0);
-  $("challenges-list").replaceChildren(...entries.map((e) => {
+  const items = entries.map((e) => {
     const li = document.createElement("li");
     const link = document.createElement("a");
     link.className = "archive-item challenge-item";
@@ -577,17 +577,52 @@ async function renderChallenges() {
     link.append(text, status);
     li.append(link);
     return li;
-  }));
+  });
+  // Pages of five, side by side: swipe across for more.
+  const pages = [];
+  for (let i = 0; i < items.length; i += CHALLENGES_PER_PAGE) {
+    const page = document.createElement("ol");
+    page.className = "archive-list challenge-page";
+    page.append(...items.slice(i, i + CHALLENGES_PER_PAGE));
+    pages.push(page);
+  }
+  const list = $("challenges-list");
+  list.replaceChildren(...pages);
+  list.scrollLeft = 0;
+  $("challenges-pager").hidden = pages.length < 2;
+  updateChallengePager();
   $("challenges-empty").hidden = entries.length > 0;
   // Something waiting for you: open the list.
   if (waiting && $("challenges-body").hidden) $("challenges-toggle").click();
 }
+
+const CHALLENGES_PER_PAGE = 5;
+const challengePageIndex = () => {
+  const list = $("challenges-list");
+  return list.clientWidth ? Math.round(list.scrollLeft / list.clientWidth) : 0;
+};
+function updateChallengePager() {
+  const count = $("challenges-list").children.length;
+  const index = Math.min(challengePageIndex(), Math.max(count - 1, 0));
+  $("challenges-page").textContent = `${index + 1} of ${count}`;
+  $("challenges-prev").disabled = index === 0;
+  $("challenges-next").disabled = index >= count - 1;
+}
+function showChallengePage(index) {
+  const list = $("challenges-list");
+  list.scrollTo({ left: index * list.clientWidth, behavior: "smooth" });
+}
+$("challenges-list").addEventListener("scroll", () => requestAnimationFrame(updateChallengePager), { passive: true });
+$("challenges-prev").addEventListener("click", () => showChallengePage(challengePageIndex() - 1));
+$("challenges-next").addEventListener("click", () => showChallengePage(challengePageIndex() + 1));
 
 $("challenges-toggle").addEventListener("click", () => {
   const open = $("challenges-body").hidden;
   $("challenges-body").hidden = !open;
   $("challenges-toggle").setAttribute("aria-expanded", String(open));
   $("challenges-toggle").querySelector(".practice-arrow").textContent = open ? "↑" : "↓";
+  $("challenges-section").classList.toggle("is-open", open);
+  if (open) updateChallengePager();
 });
 
 // ---------- Follow links ----------

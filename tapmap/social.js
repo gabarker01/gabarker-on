@@ -421,6 +421,13 @@ export async function weeklyLeague(weekStart) {
     .order("username", { ascending: true }));
 }
 
+// A global leaderboard: 'day' (the game for `day`), 'week' (the Monday-to-
+// Sunday week containing `day`) or 'all'. Best first, plus your own row if
+// you're further down.
+export async function leaderboard(period, day) {
+  return unwrap(await client.rpc("leaderboard", { period, day: day || null, lim: 50 }));
+}
+
 // Saves the player's time zone, so their streak follows their own date.
 export async function saveTimeZone(userId, timeZone) {
   unwrap(await client.from("profiles").update({ time_zone: timeZone }).eq("id", userId));

@@ -177,6 +177,15 @@ select * from public.daily_summary order by game_date desc;
 select * from public.weekly_league order by week_start desc, rank;
 ```
 
+**Global leaderboards** (`/tapmap/leaderboard/`: today, this week, all time)
+come from the `leaderboard(period, day, lim)` function. Anyone can read them;
+they show each signed-in player's name, photo, days played and points (never
+their guesses), and games without an account never appear.
+
+```sql
+select * from public.leaderboard('week', current_date);
+```
+
 In the app, `weekly_league` only shows you and the players who accepted your
 follow (it uses the `games` table's row-level security), and the results
 screen ranks those players for the current week.

@@ -478,6 +478,56 @@ from (
 ) w
 join public.profiles p on p.id = w.user_id;
 
+-- Global leaderboards: every player with an account, for one day's game
+-- (period 'day', the TapMap No. for `day`), the Monday-to-Sunday week
+-- containing `day` ('week'), or all time ('all'). Points are the sum of
+-- daily totals. Returns the top `lim` (at most 100) plus your own row if
+-- you're further down. Anyone can read them; only names, photos and scores
+-- are shown (never guesses), and games without an account never appear.
+create or replace function public.leaderboard(period text, day date default null, lim integer default 50)
+returns table (
+  rank integer,
+  user_id uuid,
+  username text,
+  display_name text,
+  avatar_url text,
+  played integer,
+  points integer,
+  best integer
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with picked as (
+    select g.user_id, g.total
+    from public.games g
+    where g.user_id is not null
+      and case period
+        when 'day' then g.game_date = day
+        when 'week' then g.game_date between day - (extract(isodow from day)::integer - 1)
+                                         and day - (extract(isodow from day)::integer - 1) + 6
+        when 'all' then true
+        else false
+      end
+  ),
+  totals as (
+    select p.user_id, count(*)::integer as played, sum(p.total)::integer as points, max(p.total) as best
+    from picked p
+    group by p.user_id
+  ),
+  ranked as (
+    select rank() over (order by t.points desc)::integer as rank, t.*
+    from totals t
+  )
+  select r.rank, r.user_id, pr.username, pr.display_name, pr.avatar_url, r.played, r.points, r.best
+  from ranked r
+  join public.profiles pr on pr.id = r.user_id
+  where r.rank <= least(greatest(lim, 1), 100) or r.user_id = (select auth.uid())
+  order by r.rank, pr.username;
+$$;
+
 -- ---------- Challenges ----------
 
 -- A challenge: five places and the sender's result, shared as
@@ -716,6 +766,7 @@ grant update (status) on public.follows to authenticated;
 -- (Only these columns: the id, country and time saved are the database's.)
 revoke insert on public.games from anon, authenticated;
 grant insert (user_id, device_id, signed_in, game_date, game_number, rounds, total, time_zone) on public.games to anon, authenticated;
+grant execute on function public.leaderboard(text, date, integer) to anon, authenticated;
 revoke execute on function public.claim_device_games(uuid) from public, anon;
 grant execute on function public.claim_device_games(uuid) to authenticated;
 revoke execute on function public.copy_anonymous_game() from public, anon, authenticated;

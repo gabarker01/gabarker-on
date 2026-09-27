@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=27">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=28">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -148,7 +148,13 @@
           </button>
           <div id="challenges-body" class="past-days" hidden>
             <button id="new-challenge" class="secondary-button" type="button">New challenge</button>
-            <ol id="challenges-list" class="archive-list"></ol>
+            <!-- Five per page; swipe (or use the arrows) for more -->
+            <div id="challenges-list" class="challenge-pages"></div>
+            <div id="challenges-pager" class="challenge-pager" hidden>
+              <button id="challenges-prev" class="pager-button" type="button" aria-label="Previous challenges">←</button>
+              <span id="challenges-page" class="pager-count"></span>
+              <button id="challenges-next" class="pager-button" type="button" aria-label="More challenges">→</button>
+            </div>
             <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. Tap New challenge, or Challenge on a friend's profile.</p>
           </div>
         </section>
@@ -266,17 +272,17 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
-    import("/tapmap/account-button.js?v=5").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
+    import("/tapmap/account-button.js?v=6").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
     const path = window.location.pathname;
     const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
     const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=17").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=18").then((m) => m.showProfile(decodeURIComponent(match[1])));
     } else if (challenge && !path.startsWith("/tapmap/")) {
       // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
       window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
     } else if (challenge) {
-      import("/tapmap/challenge/challenge.js?v=8").then((m) => m.showChallenge(challenge[1]));
+      import("/tapmap/challenge/challenge.js?v=9").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

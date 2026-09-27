@@ -10,7 +10,7 @@ import {
 } from "./game.js?v=8";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=10";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=16";
+import * as social from "./social.js?v=17";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";
@@ -1086,10 +1086,16 @@ const shareTitle = (g) => ({
   challenge: "TapMap Challenge",
 }[g.mode]);
 
+const CHALLENGE_KINDS = { practice: "Random", photo: "Photos", daily: "Daily game" };
 const endLabel = (g) => {
   if (g.mode === "daily") return `TapMap No. ${g.number} · ${longDateOf(today)}`;
   if (g.mode === "archive") return `TapMap No. ${g.number} · ${longDateOf(g.dateKey)} · Unranked`;
-  return { practice: "Practice", photo: "Photo practice", challenge: "Challenge · Unranked" }[g.mode];
+  // A challenge (played, or played to send): "Challenge · Photos" or "Challenge · Random".
+  if (g.mode === "challenge" || g.sendAsChallenge) {
+    const kind = (g.challenge && g.challenge.ch && g.challenge.ch.kind) || challengeKind(g);
+    return `Challenge · ${CHALLENGE_KINDS[kind] || "Random"}`;
+  }
+  return { practice: "Practice", photo: "Photo practice" }[g.mode];
 };
 
 let shareImage = null; // { game, blob } drawn ahead so sharing is instant
