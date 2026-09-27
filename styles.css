@@ -1,33 +1,5 @@
 :root {
-  --bg: #f6f3ec;
-  --ink: #1b1a17;
-  --soft: #5c5850;
-  --faint: #8f8a7f;
-  --rule: #dad5c9;
-  --card: #fbf9f4;
-  --accent: #a8742a;
-  --grid: rgba(27, 26, 23, 0.05);
-  --grid-glow: rgba(168, 116, 42, 0.3);
-  --serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121210;
-    --ink: #ecebe6;
-    --soft: #aaa69c;
-    --faint: #74716a;
-    --rule: #2c2b27;
-    --card: #181816;
-    --accent: #d9b26a;
-    --grid: rgba(236, 235, 230, 0.04);
-    --grid-glow: rgba(217, 178, 106, 0.28);
-  }
-}
-
-:root[data-theme="dark"] {
+  /* Dark by default; the toggle switches to light */
   --bg: #121210;
   --ink: #ecebe6;
   --soft: #aaa69c;
@@ -37,6 +9,21 @@
   --accent: #d9b26a;
   --grid: rgba(236, 235, 230, 0.04);
   --grid-glow: rgba(217, 178, 106, 0.28);
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f3ec;
+  --ink: #1b1a17;
+  --soft: #5c5850;
+  --faint: #8f8a7f;
+  --rule: #dad5c9;
+  --card: #fbf9f4;
+  --accent: #a8742a;
+  --grid: rgba(27, 26, 23, 0.05);
+  --grid-glow: rgba(168, 116, 42, 0.3);
 }
 
 *,
@@ -159,8 +146,7 @@ a {
   letter-spacing: -0.02em;
 }
 
-.intro h1 em {
-  font-style: italic;
+.intro h1 span {
   color: var(--accent);
 }
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="George Barker: projects.">
   <meta name="author" content="George Barker">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark light">
   <meta property="og:title" content="George Barker">
   <meta property="og:description" content="Projects by George Barker.">
   <meta property="og:type" content="website">
@@ -22,13 +22,13 @@
       if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
     } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <!-- Graph-paper grid; the lines brighten around the pointer -->
   <div class="grid" aria-hidden="true"><div class="grid-glow"></div></div>
 
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light mode">
     <svg class="icon-moon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
     <svg class="icon-sun" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
   </button>
@@ -36,7 +36,7 @@
   <main class="page">
     <header class="intro">
       <p class="kicker">gabarker.com</p>
-      <h1>George <em>Barker</em></h1>
+      <h1>George <span>Barker</span></h1>
     </header>
 
     <section aria-labelledby="projects-heading">
@@ -84,6 +84,6 @@
     </footer>
   </main>
 
-  <script src="site.js?v=1"></script>
+  <script src="site.js?v=2"></script>
 </body>
 </html>

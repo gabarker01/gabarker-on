@@ -1,10 +1,10 @@
 // gabarker.com: the light/dark toggle, and the grid lines that brighten
 // around the pointer (drifting slowly on their own when there isn't one).
 const root = document.documentElement;
-const dark = window.matchMedia("(prefers-color-scheme: dark)");
 const toggle = document.getElementById("theme-toggle");
 
-const activeTheme = () => root.dataset.theme || (dark.matches ? "dark" : "light");
+// Dark unless the visitor chose light.
+const activeTheme = () => root.dataset.theme || "dark";
 function syncToggle() {
   const theme = activeTheme();
   root.dataset.activeTheme = theme;
@@ -16,7 +16,6 @@ toggle.addEventListener("click", () => {
   try { localStorage.setItem("theme", next); } catch (e) {}
   syncToggle();
 });
-dark.addEventListener("change", syncToggle);
 syncToggle();
 
 const glow = document.querySelector(".grid-glow");
