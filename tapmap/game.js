@@ -132,6 +132,10 @@ const originalPicks = (dateKey, locations) =>
 //    picked once it has rested for all but the last 3 days of a cycle (so with
 //    20 hard places, 2 a day, a hard place comes back after 8 days at the
 //    soonest). The end of one cycle never runs straight into the next.
+//  - The rest counts across difficulties, so a place that moves to another
+//    difficulty (Bearings' new list from 4 October 2026, which TapMap now
+//    shares) doesn't come straight back. (Before then every place had one
+//    difficulty, so this changes no earlier game.)
 const rankIn = (level, cycle, name) => hashString(`tapmap:cycle:${level}:${cycle}:${name}`);
 
 const simulations = new WeakMap(); // locations array -> { upTo, days: Map(dateKey -> picks) }
@@ -141,6 +145,7 @@ function simulate(locations, upTo) {
   if (cached && cached.upTo >= upTo) return cached.days;
   const days = new Map();
   const state = Object.fromEntries(LEVELS.map((level) => [level, { cycle: 0, used: new Set(), lastSeen: new Map() }]));
+  const lastSeen = new Map(); // name -> day last shown, at any difficulty
   let day = 0;
   for (let key = LAUNCH_DATE; key <= upTo; key = nextDateKey(key), day++) {
     if (key < PICKER_START) {
@@ -150,6 +155,7 @@ function simulate(locations, upTo) {
         if (!loc) return;
         state[loc.difficulty].used.add(loc.name);
         state[loc.difficulty].lastSeen.set(loc.name, day);
+        lastSeen.set(loc.name, day);
       });
       days.set(key, picks);
       continue;
@@ -172,12 +178,13 @@ function simulate(locations, upTo) {
           candidates = open;
         }
         candidates.sort((a, b) => rankIn(level, s.cycle, a.name) - rankIn(level, s.cycle, b.name) || (a.name < b.name ? -1 : 1));
-        const rested = candidates.find((loc) => !s.lastSeen.has(loc.name) || day - s.lastSeen.get(loc.name) > cooldown);
+        const rested = candidates.find((loc) => !lastSeen.has(loc.name) || day - lastSeen.get(loc.name) > cooldown);
         // (If nothing has rested long enough, the one shown longest ago.)
-        const pick = rested || candidates.reduce((a, b) => (s.lastSeen.get(b.name) < s.lastSeen.get(a.name) ? b : a));
+        const pick = rested || candidates.reduce((a, b) => ((lastSeen.get(b.name) ?? -1) < (lastSeen.get(a.name) ?? -1) ? b : a));
         chosen.push(pick);
         s.used.add(pick.name);
         s.lastSeen.set(pick.name, day);
+        lastSeen.set(pick.name, day);
       }
       picks[level] = chosen;
     }

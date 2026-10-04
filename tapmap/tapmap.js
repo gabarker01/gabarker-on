@@ -7,10 +7,10 @@ import {
   ratingFor, tierFor, formatNumber, shareText,
   recordDailyResult, currentStreak,
   encodeChallenge, decodeChallenge, resolvePlaces, placeCode,
-} from "./game.js?v=8";
+} from "./game.js?v=9";
 import { createGlobe, createSummaryGlobe } from "./map.js?v=10";
 import { AUTH_PROVIDERS } from "./config.js?v=3";
-import * as social from "./social.js?v=17";
+import * as social from "./social.js?v=18";
 import { initials, colourFor, avatarElement } from "./avatar.js?v=2";
 import { landmarkPhoto, photoCredit } from "./photo.js?v=1";
 import { satellitePhoto } from "./satellite.js?v=2";

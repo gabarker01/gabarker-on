@@ -1,9 +1,9 @@
 // Global leaderboards: today's game, this week (Monday to Sunday) and all
 // time, for every player with an account. Points are daily-game totals.
-import * as social from "/tapmap/social.js?v=17";
+import * as social from "/tapmap/social.js?v=18";
 import { avatarElement } from "/tapmap/avatar.js?v=2";
-import { mountAccountButton, signInHref } from "/tapmap/account-button.js?v=6";
-import { todayKey, gameNumber, formatNumber } from "/tapmap/game.js?v=8";
+import { mountAccountButton, signInHref } from "/tapmap/account-button.js?v=7";
+import { todayKey, gameNumber, formatNumber } from "/tapmap/game.js?v=9";
 
 mountAccountButton(document.getElementById("account-slot"));
 

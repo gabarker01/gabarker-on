@@ -49,13 +49,25 @@ const unwrap = ({ data, error }) => {
 // not yet live or already retired (the daily picker replays every day since
 // launch). Plain REST so the game doesn't wait for the auth library. (All
 // columns, so a database that hasn't been updated yet still works.)
+// TapMap now plays the same places as Bearings: Bearings' list
+// (bearings_locations) first, its own original table if that's unavailable.
 export async function fetchLocations(timeoutMs = 5000) {
+  try {
+    const rows = await fetchTable("bearings_locations", timeoutMs);
+    if (Array.isArray(rows) && rows.length) return rows;
+  } catch (error) {
+    console.warn("Bearings' place list unavailable, using TapMap's:", error);
+  }
+  return fetchTable("locations", timeoutMs);
+}
+
+async function fetchTable(table, timeoutMs) {
   if (!socialEnabled()) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/locations?select=*&order=id.asc`,
+      `${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc`,
       { headers: { apikey: SUPABASE_KEY }, signal: controller.signal },
     );
     if (!response.ok) throw new Error(`Locations request failed (${response.status})`);
