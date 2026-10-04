@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex">
   <title>TapMap is now Bearings</title>
-  <!-- TapMap → Bearings. Shown to TapMap players: it gathers what this browser
+  <!-- TapMap → Bearings, at /tapmap/ (and /tapmap/migration/). Shown to TapMap players: it gathers what this browser
        saved for TapMap (stats, streak, past games, challenges, device id and
        sign-in), counts down, and sends them to bearings.quest with it after
        the # (never sent to a server). Bearings reads it in importFromTapMap
@@ -221,6 +221,25 @@
   (() => {
     const SECONDS = 10;
     const TARGET = "https://bearings.quest/";
+    // Where they were going on TapMap, as the same page on Bearings: other
+    // TapMap pages send ?from=<path after /tapmap>; here, TapMap's own links
+    // (?c=, ?challenge=, ?invite=...) are kept.
+    const KEEP = ["c", "challenge", "invite", "signin", "play", "n", "to", "send"];
+    function nextPath() {
+      const here = new URLSearchParams(window.location.search);
+      let path = "/";
+      let query = here;
+      const from = here.get("from");
+      if (from && from.startsWith("/")) {
+        const url = new URL(from, "https://bearings.quest");
+        path = url.pathname;
+        query = url.searchParams;
+      }
+      const kept = new URLSearchParams();
+      for (const key of KEEP) if (query.has(key)) kept.set(key, query.get(key));
+      const search = kept.toString();
+      return path + (search ? `?${search}` : "");
+    }
     const read = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
     const raw = (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
 
@@ -262,7 +281,7 @@
       const saved = key ? read(key) : null;
       const session = saved && saved.access_token && saved.refresh_token
         ? { access_token: saved.access_token, refresh_token: saved.refresh_token } : null;
-      return { payload: { v: 1, at: Date.now(), data, session }, key: session ? key : null };
+      return { payload: { v: 1, at: Date.now(), data, session, next: nextPath() }, key: session ? key : null };
     }
 
     const toBase64Url = (bytes) => {

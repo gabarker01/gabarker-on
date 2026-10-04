@@ -2,6 +2,16 @@
 <html lang="en" class="profile-root">
 <head>
   <meta charset="UTF-8">
+  <!-- TapMap is now Bearings: TapMap profile and challenge links go to the
+       notice at /tapmap/, which sends players to the same page there. Other
+       addresses on gabarker.com are unaffected. -->
+  <script>
+    (() => {
+      const path = window.location.pathname;
+      const match = path.match(/^\/tapmap(\/.*)$/) || path.match(/^(\/challenge\/[a-z0-9]{6,16})\/?$/);
+      if (match) window.location.replace("/tapmap/?from=" + encodeURIComponent(match[1].replace(/\/$/, "") + window.location.search));
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark">
