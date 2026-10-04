@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex">
+  <title>TapMap is now Bearings</title>
+  <!-- TapMap → Bearings. Shown to TapMap players: it gathers what this browser
+       saved for TapMap (stats, streak, past games, challenges, device id and
+       sign-in), counts down, and sends them to bearings.quest with it after
+       the # (never sent to a server). Bearings reads it in importFromTapMap
+       (bearings.js). TapMap's own sign-in is cleared here as it hands over, so
+       the two sites don't share one session. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&family=Instrument+Serif:ital@0;1&display=swap">
+  <style>
+    :root {
+      --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+      --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+      --paper: #0b0d12;
+      --ink: #f1ece2;
+      --ink-soft: #a7abb3;
+      --ink-faint: #71767f;
+      --hairline: rgba(241, 236, 226, 0.1);
+      --accent: #d9b26a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(120% 80% at 50% 110%, #101a2a 0%, transparent 60%),
+        radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,.7), transparent),
+        radial-gradient(1px 1px at 78% 12%, rgba(255,255,255,.5), transparent),
+        radial-gradient(1px 1px at 32% 72%, rgba(255,255,255,.4), transparent),
+        radial-gradient(1px 1px at 88% 64%, rgba(255,255,255,.6), transparent),
+        radial-gradient(1px 1px at 55% 35%, rgba(255,255,255,.35), transparent),
+        radial-gradient(1px 1px at 8% 88%, rgba(255,255,255,.5), transparent),
+        #000;
+    }
+    .card {
+      width: 100%;
+      min-width: 0;
+      max-width: 460px;
+      padding: 32px 26px 26px;
+      background: rgba(14, 17, 24, 0.82);
+      border: 1px solid rgba(241, 236, 226, 0.08);
+      border-radius: 28px;
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 16px 48px -16px rgba(0,0,0,.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* The two wordmarks, each in its own style: TapMap → Bearings */
+    .brands {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 26px;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink); }
+    .mark { width: 34px; height: 34px; flex: none; overflow: visible; }
+    .brand-tapmap { opacity: 0.6; }
+    .tapmap-name { font-family: var(--serif); font-size: 1.4rem; letter-spacing: -0.01em; }
+    .tapmap-name em { color: var(--accent); }
+    .bearings-name { font-family: var(--sans); font-weight: 600; font-size: 1.35rem; letter-spacing: -0.04em; color: var(--accent); }
+    @media (max-width: 360px) {
+      .card { padding: 28px 18px 22px; }
+      h1 { font-size: 2rem; }
+    }
+    .arrow { color: var(--ink-faint); font-size: 1.2rem; }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2.3rem;
+      line-height: 1.08;
+      font-weight: 400;
+      text-align: center;
+    }
+    h1 .t { font-family: var(--serif); letter-spacing: -0.01em; }
+    h1 .t em { color: var(--accent); }
+    h1 .b { font-family: var(--sans); font-weight: 600; letter-spacing: -0.045em; color: var(--accent); }
+    .lead { margin: 0 0 24px; text-align: center; font-size: 1.05rem; color: var(--ink-soft); }
+
+    /* Countdown ring */
+    .countdown[hidden] { display: none; }
+    .countdown { display: grid; place-items: center; margin: 0 auto 18px; width: 84px; height: 84px; position: relative; }
+    .countdown svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+    .countdown circle { fill: none; stroke-width: 3; }
+    .countdown .track { stroke: var(--hairline); }
+    .countdown .progress { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+    .countdown-number { font-family: var(--mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+
+    .redirect { margin: 0 0 8px; text-align: center; font-size: 0.95rem; }
+    .reassure { margin: 0 0 22px; text-align: center; font-size: 0.92rem; line-height: 1.5; color: var(--ink-soft); }
+    .coming { margin: -8px 0 22px; text-align: center; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; color: var(--ink-faint); }
+    .coming:empty { display: none; }
+
+    .go {
+      display: block;
+      width: 100%;
+      min-height: 54px;
+      padding: 14px 22px;
+      font: inherit;
+      font-weight: 500;
+      color: var(--paper);
+      background: var(--ink);
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .go:active { transform: scale(0.985); }
+    .stay {
+      display: block;
+      margin: 12px auto 0;
+      padding: 6px;
+      font: inherit;
+      font-size: 0.85rem;
+      color: var(--ink-faint);
+      background: none;
+      border: none;
+      text-decoration: underline;
+      text-decoration-color: var(--hairline);
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+    .stay[hidden] { display: none; }
+    @media (prefers-reduced-motion: reduce) { .card { animation: none; } .countdown .progress { transition: none; } }
+  </style>
+</head>
+<body>
+  <main class="card" aria-labelledby="title">
+    <div class="brands" aria-hidden="true">
+      <span class="brand brand-tapmap">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+          <defs>
+            <radialGradient id="mark-sphere" cx="38%" cy="32%" r="75%">
+              <stop offset="0" stop-color="#34496a"/>
+              <stop offset="1" stop-color="#101a2a"/>
+            </radialGradient>
+            <clipPath id="mark-clip"><circle cx="18" cy="21" r="14"/></clipPath>
+          </defs>
+          <circle cx="18" cy="21" r="16.5" fill="none" stroke="#d9b26a" stroke-opacity="0.35" stroke-width="0.8"/>
+          <circle cx="18" cy="21" r="14" fill="url(#mark-sphere)"/>
+          <g clip-path="url(#mark-clip)" fill="none" stroke="rgba(241,236,226,0.3)" stroke-width="0.7">
+            <ellipse cx="18" cy="21" rx="6" ry="14"/>
+            <path d="M4 21h28M5.8 14.5c7.4 2.2 17 2.2 24.4 0M5.8 27.5c7.4-2.2 17-2.2 24.4 0"/>
+          </g>
+          <path d="M9 27C13 13 24 9 29.5 10.5" fill="none" stroke="#d9b26a" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1.2 2.6"/>
+          <path d="M30 13.2c-.5-1.9-3.1-3-3.1-5.5a3.1 3.1 0 0 1 6.2 0c0 2.5-2.6 3.6-3.1 5.5z" fill="#d9b26a"/>
+          <circle cx="30" cy="7.7" r="1.1" fill="#0b0d12"/>
+        </svg>
+        <span class="tapmap-name">Tap<em>Map</em></span>
+      </span>
+      <span class="arrow">&rarr;</span>
+      <span class="brand brand-bearings">
+        <svg class="mark mark-bearings" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" fill="none" stroke="var(--ink)" stroke-opacity="0.35" stroke-width="0.8"/>
+        <path d="M20 1.8v3M38.2 20h-3M20 38.2v-3M1.8 20h3" stroke="var(--ink)" stroke-opacity="0.55" stroke-width="1" stroke-linecap="round"/>
+        <!-- The rose stays fixed on north; the heading (trail and bead) turns. -->
+        <g class="mark-rose">
+          <g transform="rotate(45 20 20)"><path d="M20 14.8L20 20L19.05 19.05Z" fill="var(--ink)" fill-opacity="0.5"/><path d="M20 14.8L20.95 19.05L20 20Z" fill="var(--ink)" fill-opacity="0.22"/></g>
+          <g transform="rotate(135 20 20)"><path d="M20 14.8L20 20L19.05 19.05Z" fill="var(--ink)" fill-opacity="0.5"/><path d="M20 14.8L20.95 19.05L20 20Z" fill="var(--ink)" fill-opacity="0.22"/></g>
+          <g transform="rotate(225 20 20)"><path d="M20 14.8L20 20L19.05 19.05Z" fill="var(--ink)" fill-opacity="0.5"/><path d="M20 14.8L20.95 19.05L20 20Z" fill="var(--ink)" fill-opacity="0.22"/></g>
+          <g transform="rotate(315 20 20)"><path d="M20 14.8L20 20L19.05 19.05Z" fill="var(--ink)" fill-opacity="0.5"/><path d="M20 14.8L20.95 19.05L20 20Z" fill="var(--ink)" fill-opacity="0.22"/></g>
+          <g transform="rotate(90 20 20)"><path d="M20 11.4L20 20L18.6 18.6Z" fill="var(--ink)" fill-opacity="0.85"/><path d="M20 11.4L21.4 18.6L20 20Z" fill="var(--ink)" fill-opacity="0.38"/></g>
+          <g transform="rotate(180 20 20)"><path d="M20 11.4L20 20L18.6 18.6Z" fill="var(--ink)" fill-opacity="0.85"/><path d="M20 11.4L21.4 18.6L20 20Z" fill="var(--ink)" fill-opacity="0.38"/></g>
+          <g transform="rotate(270 20 20)"><path d="M20 11.4L20 20L18.6 18.6Z" fill="var(--ink)" fill-opacity="0.85"/><path d="M20 11.4L21.4 18.6L20 20Z" fill="var(--ink)" fill-opacity="0.38"/></g>
+          <g transform="rotate(0 20 20)"><path d="M20 11.4L20 20L18.6 18.6Z" fill="var(--accent)" fill-opacity="1"/><path d="M20 11.4L21.4 18.6L20 20Z" fill="var(--accent)" fill-opacity="0.55"/></g>
+        </g>
+        <g class="mark-heading">
+          <path class="mark-trail" d="M20 9.6V5.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" stroke-dasharray="0.9 1.8"/>
+          <circle cx="20" cy="3" r="2.3" fill="var(--accent)" stroke="var(--paper)" stroke-width="0.9"/>
+        </g>
+        <circle cx="20" cy="20" r="1" fill="var(--paper)" stroke="var(--ink)" stroke-width="0.5"/>
+      </svg>
+        <span class="bearings-name">bearings.</span>
+      </span>
+    </div>
+
+    <p class="eyebrow">Big news</p>
+    <h1 id="title"><span class="t">Tap<em>Map</em></span> is now <span class="b">Bearings.</span></h1>
+    <p class="lead">Same daily game, new home.</p>
+
+    <div class="countdown" aria-hidden="true">
+      <svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="39"/><circle id="ring" class="progress" cx="42" cy="42" r="39"/></svg>
+      <span id="count" class="countdown-number">10</span>
+    </div>
+    <p class="redirect" role="status" aria-live="polite">You&rsquo;ll be redirected in <span id="count-text">10 seconds</span>.</p>
+    <p class="reassure">Don&rsquo;t worry &ndash; your streak, stats, previous scores and account will automatically come with you to the new site.</p>
+    <p id="coming" class="coming"></p>
+
+    <button id="go" class="go" type="button">Go to Bearings now</button>
+    <button id="stay" class="stay" type="button">Wait, don&rsquo;t redirect me yet</button>
+  </main>
+
+  <script>
+  (() => {
+    const SECONDS = 10;
+    const TARGET = "https://bearings.quest/";
+    const read = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
+    const raw = (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
+
+    // Places travel without their notes and photos (Bearings has its own),
+    // to keep the link short.
+    const lean = (list) => Array.isArray(list)
+      ? list.map((l) => (l && typeof l === "object" ? { name: l.name, lat: l.lat, lng: l.lng, difficulty: l.difficulty } : l))
+      : list;
+    const leanGames = (map) => {
+      if (!map || typeof map !== "object") return null;
+      const out = {};
+      for (const [k, v] of Object.entries(map)) out[k] = v && typeof v === "object" && Array.isArray(v.locations) ? { ...v, locations: lean(v.locations) } : v;
+      return out;
+    };
+
+    // TapMap's sign-in (the Supabase session saved by its auth library).
+    function sessionKey() {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (/^sb-.*-auth-token$/.test(key)) return key;
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function gather() {
+      const daily = read("tapmap:v5:daily");
+      const data = {
+        stats: read("tapmap:v5:stats") || read("tapmap:v4:stats"),
+        daily: daily && typeof daily === "object" ? { ...daily, locations: lean(daily.locations) } : null,
+        archive: leanGames(read("tapmap:v5:archive")),
+        challenges: leanGames(read("tapmap:v5:challenges")),
+        challengeResults: read("tapmap:v5:challenge-results"),
+        createdChallenges: read("tapmap:v5:created-challenges"),
+        device: raw("tapmap:device"),
+      };
+      const key = sessionKey();
+      const saved = key ? read(key) : null;
+      const session = saved && saved.access_token && saved.refresh_token
+        ? { access_token: saved.access_token, refresh_token: saved.refresh_token } : null;
+      return { payload: { v: 1, at: Date.now(), data, session }, key: session ? key : null };
+    }
+
+    const toBase64Url = (bytes) => {
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    };
+
+    async function handoverUrl(payload) {
+      const bytes = new TextEncoder().encode(JSON.stringify(payload));
+      if (typeof CompressionStream === "function") {
+        try {
+          const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+          const packed = new Uint8Array(await new Response(stream).arrayBuffer());
+          return `${TARGET}#import=2.${toBase64Url(packed)}`;
+        } catch (e) {}
+      }
+      return `${TARGET}#import=1.${toBase64Url(bytes)}`;
+    }
+
+    // What's coming with them, so they can see it.
+    const { payload } = gather();
+    const bits = [];
+    const stats = payload.data.stats;
+    if (stats && stats.played) bits.push(`${stats.played} game${stats.played === 1 ? "" : "s"}`);
+    if (stats && stats.streak) bits.push(`${stats.streak}-day streak`);
+    if (payload.session) bits.push("your account");
+    document.getElementById("coming").textContent = bits.length ? `Coming with you: ${bits.join(" · ")}` : "";
+
+    let going = false;
+    async function go() {
+      if (going) return;
+      going = true;
+      clearInterval(timer);
+      document.getElementById("go").textContent = "Taking you to Bearings…";
+      // Gathered again at the last moment, so the sign-in is current.
+      const { payload: fresh, key } = gather();
+      const url = await handoverUrl(fresh);
+      // Bearings takes over the sign-in: TapMap forgets its copy on this
+      // device (without signing out on the server, which would end it there too).
+      if (key) { try { localStorage.removeItem(key); } catch (e) {} }
+      window.location.replace(url);
+    }
+
+    // Countdown
+    const ring = document.getElementById("ring");
+    const length = 2 * Math.PI * 39;
+    ring.style.strokeDasharray = `${length}`;
+    ring.style.strokeDashoffset = "0";
+    let left = SECONDS;
+    const show = () => {
+      document.getElementById("count").textContent = String(left);
+      document.getElementById("count-text").textContent = `${left} second${left === 1 ? "" : "s"}`;
+      ring.style.strokeDashoffset = `${length * (1 - left / SECONDS)}`;
+    };
+    show();
+    const timer = setInterval(() => {
+      left -= 1;
+      show();
+      if (left <= 0) go();
+    }, 1000);
+
+    document.getElementById("go").addEventListener("click", go);
+    document.getElementById("stay").addEventListener("click", (event) => {
+      clearInterval(timer);
+      document.querySelector(".countdown").hidden = true;
+      document.querySelector(".redirect").textContent = "No rush: tap the button when you're ready.";
+      event.currentTarget.hidden = true;
+    });
+  })();
+  </script>
+</body>
+</html>
