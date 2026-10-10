@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="dark">
+  <title>Bearings daily summary</title>
+  <!-- Daily totals from Bearings' database (public_daily_summary in the
+       bearings repo's supabase/public-summary.sql): players, average and
+       best per day, no names. Fetched when the page opens and every 3 hours. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+  <style>
+    :root {
+      --paper: #0b0d12;
+      --panel: #11141b;
+      --ink: #f1ece2;
+      --ink-soft: #a7abb3;
+      --ink-faint: #71767f;
+      --hairline: rgba(241, 236, 226, 0.1);
+      --accent: #d9b26a;
+      --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 32px 16px 48px;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: var(--paper);
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    .wordmark { margin: 0; font-size: 1.6rem; font-weight: 600; letter-spacing: -0.04em; color: var(--accent); }
+    h1 { margin: 6px 0 4px; font-size: 2rem; font-weight: 600; letter-spacing: -0.03em; }
+    .meta { margin: 0 0 24px; font-size: 0.85rem; color: var(--ink-soft); }
+    .meta button {
+      margin-left: 6px; padding: 2px 10px; font: inherit; font-size: 0.8rem; color: var(--ink);
+      background: none; border: 1px solid var(--hairline); border-radius: 999px; cursor: pointer;
+    }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .tile { padding: 14px 16px; background: var(--panel); border: 1px solid var(--hairline); border-radius: 16px; }
+    .tile-label { margin: 0 0 6px; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+    .tile-value { margin: 0; font-family: var(--mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 16px; background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 10px 14px; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-size: 0.7rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--hairline); }
+    td { font-family: var(--mono); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--hairline); }
+    td:first-child { font-family: var(--sans); }
+    tr:last-child td { border-bottom: none; }
+    .no { color: var(--ink-faint); }
+    .status { padding: 20px; text-align: center; color: var(--ink-soft); }
+    .note { margin-top: 16px; font-size: 0.8rem; color: var(--ink-faint); }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="wordmark">bearings.</p>
+    <h1>Daily summary</h1>
+    <p class="meta"><span id="updated">Loading…</span> · refreshes every 3 hours <button id="refresh" type="button">Refresh now</button></p>
+
+    <div class="tiles">
+      <div class="tile"><p class="tile-label">Latest day</p><p id="t-today" class="tile-value">–</p></div>
+      <div class="tile"><p class="tile-label">Last 7 days</p><p id="t-week" class="tile-value">–</p></div>
+      <div class="tile"><p class="tile-label">Last 90 days</p><p id="t-all" class="tile-value">–</p></div>
+      <div class="tile"><p class="tile-label">Best (90 days)</p><p id="t-best" class="tile-value">–</p></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Day</th><th>Players</th><th>Signed in</th><th>No account</th><th>Average</th><th>Best</th></tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="6" class="status">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="note">Games played each day on Bearings (and TapMap before it), by each player's own date. Totals only: no names or personal details.</p>
+  </main>
+
+  <script>
+    (() => {
+      const SUPABASE_URL = "https://qmgwlvjvwwrlcuupsttb.supabase.co";
+      const SUPABASE_KEY = "sb_publishable_5z6nUJz6Si0NjEOAJUDiwA_ztDlxixv";
+      const EVERY = 3 * 60 * 60 * 1000;
+      let last = 0; // when the numbers were last fetched
+      const $ = (id) => document.getElementById(id);
+      const num = (n) => (Number.isFinite(n) ? n.toLocaleString("en-GB") : "–");
+      const day = (key) => new Date(`${key}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+      function cell(text, className) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (className) td.className = className;
+        return td;
+      }
+
+      function render(rows) {
+        const body = $("rows");
+        body.replaceChildren();
+        if (!rows.length) {
+          const tr = document.createElement("tr");
+          tr.append(Object.assign(cell("No games yet.", "status"), { colSpan: 6 }));
+          body.append(tr);
+        }
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          const first = cell(`${day(r.game_date)} `);
+          first.append(Object.assign(document.createElement("span"), { className: "no", textContent: `No. ${r.game_number}` }));
+          tr.append(first, cell(num(r.players)), cell(num(r.signed_in_players)), cell(num(r.players_without_account)), cell(num(r.average)), cell(num(r.best)));
+          body.append(tr);
+        }
+        const sum = (list) => list.reduce((a, r) => a + (r.players || 0), 0);
+        $("t-today").textContent = rows.length ? num(rows[0].players) : "0";
+        $("t-week").textContent = num(sum(rows.slice(0, 7)));
+        $("t-all").textContent = num(sum(rows));
+        $("t-best").textContent = rows.length ? num(Math.max(...rows.map((r) => r.best || 0))) : "–";
+      }
+
+      async function load() {
+        last = Date.now();
+        $("updated").textContent = "Updating…";
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/public_daily_summary`, {
+            method: "POST",
+            headers: { apikey: SUPABASE_KEY, "content-type": "application/json" },
+            body: JSON.stringify({ days: 90 }),
+          });
+          if (!response.ok) throw new Error(`The database answered ${response.status}`);
+          const rows = await response.json();
+          render(Array.isArray(rows) ? rows : []);
+          $("updated").textContent = `Updated ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+        } catch (error) {
+          console.error(error);
+          $("updated").textContent = "Couldn't load the latest numbers";
+          const body = $("rows");
+          if (!body.querySelector("td:not(.status)")) {
+            body.replaceChildren();
+            const tr = document.createElement("tr");
+            tr.append(Object.assign(cell("Couldn't load the summary. Has public-summary.sql been run in Supabase?", "status"), { colSpan: 6 }));
+            body.append(tr);
+          }
+        }
+      }
+
+      $("refresh").addEventListener("click", load);
+      load();
+      setInterval(load, EVERY);
+      // Back to the tab after a while (timers pause in the background): catch up.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && Date.now() - last > EVERY) load();
+      });
+    })();
+  </script>
+</body>
+</html>
