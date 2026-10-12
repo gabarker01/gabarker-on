@@ -8,38 +8,37 @@
   <title>Lobby · GeoBarkr</title>
   <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
   <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
   <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
 </head>
 <body>
   <div id="gb-header"></div>
   <main class="gb-page">
-    <h1 class="gb-page-title">Game Lobby</h1>
-    <div class="gb-grid-2" id="lobby" hidden>
-      <div class="gb-card">
+    <h1 class="gb-page-title">Game lobby</h1>
+    <div class="gb-columns" id="lobby" hidden>
+      <section class="gb-section">
         <h2 id="players-title">Players</h2>
         <p class="gb-muted" id="host-note" hidden></p>
         <ul class="gb-players" id="players"></ul>
-      </div>
-      <div>
-        <div class="gb-card">
-          <table class="gb-table gb-info-table">
-            <tbody>
-              <tr><th>Game type</th><td id="info-type"></td></tr>
-              <tr><th>Map</th><td id="info-map"></td></tr>
-              <tr><th>Rounds</th><td id="info-rounds"></td></tr>
-              <tr><th>Players</th><td id="info-players"></td></tr>
-            </tbody>
-          </table>
+        <dl class="gb-facts" style="margin-top: 20px">
+          <dt>Game type</dt><dd id="info-type"></dd>
+          <dt>Map</dt><dd id="info-map"></dd>
+          <dt>Rounds</dt><dd id="info-rounds"></dd>
+          <dt>Players</dt><dd id="info-players"></dd>
+        </dl>
+      </section>
+      <section class="gb-section gb-share">
+        <div class="gb-sign gb-code-sign" style="width: 100%">
+          <span class="gb-code-label">Room code</span>
+          <span class="gb-code" id="room-code"></span>
         </div>
-        <div class="gb-card gb-center">
-          <h2>Room code</h2>
-          <div class="gb-room-code" id="room-code"></div>
-          <div id="qr"></div>
-          <p class="gb-muted" id="join-help"></p>
-          <button class="gb-button gb-button-block" type="button" id="start-button" hidden>Start Game</button>
-          <p class="gb-muted" id="waiting-note"></p>
-        </div>
-      </div>
+        <div id="qr"></div>
+        <p class="gb-muted" id="join-help"></p>
+        <button class="gb-button gb-button-block" type="button" id="start-button" hidden>Start game</button>
+        <p class="gb-muted" id="waiting-note"></p>
+      </section>
     </div>
     <p class="gb-loading" id="loading">Loading the lobby…</p>
   </main>

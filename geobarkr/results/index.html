@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>Results · GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page">
+    <h1 class="gb-page-title">Game results</h1>
+    <p class="gb-loading" id="loading">Loading the results…</p>
+    <div id="results-page" hidden>
+      <p class="gb-lede" id="summary"></p>
+      <p id="unfinished" hidden></p>
+      <section class="gb-section" id="table-section" hidden>
+        <h2>Leaderboard</h2>
+        <div class="gb-table-wrap"><table class="gb-table" id="multi-table"></table></div>
+      </section>
+      <div class="gb-columns" id="scorecard-section" hidden>
+        <section class="gb-section">
+          <h2 id="scorecard-title">Your scorecard</h2>
+          <div class="gb-results-map" id="results-map"></div>
+        </section>
+        <section class="gb-section">
+          <h2 class="gb-visually-hidden">Scores by round</h2>
+          <div class="gb-table-wrap"><table class="gb-table" id="scorecard"></table></div>
+        </section>
+      </div>
+      <p><a class="gb-button" href="/geobarkr/">Play again</a></p>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/results.js?v=1"></script>
+</body>
+</html>

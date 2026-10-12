@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>My games · GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page">
+    <h1 class="gb-page-title">My games</h1>
+    <div class="gb-columns">
+      <section class="gb-section">
+        <h2 class="gb-visually-hidden">Games you've played or hosted</h2>
+        <p class="gb-loading" id="loading">Loading your games…</p>
+        <div class="gb-table-wrap"><table class="gb-table" id="games" hidden></table></div>
+        <p id="empty" hidden>You haven't played yet. <a href="/geobarkr/">Start a game</a> and it'll appear here.</p>
+      </section>
+      <form class="gb-section" id="name-form">
+        <h2>Your name</h2>
+        <p class="gb-muted">Other players see this in lobbies, results and the leaderboard.</p>
+        <label class="gb-field"><span class="gb-visually-hidden">Your name</span><input class="gb-input" id="name" maxlength="40" autocomplete="nickname" required></label>
+        <button class="gb-button" type="submit" id="name-button">Save name</button>
+      </form>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/games.js?v=1"></script>
+</body>
+</html>

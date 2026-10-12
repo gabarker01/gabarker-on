@@ -54,12 +54,10 @@ export async function busy(button, action) {
 }
 
 function notConfigured() {
-  document.body.replaceChildren(h("main", { class: "gb-page" },
-    h("div", { class: "gb-card gb-center" },
-      h("img", { class: "gb-card-logo", src: "/geobarkr/assets/logo.png", alt: "GeoBarkr" }),
-      h("p", {}, "GeoBarkr isn't switched on yet."),
-      h("p", { class: "gb-muted" }, "The Supabase project still needs setting up (see geobarkr/README.md)."),
-    ),
+  document.body.replaceChildren(h("main", { class: "gb-page gb-notice" },
+    h("img", { src: "/geobarkr/assets/logo.png", alt: "GeoBarkr" }),
+    h("p", { class: "gb-lede" }, "GeoBarkr isn't switched on yet."),
+    h("p", { class: "gb-muted" }, "Its Supabase project needs setting up first: follow the checklist in geobarkr/README.md."),
   ));
 }
 

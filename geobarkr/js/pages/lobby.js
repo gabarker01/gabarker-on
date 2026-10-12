@@ -38,9 +38,10 @@ watchGame(gameId, async () => {
   $("#host-note").textContent = `Hosted by ${game.host_name} on this screen. Players join on their phones.`;
 
   $("#players").replaceChildren(...(players.length ? players.map((player) => h("li", {},
-    h("strong", {}, player.name), player.is_host ? h("span", { class: "gb-badge" }, "owner") : null,
-    h("br"), h("span", { class: "gb-muted" }, `Joined ${formatDate(player.joined_at)}`),
-  )) : [h("li", { class: "gb-muted gb-center" }, "No players yet")]));
+    h("span", {}, h("span", { class: "gb-name" }, player.name), h("br"),
+      h("span", { class: "gb-muted" }, `Joined ${formatDate(player.joined_at)}`)),
+    player.is_host ? h("span", { class: "gb-owner" }, "Owner") : null,
+  )) : [h("li", { class: "gb-muted" }, "No one has joined yet.")]));
 
   $("#info-type").textContent = GAME_TYPES[game.type];
   $("#info-map").textContent = game.map_name;
@@ -60,7 +61,7 @@ watchGame(gameId, async () => {
   $("#start-button").hidden = !game.is_host;
   $("#start-button").disabled = !canStart;
   $("#waiting-note").textContent = game.is_host
-    ? (canStart ? "" : "Waiting for at least 2 players to join…")
+    ? (canStart ? "" : "You can start once at least 2 players have joined.")
     : `Waiting for ${game.host_name} to start the game…`;
 });
 

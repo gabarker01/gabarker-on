@@ -11,9 +11,16 @@ if (!isConfigured()) {
   $("#signin-intro").textContent = "GeoBarkr isn't switched on yet: the Supabase project still needs setting up.";
 } else {
   const client = await getClient();
-  if (await getSession()) location.replace(next);
+  let leaving = false;
+  const goNext = () => {
+    if (leaving) return;
+    leaving = true;
+    location.replace(next);
+  };
+  if (await getSession()) goNext();
+  // Coming back from Google: the session appears once the link is exchanged.
   client.auth.onAuthStateChange((event, session) => {
-    if (session && event === "SIGNED_IN") location.replace(next);
+    if (session && event === "SIGNED_IN") goNext();
   });
 
   if (AUTH_PROVIDERS.includes("email")) $("#email-area").hidden = false;
@@ -55,7 +62,7 @@ if (!isConfigured()) {
         const { error } = await client.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      location.replace(next);
+      goNext();
     });
   });
 
