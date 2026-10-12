@@ -246,7 +246,19 @@ that one.
 - **The owner/host alone advances rounds.**
 - **Cancelled status** exists but nothing sets it.
 
-### Questions for you (gameplay judgment calls)
+### Decisions (answered 2026-10-12)
+
+| Q | Decision |
+|---|---|
+| Q1 | Add a host-only **End round now** button; players who haven't guessed score 0 for that round |
+| Q2 | Single-player round popup **also shows the round's points** |
+| Q3 | Joining is **lobby only** |
+| Q4 | No public lobby list: join **only with the room code or QR code** (online and in-person) |
+| Q5 | Add a **My games** history page and an **all-time leaderboard** |
+| Q6 | **Keep the same sound effect** |
+| Q7 | Keep Google Maps + Street View; George will create a new restricted key |
+
+### Questions as asked
 
 - **Q1. Player who drops out.** A round only ends when *every* player has
   guessed, so one player leaving freezes the game for everyone. Keep exactly
