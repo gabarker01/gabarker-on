@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page">
+    <h1 class="gb-page-title">Start Game</h1>
+    <div class="gb-grid-2">
+      <form class="gb-card" id="start-form">
+        <h2>New game</h2>
+        <fieldset class="gb-choices">
+          <legend>Select game type</legend>
+          <label class="gb-choice"><input type="radio" name="type" value="single_player" checked><span>Single player<small>Five rounds on your own</small></span></label>
+          <label class="gb-choice"><input type="radio" name="type" value="multiplayer"><span>Multiplayer<small>Everyone plays on their own device</small></span></label>
+          <label class="gb-choice"><input type="radio" name="type" value="local_multiplayer"><span>In person<small>Street View on one big screen, guesses on phones</small></span></label>
+        </fieldset>
+        <label class="gb-field"><span>Select map</span><select class="gb-select" name="map" id="map-select" required><option value="">Loading maps…</option></select></label>
+        <button class="gb-button gb-button-block" type="submit" id="start-button">Start game</button>
+      </form>
+      <div>
+        <form class="gb-card" id="join-form">
+          <h2>Join a game</h2>
+          <label class="gb-field"><span>Room code</span><input class="gb-input gb-code-input" name="code" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABC123" required></label>
+          <button class="gb-button gb-button-block" type="submit" id="join-button">Join</button>
+          <p class="gb-muted">Or scan the QR code on the host's screen.</p>
+        </form>
+        <div class="gb-card">
+          <h2>How to play</h2>
+          <ul class="gb-list">
+            <li>Submit the form to <strong>start or join a game</strong></li>
+            <li>Each game has <strong>5 rounds</strong></li>
+            <li><strong>Move, pan and zoom</strong> on the Street View to work out where you are</li>
+            <li><strong>Tap the map</strong> where you want to guess</li>
+            <li>The closer to the location you are, the <strong>more points</strong> you get!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/start.js?v=1"></script>
+</body>
+</html>

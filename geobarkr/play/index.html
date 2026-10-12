@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>Play · GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-play">
+    <div class="gb-pano-wrap">
+      <div class="gb-pano" id="pano"></div>
+      <div class="gb-round-badge" id="round-badge" hidden></div>
+      <button class="gb-home" type="button" id="home" aria-label="Back to where you started">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5z" fill="white"/></svg>
+      </button>
+    </div>
+    <section class="gb-panel" id="panel" aria-label="Your guess">
+      <div class="gb-map-box" id="map-box">
+        <div class="gb-map" id="map"></div>
+        <button class="gb-expand" type="button" id="expand" aria-expanded="false" aria-label="Make the map bigger">⤢</button>
+      </div>
+      <div class="gb-waiting" id="waiting" hidden>
+        <h2>Guesses this round</h2>
+        <p class="gb-progress" id="progress"></p>
+        <div class="gb-table-wrap">
+          <table class="gb-table"><thead><tr><th class="gb-left">Player</th><th>Time</th></tr></thead><tbody id="guess-rows"></tbody></table>
+        </div>
+      </div>
+      <div class="gb-panel-actions">
+        <button class="gb-button" type="button" id="guess" disabled>Guess</button>
+        <button class="gb-button gb-button-quiet" type="button" id="end-round" hidden>End round now</button>
+      </div>
+      <p class="gb-credit">Created by George Barker 2026</p>
+    </section>
+  </main>
+  <div class="gb-overlay" id="results" hidden>
+    <div class="gb-overlay-card" role="dialog" aria-modal="true" aria-labelledby="results-title">
+      <h2 id="results-title">Round Results</h2>
+      <div class="gb-results-map" id="results-map"></div>
+      <p class="gb-points" id="results-points" hidden></p>
+      <h3 id="results-text" hidden></h3>
+      <button class="gb-button" type="button" id="continue" hidden>Continue</button>
+      <p class="gb-muted" id="results-wait" hidden></p>
+    </div>
+  </div>
+  <script type="module" src="/geobarkr/js/pages/play.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>Join · GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page" style="max-width: 560px">
+    <div class="gb-card gb-center" id="joining">
+      <p class="gb-muted"><strong>Joining game…</strong></p>
+    </div>
+    <form class="gb-card" id="code-form" hidden>
+      <h2>Join a game</h2>
+      <p class="gb-muted" id="code-error" hidden></p>
+      <label class="gb-field"><span>Room code</span><input class="gb-input gb-code-input" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" required></label>
+      <button class="gb-button gb-button-block" type="submit" id="join-button">Join</button>
+    </form>
+    <div class="gb-card" id="welcome" hidden>
+      <h2 id="welcome-title"></h2>
+      <p class="gb-muted">How to play</p>
+      <ul class="gb-list">
+        <li>Each game has <strong id="round-count">5 rounds</strong></li>
+        <li><strong>Use the Street View</strong> on the big screen to find your location</li>
+        <li><strong>Tap the map</strong> to place your guess</li>
+        <li>The closer you are, the <strong>more points</strong> you score</li>
+        <li>Once the host is ready, you will be <strong>automatically redirected</strong> to the game…</li>
+      </ul>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/join.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+// Formatting shared by the pages (and tested in geobarkr/tests). Distances and
+// scores themselves are worked out in the database.
+
+// "3min 12s" or "12s", as ServiceNow's _formatTimeField.
+export function formatTime(ms) {
+  const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}min ${seconds}s` : `${seconds}s`;
+}
+
+// Whole km from 10 km up, otherwise 0.1 km (calculateDistanceBetweenPoints).
+export function roundDistance(km) {
+  const d = Number(km) || 0;
+  return d >= 10 ? Math.round(d) : Math.round(d * 10) / 10;
+}
+
+export function formatDistance(km) {
+  return roundDistance(km).toLocaleString("en-GB");
+}
+
+export function formatScore(score) {
+  return Math.floor(Number(score) || 0).toLocaleString("en-GB");
+}
+
+// 1 → "1st", 2 → "2nd", 11 → "11th".
+export function ordinal(n) {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th";
+  return `${n}${suffix}`;
+}
+
+export const GAME_TYPES = {
+  single_player: "Single player",
+  multiplayer: "Multiplayer",
+  local_multiplayer: "In person",
+};
+
+export const GAME_STATUSES = {
+  lobby: "Lobby",
+  in_play: "In play",
+  complete: "Complete",
+  cancelled: "Cancelled",
+};
+
+export function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+// "George Barker" → "George".
+export const firstName = (name) => String(name || "").trim().split(/\s+/)[0] || "there";

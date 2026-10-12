@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
+  <meta name="theme-color" content="#cc0000">
+  <title>Lobby · GeoBarkr</title>
+  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
+  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page">
+    <h1 class="gb-page-title">Game Lobby</h1>
+    <div class="gb-grid-2" id="lobby" hidden>
+      <div class="gb-card">
+        <h2 id="players-title">Players</h2>
+        <p class="gb-muted" id="host-note" hidden></p>
+        <ul class="gb-players" id="players"></ul>
+      </div>
+      <div>
+        <div class="gb-card">
+          <table class="gb-table gb-info-table">
+            <tbody>
+              <tr><th>Game type</th><td id="info-type"></td></tr>
+              <tr><th>Map</th><td id="info-map"></td></tr>
+              <tr><th>Rounds</th><td id="info-rounds"></td></tr>
+              <tr><th>Players</th><td id="info-players"></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="gb-card gb-center">
+          <h2>Room code</h2>
+          <div class="gb-room-code" id="room-code"></div>
+          <div id="qr"></div>
+          <p class="gb-muted" id="join-help"></p>
+          <button class="gb-button gb-button-block" type="button" id="start-button" hidden>Start Game</button>
+          <p class="gb-muted" id="waiting-note"></p>
+        </div>
+      </div>
+    </div>
+    <p class="gb-loading" id="loading">Loading the lobby…</p>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/lobby.js?v=1"></script>
+</body>
+</html>
