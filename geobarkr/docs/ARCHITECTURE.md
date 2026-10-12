@@ -95,7 +95,7 @@ The SQL is in `geobarkr/supabase/`:
 | `migrations/003_security.sql` | Row-level security, table and function privileges, and the Realtime channel policy |
 | `seed.sql` | The original "GeoBarkr Demo" map and its 5 locations (ServiceNow sys_ids kept as the IDs) |
 | `setup.sql` | All of the above in one file, for pasting into the SQL Editor on your phone. Safe to run again |
-| `tests/` | A local test run (on a throwaway Postgres that mimics Supabase) with 56 checks of the game flow and the security rules. All pass |
+| `tests/` | A local test run (on a throwaway Postgres that mimics Supabase) with 53 checks of the game flow and the security rules. All pass |
 
 ```mermaid
 erDiagram
