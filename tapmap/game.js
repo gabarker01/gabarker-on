@@ -13,19 +13,15 @@ export const ROUND_PLAN = [
 ];
 export const ROUNDS = ROUND_PLAN.length;
 export const ROUND_MAX = 100;
-export const BULLSEYE_KM = 25; // the 🎯 band and the bonus both use this
-export const BULLSEYE_BONUS = 5;
+export const BULLSEYE_KM = 20; // within this, full marks (the 🎯 band)
 
-// Satellite practice: the hard rounds start with a satellite photo and no
-// name. Guessing from the photo alone earns up to 20 extra points (scaled by
-// distance like the round score), so those rounds are out of 120.
-export const SATELLITE_BONUS = 20;
-export const SATELLITE_PLAN = ROUND_PLAN.map((r) => ({ ...r, satellite: r.difficulty === "hard" }));
+// Photo practice: the same easy-to-hard rounds as the daily game, but each
+// place is shown only as a photo of the landmark (the name appears once you've
+// guessed). Scored exactly like the daily game, out of 1,000.
+export const PHOTO_PLAN = ROUND_PLAN.map((r) => ({ ...r, photo: true }));
 
-export const roundMax = (plan) => ROUND_MAX + (plan.satellite ? SATELLITE_BONUS : 0);
-export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + roundMax(r) * r.multiplier, 0);
-export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000
-export const SATELLITE_MAX_SCORE = maxScoreFor(SATELLITE_PLAN); // 1,110
+export const maxScoreFor = (plan = ROUND_PLAN) => plan.reduce((sum, r) => sum + ROUND_MAX * r.multiplier, 0);
+export const MAX_SCORE = maxScoreFor(ROUND_PLAN); // 1,000 (photo practice too)
 export const GAME_URL = "https://gabarker.com/tapmap";
 
 const DAY_MS = 86400000;
@@ -98,14 +94,14 @@ export const poolFor = (dateKey, locations) =>
 const LEVELS = [...new Set(ROUND_PLAN.map((r) => r.difficulty))];
 const PER_DAY = Object.fromEntries(LEVELS.map((level) => [level, ROUND_PLAN.filter((r) => r.difficulty === level).length]));
 
-// Five locations following ROUND_PLAN (easy → hard), drawn with `rng`.
-const planLocations = (pool, rng) => {
+// Five locations following a plan (ROUND_PLAN: easy → hard), drawn with `rng`.
+const planLocations = (pool, rng, plan = ROUND_PLAN) => {
   const picks = {};
-  for (const level of LEVELS) {
-    const count = ROUND_PLAN.filter((r) => r.difficulty === level).length;
+  for (const level of new Set(plan.map((r) => r.difficulty))) {
+    const count = plan.filter((r) => r.difficulty === level).length;
     picks[level] = sample(pool.filter((loc) => loc.difficulty === level), count, rng);
   }
-  return ROUND_PLAN.map((r) => picks[r.difficulty].shift());
+  return plan.map((r) => picks[r.difficulty].shift());
 };
 
 export const nextDateKey = (dateKey) =>
@@ -136,6 +132,10 @@ const originalPicks = (dateKey, locations) =>
 //    picked once it has rested for all but the last 3 days of a cycle (so with
 //    20 hard places, 2 a day, a hard place comes back after 8 days at the
 //    soonest). The end of one cycle never runs straight into the next.
+//  - The rest counts across difficulties, so a place that moves to another
+//    difficulty (Bearings' new list from 4 October 2026, which TapMap now
+//    shares) doesn't come straight back. (Before then every place had one
+//    difficulty, so this changes no earlier game.)
 const rankIn = (level, cycle, name) => hashString(`tapmap:cycle:${level}:${cycle}:${name}`);
 
 const simulations = new WeakMap(); // locations array -> { upTo, days: Map(dateKey -> picks) }
@@ -145,6 +145,7 @@ function simulate(locations, upTo) {
   if (cached && cached.upTo >= upTo) return cached.days;
   const days = new Map();
   const state = Object.fromEntries(LEVELS.map((level) => [level, { cycle: 0, used: new Set(), lastSeen: new Map() }]));
+  const lastSeen = new Map(); // name -> day last shown, at any difficulty
   let day = 0;
   for (let key = LAUNCH_DATE; key <= upTo; key = nextDateKey(key), day++) {
     if (key < PICKER_START) {
@@ -154,6 +155,7 @@ function simulate(locations, upTo) {
         if (!loc) return;
         state[loc.difficulty].used.add(loc.name);
         state[loc.difficulty].lastSeen.set(loc.name, day);
+        lastSeen.set(loc.name, day);
       });
       days.set(key, picks);
       continue;
@@ -176,12 +178,13 @@ function simulate(locations, upTo) {
           candidates = open;
         }
         candidates.sort((a, b) => rankIn(level, s.cycle, a.name) - rankIn(level, s.cycle, b.name) || (a.name < b.name ? -1 : 1));
-        const rested = candidates.find((loc) => !s.lastSeen.has(loc.name) || day - s.lastSeen.get(loc.name) > cooldown);
+        const rested = candidates.find((loc) => !lastSeen.has(loc.name) || day - lastSeen.get(loc.name) > cooldown);
         // (If nothing has rested long enough, the one shown longest ago.)
-        const pick = rested || candidates.reduce((a, b) => (s.lastSeen.get(b.name) < s.lastSeen.get(a.name) ? b : a));
+        const pick = rested || candidates.reduce((a, b) => ((lastSeen.get(b.name) ?? -1) < (lastSeen.get(a.name) ?? -1) ? b : a));
         chosen.push(pick);
         s.used.add(pick.name);
         s.lastSeen.set(pick.name, day);
+        lastSeen.set(pick.name, day);
       }
       picks[level] = chosen;
     }
@@ -198,7 +201,7 @@ export const dailyLocations = (dateKey, locations) =>
     ? originalPicks(dateKey, locations)
     : simulate(locations, dateKey).get(dateKey);
 
-export const practiceLocations = (pool, rng = Math.random) => planLocations(pool, rng);
+export const practiceLocations = (pool, rng = Math.random, plan = ROUND_PLAN) => planLocations(pool, rng, plan);
 
 // ---------- Distance & scoring ----------
 
@@ -214,18 +217,14 @@ export const haversineKm = (a, b) => {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-// Round score out of 100: round(100 × e^(−d/2000)), plus a 5-point bullseye
-// bonus under 25 km, capped at 100. It counts towards the game total × the
-// round's multiplier. A satellite round guessed from the photo alone adds
-// round(20 × e^(−d/2000)) on top.
-export const scoreRound = (distanceKm, multiplier = 1, { satellite = false } = {}) => {
-  const closeness = Math.exp(-distanceKm / 2000);
-  const base = Math.round(ROUND_MAX * closeness);
+// Round score out of 100: full marks within 20 km (a bullseye), otherwise
+// round(100 × e^(−d/2000)), which is 99 at 20 km and falls smoothly from
+// there. It counts towards the game total × the round's multiplier. (`photo` only marks a round played from a photo.)
+export const scoreRound = (distanceKm, multiplier = 1, { photo = false } = {}) => {
+  const base = Math.round(ROUND_MAX * Math.exp(-distanceKm / 2000));
   const bullseye = distanceKm < BULLSEYE_KM;
-  const capped = bullseye ? Math.min(ROUND_MAX, base + BULLSEYE_BONUS) : base;
-  const satBonus = satellite ? Math.round(SATELLITE_BONUS * closeness) : 0;
-  const score = capped + satBonus;
-  return { base, bonus: capped - base, bullseye, satBonus, sat: satellite, score, multiplier, weighted: score * multiplier };
+  const score = bullseye ? ROUND_MAX : base;
+  return { base, bonus: score - base, bullseye, sat: photo, score, multiplier, weighted: score * multiplier };
 };
 
 export const tierFor = (distanceKm) => {
@@ -237,7 +236,7 @@ export const tierFor = (distanceKm) => {
 };
 
 // Thresholds are 90%, 70% and 40% of the game's maximum (900 / 700 / 400 out
-// of 1,000; 999 / 777 / 444 out of 1,110 in satellite practice).
+// of 1,000).
 const RATINGS = [
   { min: 0.9, label: "Cartographer", emoji: "🧭" },
   { min: 0.7, label: "Navigator", emoji: "⛵" },
@@ -250,8 +249,7 @@ export const ratingFor = (total, max = MAX_SCORE) => {
   return `${r.label} ${r.emoji}`;
 };
 
-// Everything recorded about a finished round. `satellite`: guessed from the
-// satellite photo without revealing the name.
+// Everything recorded about a finished round. `photo`: guessed from a photo.
 export const evaluateGuess = (guess, location, multiplier = 1, options = {}) => {
   const distanceKm = haversineKm(guess, location);
   return { guess, distanceKm, ...scoreRound(distanceKm, multiplier, options), tier: tierFor(distanceKm) };
@@ -308,26 +306,37 @@ const fromBase64Url = (code) => {
   return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 };
 
-// { by, kind: "daily" | "practice" | "satellite", number?, places: [name…],
-//   rounds: [{ score, km, tier }…] } -> URL-safe string, and back.
-export const encodeChallenge = ({ by, kind, number, places, rounds }) =>
+// { by, username?, kind: "daily" | "practice" | "photo", number?, places: [name…],
+//   rounds: [{ score, distanceKm, guess: { lat, lng } }…] } -> URL-safe string,
+// and back. Each round is [score, km, lat, lng]; the guess (2 decimal places,
+// about 1 km) puts the sender's pin on the globe. Links made before guesses
+// were included have [score, km] and simply show no pin.
+const round2 = (n) => Math.round(n * 100) / 100;
+export const encodeChallenge = ({ by, username, kind, number, places, rounds }) =>
   toBase64Url(JSON.stringify({
     v: 1,
     b: by ? String(by).slice(0, 40) : undefined,
+    u: username || undefined,
     k: kind,
     n: number,
     p: places.map(placeCode),
-    r: rounds.map((r) => [r.score, Math.round(r.distanceKm * 10) / 10]),
+    r: rounds.map((r) => {
+      const round = [r.score, Math.round(r.distanceKm * 10) / 10];
+      if (r.guess && Number.isFinite(r.guess.lat) && Number.isFinite(r.guess.lng)) round.push(round2(r.guess.lat), round2(r.guess.lng));
+      return round;
+    }),
   }));
 
 export const decodeChallenge = (code) => {
   try {
     const d = JSON.parse(fromBase64Url(String(code)));
-    const kinds = ["daily", "practice", "satellite"];
+    // ("satellite" is what photo practice was first called.)
+    if (d && d.k === "satellite") d.k = "photo";
+    const kinds = ["daily", "practice", "photo"];
     const valid = d && d.v === 1 && kinds.includes(d.k)
       && Array.isArray(d.p) && d.p.length === ROUNDS && d.p.every((p) => typeof p === "string" && p.length <= 8)
       && Array.isArray(d.r) && d.r.length === ROUNDS
-      && d.r.every((r) => Array.isArray(r) && Number.isFinite(r[0]) && Number.isFinite(r[1]) && r[0] >= 0 && r[0] <= ROUND_MAX + SATELLITE_BONUS && r[1] >= 0)
+      && d.r.every((r) => Array.isArray(r) && Number.isFinite(r[0]) && Number.isFinite(r[1]) && r[0] >= 0 && r[0] <= ROUND_MAX && r[1] >= 0)
       && (d.n === undefined || (Number.isInteger(d.n) && d.n > 0));
     if (!valid) return null;
     return {
@@ -335,7 +344,13 @@ export const decodeChallenge = (code) => {
       kind: d.k,
       number: d.n,
       codes: d.p,
-      rounds: d.r.map(([score, km]) => ({ score, distanceKm: km, tier: tierFor(km) })),
+      username: typeof d.u === "string" && /^[a-z0-9_]{3,20}$/.test(d.u) ? d.u : null,
+      rounds: d.r.map(([score, km, lat, lng]) => ({
+        score,
+        distanceKm: km,
+        tier: tierFor(km),
+        guess: Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null,
+      })),
     };
   } catch (e) {
     return null;

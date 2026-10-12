@@ -2,6 +2,16 @@
 <html lang="en" class="profile-root">
 <head>
   <meta charset="UTF-8">
+  <!-- TapMap is now Bearings: TapMap profile and challenge links go to the
+       notice at /tapmap/, which sends players to the same page there. Other
+       addresses on gabarker.com are unaffected. -->
+  <script>
+    (() => {
+      const path = window.location.pathname;
+      const match = path.match(/^\/tapmap(\/.*)$/) || path.match(/^(\/challenge\/[a-z0-9]{6,16})\/?$/);
+      if (match) window.location.replace("/tapmap/?from=" + encodeURIComponent(match[1].replace(/\/$/, "") + window.location.search));
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark">
@@ -14,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
-  <link rel="stylesheet" href="/tapmap/tapmap.css?v=16">
+  <link rel="stylesheet" href="/tapmap/tapmap.css?v=28">
 </head>
 <body class="profile-page">
   <header class="profile-bar">
@@ -41,7 +51,10 @@
         <span class="wordmark-name">Tap<em>Map</em></span>
       </span>
     </a>
-    <a class="chip-button" href="/tapmap/">Play today's game</a>
+    <div class="bar-actions">
+      <a class="chip-button" href="/tapmap/">Play today's game</a>
+      <span id="account-slot"></span>
+    </div>
   </header>
 
   <main class="profile-main">
@@ -66,7 +79,7 @@
     <!-- A profile (yours or someone else's) -->
     <section id="profile" hidden>
       <div class="account-head">
-        <span id="profile-avatar"></span>
+        <button id="profile-avatar" class="avatar-button" type="button" aria-label="View profile photo"></button>
         <div>
           <p id="profile-eyebrow" class="eyebrow">Player</p>
           <h1 id="profile-name" class="sheet-title account-name"></h1>
@@ -84,6 +97,21 @@
       <div class="profile-actions">
         <button id="profile-action" class="primary-button" type="button" hidden></button>
         <button id="invite-button" class="primary-button" type="button" hidden>Invite a friend</button>
+        <button id="share-profile-button" class="secondary-button" type="button" hidden>Share profile</button>
+        <button id="challenge-person" class="secondary-button" type="button" hidden>Challenge</button>
+      </div>
+
+      <!-- Someone else's followers and following -->
+      <div id="their-people" hidden>
+        <div class="follow-counts">
+          <button id="followers-count-button" class="count-button" type="button" aria-expanded="false"><strong id="followers-count">0</strong> <span>followers</span></button>
+          <button id="following-count-button" class="count-button" type="button" aria-expanded="false"><strong id="following-count">0</strong> <span>following</span></button>
+        </div>
+        <div id="their-people-body" hidden>
+          <h2 id="their-people-title" class="section-label"></h2>
+          <ul id="their-people-list" class="people-list"></ul>
+          <p id="their-people-empty" class="friends-empty" hidden></p>
+        </div>
       </div>
       <p id="profile-private" class="profile-note" hidden></p>
 
@@ -121,6 +149,26 @@
 
       <!-- Only on your own profile -->
       <div id="own-sections" hidden>
+        <!-- Challenges, kept apart from the daily games above -->
+        <section id="challenges-section" class="challenges-section">
+          <button id="challenges-toggle" class="practice-option" type="button" aria-expanded="false" aria-controls="challenges-body">
+            <span class="practice-name">Challenges</span>
+            <span id="challenges-summary" class="practice-text">Challenges you've sent and played.</span>
+            <span class="practice-arrow" aria-hidden="true">↓</span>
+          </button>
+          <div id="challenges-body" class="past-days" hidden>
+            <button id="new-challenge" class="secondary-button" type="button">New challenge</button>
+            <!-- Five per page; swipe (or use the arrows) for more -->
+            <div id="challenges-list" class="challenge-pages"></div>
+            <div id="challenges-pager" class="challenge-pager" hidden>
+              <button id="challenges-prev" class="pager-button" type="button" aria-label="Previous challenges">←</button>
+              <span id="challenges-page" class="pager-count"></span>
+              <button id="challenges-next" class="pager-button" type="button" aria-label="More challenges">→</button>
+            </div>
+            <p id="challenges-empty" class="friends-empty" hidden>No challenges yet. Tap New challenge, or Challenge on a friend's profile.</p>
+          </div>
+        </section>
+
         <section id="requests-section" hidden>
           <h2 class="section-label">Follow requests</h2>
           <ul id="requests-list" class="people-list"></ul>
@@ -156,21 +204,95 @@
 
       <!-- Signed out, looking at someone -->
       <div id="signed-out-note" hidden>
-        <p class="profile-note">Sign in to follow and see their scores.</p>
+        <p id="signed-out-text" class="profile-note">Sign in to follow and see their scores.</p>
         <a id="sign-in-link" class="primary-button link-as-button" href="/tapmap/?signin=1">Sign in</a>
       </div>
       <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
+
+      <!-- Profile photo, larger -->
+      <div id="photo-view" class="overlay photo-view" hidden>
+        <button id="photo-view-close" class="photo-view-inner" type="button" aria-label="Close"></button>
+      </div>
+
+      <!-- Challenge this player -->
+      <div id="challenge-sheet" class="overlay" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="challenge-sheet-title">
+          <p class="eyebrow">Challenge</p>
+          <h2 id="challenge-sheet-title" class="sheet-title"></h2>
+          <p id="challenge-sheet-text" class="lead"></p>
+          <ul class="practice-options">
+            <li><a id="challenge-random" class="practice-option" href="/tapmap/">
+              <span class="practice-name">Random places</span>
+              <span class="practice-text">Five random places, easy to hard.</span>
+              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
+            <li><a id="challenge-photo" class="practice-option" href="/tapmap/">
+              <span class="practice-name">Photos</span>
+              <span class="practice-text">Five places shown only as photos.</span>
+              <span class="practice-arrow" aria-hidden="true">→</span></a></li>
+          </ul>
+          <button id="challenge-sheet-close" class="secondary-button" type="button">Not now</button>
+        </div>
+      </div>
+
+      <!-- Opened from a "Follow me on TapMap" link: offer to follow -->
+      <div id="follow-prompt" class="overlay" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="follow-prompt-title">
+          <div class="account-head">
+            <span id="follow-prompt-avatar"></span>
+            <div>
+              <p class="eyebrow">Follow</p>
+              <h2 id="follow-prompt-title" class="sheet-title account-name"></h2>
+              <p id="follow-prompt-handle" class="account-handle"></p>
+            </div>
+          </div>
+          <p id="follow-prompt-text" class="lead"></p>
+          <button id="follow-prompt-yes" class="primary-button" type="button">Send follow request</button>
+          <button id="follow-prompt-no" class="secondary-button" type="button">Not now</button>
+          <p id="follow-prompt-message" class="account-message" role="status" aria-live="polite"></p>
+        </div>
+      </div>
     </section>
 
-    <p class="colophon">George Barker · <a href="/">gabarker.com</a></p>
+    <!-- A challenge: /tapmap/challenge/{id} -->
+    <section id="challenge-view" hidden>
+      <p id="challenge-eyebrow" class="eyebrow">Challenge</p>
+      <h1 id="challenge-heading" class="sheet-title"></h1>
+      <p id="challenge-lead" class="lead"></p>
+      <div class="profile-actions">
+        <a id="challenge-play" class="primary-button link-as-button" href="/tapmap/">Play the challenge</a>
+        <button id="challenge-share" class="secondary-button" type="button">Share challenge</button>
+      </div>
+      <h2 class="section-label">Results</h2>
+      <ol id="challenge-results" class="friends-list league-list"></ol>
+      <p id="challenge-anonymous" class="friends-empty" hidden></p>
+      <p id="challenge-results-note" class="profile-note" hidden></p>
+    </section>
+
+    <!-- No such challenge -->
+    <section id="no-challenge" hidden>
+      <p class="eyebrow">Challenge</p>
+      <h1 class="sheet-title">Challenge not <em>found.</em></h1>
+      <p class="lead">This challenge link doesn't work. Check it's complete, or ask for it again.</p>
+      <a class="primary-button link-as-button" href="/tapmap/">Play today's game</a>
+    </section>
+
+    <p class="colophon">George Barker · <a href="/">gabarker.com</a> · <a href="/tapmap/privacy/">Privacy</a> · <a href="/tapmap/termsofservice/">Terms</a></p>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
-    const match = window.location.pathname.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
+    import("/tapmap/account-button.js?v=7").then((m) => m.mountAccountButton(document.getElementById("account-slot")));
+    const path = window.location.pathname;
+    const match = path.match(/^\/tapmap\/profile\/([^/]+)\/?$/);
+    const challenge = path.match(/^(?:\/tapmap)?\/challenge\/([a-z0-9]{6,16})\/?$/);
     if (match) {
-      import("/tapmap/profile/profile.js?v=4").then((m) => m.showProfile(decodeURIComponent(match[1])));
+      import("/tapmap/profile/profile.js?v=19").then((m) => m.showProfile(decodeURIComponent(match[1])));
+    } else if (challenge && !path.startsWith("/tapmap/")) {
+      // gabarker.com/challenge/{id} is short for /tapmap/challenge/{id}.
+      window.location.replace(`/tapmap/challenge/${challenge[1]}${window.location.search}`);
+    } else if (challenge) {
+      import("/tapmap/challenge/challenge.js?v=10").then((m) => m.showChallenge(challenge[1]));
     } else {
       document.getElementById("profile-loading").hidden = true;
       document.getElementById("not-found").hidden = false;

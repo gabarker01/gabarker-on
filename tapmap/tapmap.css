@@ -28,7 +28,7 @@
   --globe-guess: #f1ece2;
   --globe-answer: #d9b26a;
 
-  --t-bullseye: #d9b26a;
+  --t-bullseye: #3ee08a;
   --t-close: #6fb592;
   --t-near: #e0c46a;
   --t-far: #e3925d;
@@ -48,13 +48,23 @@
 html,
 body {
   margin: 0;
+}
+
+/* Only the game page is locked to the screen (the globe fills it and nothing
+   scrolls). The practice and profile pages that share this stylesheet are
+   ordinary scrolling pages, so they have nothing to undo. */
+html.game-root,
+html.game-root body {
   height: 100%;
 }
 
-body {
+html.game-root body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+}
+
+body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -514,7 +524,8 @@ a:focus-visible {
   border-radius: 50%;
 }
 
-.t-bullseye { background: var(--t-bullseye); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-bullseye) 25%, transparent); }
+/* A bullseye (within 20 km) is bright green with a glow. */
+.t-bullseye { background: var(--t-bullseye); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-bullseye) 30%, transparent), 0 0 10px 2px color-mix(in srgb, var(--t-bullseye) 70%, transparent); }
 .t-close { background: var(--t-close); }
 .t-near { background: var(--t-near); }
 .t-far { background: var(--t-far); }
@@ -1960,32 +1971,91 @@ body.profile-page {
   color: var(--ink-soft);
 }
 
+/* Full size: name, photo, then the minimise link, in a column. */
+.prompt-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.prompt-text {
+  display: contents;
+}
+
 .prompt-photo {
-  position: relative;
-  width: min(100%, 200px);
-  aspect-ratio: 1;
+  order: 1;
   margin: 10px 0 0;
+}
+
+.photo-size {
+  order: 2;
+  align-self: flex-start;
+}
+
+.photo-frame {
+  position: relative;
+  display: block;
+  width: min(100%, 220px, 30vh);
+  aspect-ratio: 1;
+  padding: 0;
   overflow: hidden;
   background: var(--space);
   border: 1px solid var(--panel-edge);
   border-radius: 14px;
-  transition: width 0.25s ease;
+  cursor: pointer;
+  transition: width 0.25s ease, border-radius 0.25s ease;
 }
 
-.prompt-photo.is-large {
-  width: min(100%, 340px, 42vh);
-}
-
-.prompt-photo img {
+.photo-frame img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  cursor: zoom-in;
 }
 
-.prompt-photo.is-large img {
-  cursor: zoom-out;
+/* Minimised: a thumbnail beside the question, about the height of a normal prompt. */
+.prompt.is-photo-min .prompt-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.prompt.is-photo-min .prompt-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.prompt.is-photo-min .prompt-photo {
+  flex: none;
+  order: -1;
+  margin: 6px 0 0;
+}
+
+.prompt.is-photo-min .photo-frame {
+  width: 54px;
+  border-radius: 10px;
+}
+
+.prompt.is-photo-min .prompt-name {
+  margin-top: 2px;
+  font-size: 1.45rem;
+}
+
+.prompt.is-photo-min .photo-size {
+  margin-top: 0;
+  padding: 2px 0 0;
+  min-height: 24px;
+  font-size: 0.8rem;
+}
+
+.prompt.is-photo-min .prompt-photo {
+  margin-top: 4px;
+}
+
+.prompt.is-photo-min .prompt-photo-status {
+  font-size: 0;
 }
 
 .prompt-photo-status {
@@ -2004,8 +2074,12 @@ body.profile-page {
   margin-top: 4px;
 }
 
+/* The answer's name is already in the question panel above, so the result
+   panel shows the fact instead. */
 .result-fact {
-  margin: -4px 6px 12px;
+  margin: 0 6px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
   font-family: var(--font-serif);
   font-style: italic;
   font-size: 1rem;
@@ -2192,4 +2266,519 @@ body.profile-page {
   font-family: var(--font-serif);
   font-size: 1.2rem;
   color: var(--accent);
+}
+
+/* ---------- Practice menu (/tapmap/practice/) ---------- */
+
+.secondary-button.link-as-button,
+.primary-button + .primary-button.link-as-button {
+  margin-top: 10px;
+}
+
+.primary-button.link-as-button {
+  color: var(--primary-ink);
+}
+
+.practice-options {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
+  width: 100%;
+  padding: 18px 20px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 18px;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.12s ease;
+}
+
+.practice-option:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.practice-option:active {
+  transform: scale(0.99);
+}
+
+.practice-name {
+  grid-column: 1;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.practice-text {
+  grid-column: 1;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.practice-arrow {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.past-days {
+  margin-top: 8px;
+}
+
+.past-days .archive-list {
+  max-height: none;
+}
+
+a.archive-item {
+  text-decoration: none;
+}
+
+.practice-challenge {
+  margin: 20px 0 8px;
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.practice-challenge p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.practice-challenge strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.practice-challenge .practice-challenge-title {
+  margin-bottom: 4px;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  color: var(--accent);
+}
+
+.photo-credit {
+  margin: -6px 6px 12px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.photo-credit a {
+  color: inherit;
+}
+
+/* Profile: challenges list */
+.challenges-section {
+  margin: 24px 0 8px;
+}
+
+.challenge-item {
+  grid-template-columns: 1fr auto;
+}
+
+.challenge-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.archive-status.is-lost {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+}
+
+/* Top bar of the profile, challenge and practice pages */
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+a.ghost-button {
+  text-decoration: none;
+}
+
+.profile-note a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+/* Profile photo: tap for a larger view */
+.avatar-button {
+  flex: none;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: zoom-in;
+}
+
+.photo-view {
+  z-index: 20;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.photo-view-inner {
+  display: grid;
+  place-items: center;
+  width: min(86vw, 86vh, 520px);
+  aspect-ratio: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: zoom-out;
+}
+
+.photo-view-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.avatar.avatar-xl {
+  width: min(70vw, 320px);
+  height: min(70vw, 320px);
+  font-size: min(24vw, 7rem);
+}
+
+/* Someone else's followers / following */
+.follow-counts {
+  display: flex;
+  gap: 18px;
+  margin: 14px 0 4px;
+}
+
+.count-button {
+  padding: 4px 0;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 4px;
+}
+
+.count-button strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.count-button[aria-expanded="true"] {
+  color: var(--ink);
+  text-decoration-color: var(--accent);
+}
+
+/* A challenge waiting for you */
+.practice-option.has-waiting {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.practice-option.has-waiting .practice-text {
+  color: var(--accent);
+}
+
+/* The results screen's challenge button, when sending to a particular player */
+.chip-button.is-target {
+  color: var(--primary-ink);
+  background: var(--primary);
+  border-color: transparent;
+}
+
+/* Results screen of a challenge game: ready to send */
+.challenge-ready {
+  margin: 4px 0 18px;
+  padding: 16px 18px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.challenge-ready .eyebrow {
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+
+.challenge-ready-text {
+  margin: 0 0 14px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+a.chip-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.practice-challenge .mode-row {
+  justify-content: flex-start;
+}
+
+/* The challenge results screen opens with Share challenge */
+.challenge-ready {
+  margin: 0 0 20px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.challenge-ready-text {
+  margin: 10px 2px 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* Under Share challenge: share just your score */
+#share-result {
+  margin-top: 14px;
+}
+
+#breakdown-label {
+  margin-top: 8px;
+}
+
+#challenge-note {
+  margin: 14px 0 0;
+}
+
+/* Your profile's challenges: room between New challenge and the list */
+#new-challenge {
+  margin-bottom: 16px;
+}
+
+/* Privacy policy and terms */
+.legal h2 {
+  margin: 30px 0 8px;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.legal h3 {
+  margin: 16px 0 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.legal p,
+.legal li {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.legal p {
+  margin: 0 0 12px;
+}
+
+.legal ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.legal li {
+  margin-bottom: 6px;
+}
+
+.legal strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.legal a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.legal .colophon {
+  margin-top: 36px;
+}
+
+.legal .colophon a {
+  color: inherit;
+}
+
+/* Your profile's Challenges: one pill, with the list inside it when open */
+.challenges-section {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.challenges-section:has(.has-waiting) {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.challenges-section > .practice-option {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.challenges-section > .practice-option:active {
+  transform: none;
+}
+
+.challenges-section .past-days {
+  margin: 0;
+  padding: 0 20px 16px;
+}
+
+.challenges-section #new-challenge {
+  margin-top: 0;
+}
+
+/* Pages of five challenges, side by side */
+.challenge-pages {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.challenge-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.challenge-pages .challenge-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  margin: 0;
+  scroll-snap-align: start;
+}
+
+.challenge-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.challenge-pager[hidden] {
+  display: none;
+}
+
+.pager-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pager-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pager-count {
+  min-width: 52px;
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Global leaderboards */
+.board-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 24px 0 10px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 999px;
+}
+
+.board-tab {
+  min-height: 40px;
+  padding: 8px 10px;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.board-tab[aria-selected="true"] {
+  color: var(--primary-ink);
+  background: var(--primary);
+}
+
+.board-dates {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.board-list {
+  min-height: 60px;
+  transition: opacity 0.2s ease;
+}
+
+.board-list.is-loading {
+  opacity: 0.4;
+}
+
+.league-list li.board-gap {
+  display: block;
+  text-align: center;
+  color: var(--ink-faint);
+  letter-spacing: 0.3em;
+}
+
+.board-signin {
+  margin: 14px 0 0;
+  font-size: 0.88rem;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.board-signin a {
+  color: var(--ink);
+}
+
+.leaderboard-main .link-as-button {
+  margin-top: 24px;
 }

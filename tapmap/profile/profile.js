@@ -3,10 +3,10 @@
 // requests. Other players' scores and stats are shown only if they have
 // accepted your follow request.
 
-import * as social from "/tapmap/social.js?v=8";
+import * as social from "/tapmap/social.js?v=18";
 import { avatarElement, squarePhoto } from "/tapmap/avatar.js?v=2";
 import { lineChart, barChart, YOU, THEM } from "/tapmap/profile/charts.js?v=2";
-import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=2";
+import { todayKey, formatNumber, MAX_SCORE, BULLSEYE_KM, tierFor } from "/tapmap/game.js?v=9";
 
 // Tiers from the saved distance, so older results (when 🎯 meant under 50 km)
 // use today's bands.
@@ -320,6 +320,7 @@ async function runSearch() {
 
 function renderHead(person, isMe) {
   $("profile-avatar").replaceChildren(avatarElement(person, "lg"));
+  $("profile-avatar").onclick = () => showPhoto(person);
   $("profile-eyebrow").textContent = isMe ? "Your profile" : "Player";
   $("profile-name").textContent = personName(person);
   $("profile-handle").textContent = `@${person.username}`;
@@ -332,6 +333,12 @@ async function renderFollowButton(person) {
   button.hidden = false;
   button.disabled = false;
   button.className = state ? "secondary-button" : "primary-button";
+  // Following them: Challenge is the main button, above Unfollow. Otherwise
+  // Follow comes first.
+  const challenge = $("challenge-person");
+  challenge.className = state === "accepted" ? "primary-button" : "secondary-button";
+  if (state === "accepted") button.before(challenge);
+  else button.after(challenge);
   button.textContent = state === "accepted" ? "Unfollow" : state === "pending" ? "Cancel request" : "Follow";
   button.onclick = async () => {
     button.disabled = true;
@@ -354,6 +361,10 @@ async function render() {
   $("profile").hidden = false;
   $("own-sections").hidden = !isMe;
   $("invite-button").hidden = !isMe;
+  $("share-profile-button").hidden = !isMe;
+  $("challenge-person").hidden = isMe;
+  $("challenge-person").onclick = () => openChallengeSheet(person);
+  $("their-people").hidden = true;
   $("signed-out-note").hidden = Boolean(me);
   $("profile-action").hidden = true;
   message("");
@@ -361,7 +372,14 @@ async function render() {
   if (!me) {
     $("profile-details").hidden = true;
     $("profile-private").hidden = true;
+    // Signing in goes through the invite flow: create an account or sign in,
+    // then asked whether to follow this player, then back to this page.
     localStorage.setItem("tapmap:next", profileUrl(person.username));
+    $("sign-in-link").href = `/tapmap/?invite=${encodeURIComponent(person.username)}`;
+    $("sign-in-link").textContent = "Create account or sign in";
+    $("signed-out-text").textContent = wantsFollow
+      ? `${personName(person)} shared their TapMap profile. Create a free account or sign in to follow them and see each other's scores.`
+      : "Sign in to follow and see their scores.";
     return;
   }
 
@@ -375,11 +393,14 @@ async function render() {
     const locked = social.isUsernameAccount(me);
     $("username").readOnly = locked;
     $("username-lock").hidden = !locked;
-    await Promise.all([renderDetails(person, true), renderPeople()]);
+    await Promise.all([renderDetails(person, true), renderPeople(), renderChallenges()]);
     return;
   }
 
+  renderTheirPeople(person);
   const state = await renderFollowButton(person);
+  if (wantsFollow && !state) offerFollow(person);
+  wantsFollow = false;
   const visible = state === "accepted";
   $("profile-details").hidden = !visible;
   $("profile-private").hidden = visible;
@@ -388,6 +409,280 @@ async function render() {
     : "Their scores and stats are private. Follow to send a request.";
   if (visible) await renderDetails(person, false);
 }
+
+// ---------- Profile photo, larger ----------
+
+function showPhoto(person) {
+  const inner = $("photo-view-close");
+  if (person.avatar_url) {
+    const img = document.createElement("img");
+    img.src = person.avatar_url;
+    img.alt = `${personName(person)}'s profile photo`;
+    inner.replaceChildren(img);
+  } else {
+    const big = avatarElement(person, "lg");
+    big.classList.add("avatar-xl");
+    inner.replaceChildren(big);
+  }
+  $("photo-view").hidden = false;
+}
+$("photo-view").addEventListener("click", () => { $("photo-view").hidden = true; });
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  $("photo-view").hidden = true;
+  $("challenge-sheet").hidden = true;
+});
+
+// ---------- Challenge this player ----------
+
+// Pick random places or photos and play: when you finish, the game is saved
+// as a challenge, sent to their profile (signed in), and ready to share.
+// Without a person (New challenge on your own profile) it's just ready to share.
+function openChallengeSheet(person) {
+  const name = person ? personName(person) : "";
+  const to = person ? `&to=${encodeURIComponent(person.username)}` : "";
+  $("challenge-sheet-title").textContent = person ? `Challenge ${name}` : "New challenge";
+  $("challenge-sheet-text").textContent = person
+    ? (me
+      ? `Pick a game and play it. When you finish, it's sent to ${name}'s profile and you can share the link too.`
+      : `Pick a game and play it. When you finish, share the link with ${name}.`)
+    : "Pick a game and play it. When you finish, share the link with anyone.";
+  $("challenge-random").href = `/tapmap/?play=practice&send=1${to}`;
+  $("challenge-photo").href = `/tapmap/?play=photo&send=1${to}`;
+  $("challenge-sheet").hidden = false;
+}
+$("new-challenge").addEventListener("click", () => openChallengeSheet(null));
+$("challenge-sheet-close").addEventListener("click", () => { $("challenge-sheet").hidden = true; });
+
+// ---------- Someone else's followers and following ----------
+
+let theirPeople = null; // { person, followers, following }
+
+async function renderTheirPeople(person) {
+  $("their-people-body").hidden = true;
+  ["followers-count-button", "following-count-button"].forEach((id) => $(id).setAttribute("aria-expanded", "false"));
+  if (!me) return; // (visible to signed-in players)
+  try {
+    const [followers, following] = await Promise.all([social.listFollowers(person.id), social.listFollowing(person.id)]);
+    theirPeople = { person, followers, following: following.filter((p) => p.status === "accepted") };
+  } catch (error) {
+    console.warn("Follows:", error);
+    return;
+  }
+  $("followers-count").textContent = formatNumber(theirPeople.followers.length);
+  $("following-count").textContent = formatNumber(theirPeople.following.length);
+  $("followers-count-button").lastElementChild.textContent = theirPeople.followers.length === 1 ? "follower" : "followers";
+  $("their-people").hidden = false;
+}
+
+function showTheirPeople(which) {
+  const button = $(`${which}-count-button`);
+  const open = button.getAttribute("aria-expanded") !== "true";
+  ["followers-count-button", "following-count-button"].forEach((id) => $(id).setAttribute("aria-expanded", "false"));
+  $("their-people-body").hidden = !open;
+  if (!open || !theirPeople) return;
+  button.setAttribute("aria-expanded", "true");
+  const { person, followers, following } = theirPeople;
+  const people = which === "followers" ? followers : following;
+  const name = personName(person);
+  $("their-people-title").textContent = which === "followers" ? `Following ${name}` : `${name} follows`;
+  $("their-people-list").replaceChildren(...people.map((p) => personRow(p, [], p.id === me.id ? "you" : "")));
+  $("their-people-empty").hidden = people.length > 0;
+  $("their-people-empty").textContent = which === "followers" ? `Nobody follows ${name} yet.` : `${name} doesn't follow anyone yet.`;
+}
+$("followers-count-button").addEventListener("click", () => showTheirPeople("followers"));
+$("following-count-button").addEventListener("click", () => showTheirPeople("following"));
+
+// ---------- Challenges (your own profile) ----------
+
+const KIND_LABELS = { practice: "Random places", photo: "Photos" };
+const kindLabel = (c) => (c.kind === "daily" && c.game_number ? `TapMap No. ${c.game_number}` : KIND_LABELS[c.kind] || "Challenge");
+const timestampDate = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+// Sent and played challenges in one list, newest first.
+async function renderChallenges() {
+  let data;
+  try {
+    data = await social.myChallenges(me.id);
+  } catch (error) {
+    // (Hidden until setup.sql has been re-run to create the challenge tables.)
+    console.warn("Challenges:", error);
+    $("challenges-section").hidden = true;
+    return;
+  }
+  $("challenges-section").hidden = false;
+  const entries = [];
+  for (const c of data.sent) {
+    const others = (c.challenge_results || []).filter((r) => r.user_id !== me.id);
+    const best = others.reduce((top, r) => (!top || r.total > top.total ? r : top), null);
+    entries.push({
+      id: c.id,
+      when: c.created_at,
+      title: kindLabel(c),
+      sub: `You sent it · ${others.length ? `${others.length} played` : "no one's played yet"}`,
+      mine: c.total,
+      theirs: best ? best.total : null,
+      theirName: best ? personName(best.profiles) : "",
+    });
+  }
+  const playedIds = new Set(data.played.map((r) => r.challenges && r.challenges.id));
+  for (const c of data.received || []) {
+    if (playedIds.has(c.id)) continue; // listed below with your score
+    const from = c.by_name || (c.profiles ? personName(c.profiles) : "A friend");
+    entries.push({ id: c.id, when: c.created_at, title: kindLabel(c), sub: `From ${from} · waiting for you`, mine: null, theirs: c.total, theirName: from, waiting: true });
+  }
+  for (const r of data.played) {
+    const c = r.challenges;
+    if (!c || c.created_by === me.id) continue; // already listed as sent
+    const from = c.by_name || (c.profiles ? personName(c.profiles) : "A friend");
+    entries.push({ id: c.id, when: r.created_at, title: kindLabel(c), sub: `From ${from}`, mine: r.total, theirs: c.total, theirName: from });
+  }
+  // Challenges waiting for you first, then newest first.
+  entries.sort((a, b) => (a.waiting !== b.waiting ? (a.waiting ? -1 : 1) : a.when < b.when ? 1 : -1));
+  const waiting = entries.filter((e) => e.waiting).length;
+
+  const won = entries.filter((e) => e.theirs !== null && e.mine !== null && e.mine > e.theirs).length;
+  const decided = entries.filter((e) => e.theirs !== null && e.mine !== null).length;
+  $("challenges-summary").textContent = waiting
+    ? `${waiting} challenge${waiting === 1 ? "" : "s"} waiting for you. Tap to see.`
+    : entries.length
+      ? `${entries.length} challenge${entries.length === 1 ? "" : "s"} sent and played${decided ? ` · won ${won} of ${decided}` : ""}.`
+      : "Challenges you've sent and played.";
+  $("challenges-toggle").classList.toggle("has-waiting", waiting > 0);
+  const items = entries.map((e) => {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.className = "archive-item challenge-item";
+    link.href = `/tapmap/challenge/${e.id}`;
+    const text = document.createElement("span");
+    text.className = "challenge-text";
+    const title = document.createElement("span");
+    title.className = "archive-title";
+    title.textContent = e.title;
+    const sub = document.createElement("span");
+    sub.className = "archive-date";
+    sub.textContent = `${e.sub} · ${timestampDate(e.when)}`;
+    text.append(title, sub);
+    const status = document.createElement("span");
+    status.className = "archive-status";
+    if (e.waiting) {
+      status.textContent = "Play";
+      status.classList.add("is-done");
+      status.title = `${e.theirName} scored ${e.theirs}`;
+    } else {
+      status.textContent = e.theirs === null ? formatNumber(e.mine) : `${formatNumber(e.mine)} v ${formatNumber(e.theirs)}`;
+      if (e.theirs !== null && e.mine !== e.theirs) status.classList.add(e.mine > e.theirs ? "is-done" : "is-lost");
+      status.title = e.theirs === null ? "Your score" : `You ${e.mine}, ${e.theirName} ${e.theirs}`;
+    }
+    link.append(text, status);
+    li.append(link);
+    return li;
+  });
+  // Pages of five, side by side: swipe across for more.
+  const pages = [];
+  for (let i = 0; i < items.length; i += CHALLENGES_PER_PAGE) {
+    const page = document.createElement("ol");
+    page.className = "archive-list challenge-page";
+    page.append(...items.slice(i, i + CHALLENGES_PER_PAGE));
+    pages.push(page);
+  }
+  const list = $("challenges-list");
+  list.replaceChildren(...pages);
+  list.scrollLeft = 0;
+  $("challenges-pager").hidden = pages.length < 2;
+  updateChallengePager();
+  $("challenges-empty").hidden = entries.length > 0;
+  // Something waiting for you: open the list.
+  if (waiting && $("challenges-body").hidden) $("challenges-toggle").click();
+}
+
+const CHALLENGES_PER_PAGE = 5;
+const challengePageIndex = () => {
+  const list = $("challenges-list");
+  return list.clientWidth ? Math.round(list.scrollLeft / list.clientWidth) : 0;
+};
+function updateChallengePager() {
+  const count = $("challenges-list").children.length;
+  const index = Math.min(challengePageIndex(), Math.max(count - 1, 0));
+  $("challenges-page").textContent = `${index + 1} of ${count}`;
+  $("challenges-prev").disabled = index === 0;
+  $("challenges-next").disabled = index >= count - 1;
+}
+function showChallengePage(index) {
+  const list = $("challenges-list");
+  list.scrollTo({ left: index * list.clientWidth, behavior: "smooth" });
+}
+$("challenges-list").addEventListener("scroll", () => requestAnimationFrame(updateChallengePager), { passive: true });
+$("challenges-prev").addEventListener("click", () => showChallengePage(challengePageIndex() - 1));
+$("challenges-next").addEventListener("click", () => showChallengePage(challengePageIndex() + 1));
+
+$("challenges-toggle").addEventListener("click", () => {
+  const open = $("challenges-body").hidden;
+  $("challenges-body").hidden = !open;
+  $("challenges-toggle").setAttribute("aria-expanded", String(open));
+  $("challenges-toggle").querySelector(".practice-arrow").textContent = open ? "↑" : "↓";
+  $("challenges-section").classList.toggle("is-open", open);
+  if (open) updateChallengePager();
+});
+
+// ---------- Follow links ----------
+
+// A shared profile link ("Follow me on TapMap") ends in ?follow=1: the page
+// then asks whether to follow, as an invite link does.
+let wantsFollow = new URLSearchParams(window.location.search).has("follow");
+if (wantsFollow) window.history.replaceState(null, "", window.location.pathname);
+
+function offerFollow(person) {
+  $("follow-prompt-avatar").replaceChildren(avatarElement(person, "lg"));
+  $("follow-prompt-title").textContent = personName(person);
+  $("follow-prompt-handle").textContent = `@${person.username}`;
+  $("follow-prompt-text").textContent = `Follow ${personName(person)} on TapMap? Once they accept, you'll follow each other and see each other's scores.`;
+  $("follow-prompt-message").textContent = "";
+  $("follow-prompt-yes").onclick = async () => {
+    $("follow-prompt-yes").disabled = true;
+    try {
+      await social.requestFollow(me.id, person.id);
+      $("follow-prompt").hidden = true;
+      toast(`Follow request sent to @${person.username}`);
+      await render();
+    } catch (error) {
+      $("follow-prompt-message").textContent = errorText(error);
+    } finally {
+      $("follow-prompt-yes").disabled = false;
+    }
+  };
+  $("follow-prompt-no").onclick = () => { $("follow-prompt").hidden = true; };
+  $("follow-prompt").hidden = false;
+  $("follow-prompt-yes").focus({ preventScroll: true });
+}
+
+async function shareText(text, copiedMessage) {
+  if (navigator.share) {
+    try {
+      // The link is inside the text, so apps like WhatsApp show one message.
+      await navigator.share({ text });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  toast(copiedMessage);
+}
+
+$("share-profile-button").addEventListener("click", () => {
+  const url = `${window.location.origin}${profileUrl(myProfile.username)}?follow=1`;
+  shareText(`Follow me on TapMap: ${url}`, "Profile link copied");
+});
 
 // ---------- Actions ----------
 
@@ -425,30 +720,10 @@ $("photo-remove").addEventListener("click", async () => {
   }
 });
 
-$("invite-button").addEventListener("click", async () => {
+$("invite-button").addEventListener("click", () => {
   const url = `${window.location.origin}/tapmap/?invite=${encodeURIComponent(myProfile.username)}`;
   const first = personName(myProfile).trim().split(/\s+/)[0];
-  const text = `${first} has invited you to play TapMap, the daily geography game. Sign up here: ${url}`;
-  if (navigator.share) {
-    try {
-      // The link is inside the text, so apps like WhatsApp show one message.
-      await navigator.share({ text });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (error) {
-    const area = document.createElement("textarea");
-    area.value = text;
-    document.body.append(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
-  }
-  toast("Invite copied");
+  shareText(`${first} has invited you to play TapMap, the daily geography game. Sign up here: ${url}`, "Invite copied");
 });
 
 $("profile-form").addEventListener("submit", async (event) => {

@@ -22,38 +22,60 @@ async function loadTile(url, signal) {
   return createImageBitmap(await response.blob());
 }
 
+// Draws the photo at one zoom level. Tiles that fail are left dark; it only
+// gives up if fewer than half of them load.
+async function drawAt(place, zoom, size, signal) {
+  const centre = worldPixel(place, zoom);
+  const left = centre.x - size / 2;
+  const top = centre.y - size / 2;
+  const tiles = 2 ** zoom;
+  const jobs = [];
+  for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.floor((top + size - 1) / TILE_SIZE); ty++) {
+    if (ty < 0 || ty >= tiles) continue;
+    for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.floor((left + size - 1) / TILE_SIZE); tx++) {
+      const wrapped = ((tx % tiles) + tiles) % tiles;
+      jobs.push(loadTile(TILE(zoom, wrapped, ty), signal).then((image) => ({ image, tx, ty })));
+    }
+  }
+  const results = await Promise.allSettled(jobs);
+  const loaded = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  if (loaded.length * 2 < jobs.length) {
+    const failure = results.find((r) => r.status === "rejected");
+    throw (failure && failure.reason) || new Error("Satellite tiles didn't load");
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0b0d12";
+  ctx.fillRect(0, 0, size, size);
+  for (const { image, tx, ty } of loaded) {
+    ctx.drawImage(image, Math.round(tx * TILE_SIZE - left), Math.round(ty * TILE_SIZE - top));
+    if (image.close) image.close();
+  }
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the photo"))), "image/jpeg", 0.88));
+}
+
 // Resolves to { url, revoke } for a size × size photo centred on the place.
-export async function satellitePhoto(place, { zoom = 12, size = 512, timeoutMs = 8000 } = {}) {
+// Tries a closer view first, then a wider one if the close tiles don't load.
+export async function satellitePhoto(place, { zooms = [12, 10], size = 512, timeoutMs = 12000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError = null;
   try {
-    const centre = worldPixel(place, zoom);
-    const left = centre.x - size / 2;
-    const top = centre.y - size / 2;
-    const tiles = 2 ** zoom;
-    const jobs = [];
-    for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.floor((top + size - 1) / TILE_SIZE); ty++) {
-      if (ty < 0 || ty >= tiles) continue;
-      for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.floor((left + size - 1) / TILE_SIZE); tx++) {
-        const wrapped = ((tx % tiles) + tiles) % tiles;
-        jobs.push(loadTile(TILE(zoom, wrapped, ty), controller.signal).then((image) => ({ image, tx, ty })));
+    for (const zoom of zooms) {
+      try {
+        const blob = await drawAt(place, zoom, size, controller.signal);
+        const url = URL.createObjectURL(blob);
+        return { url, revoke: () => URL.revokeObjectURL(url) };
+      } catch (error) {
+        lastError = error;
+        if (controller.signal.aborted) break;
+        console.warn(`Satellite photo at zoom ${zoom} failed:`, error);
       }
     }
-    const loaded = await Promise.all(jobs);
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#0b0d12";
-    ctx.fillRect(0, 0, size, size);
-    for (const { image, tx, ty } of loaded) {
-      ctx.drawImage(image, Math.round(tx * TILE_SIZE - left), Math.round(ty * TILE_SIZE - top));
-      if (image.close) image.close();
-    }
-    const blob = await new Promise((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the photo"))), "image/jpeg", 0.88));
-    const url = URL.createObjectURL(blob);
-    return { url, revoke: () => URL.revokeObjectURL(url) };
+    throw lastError || new Error("Satellite photo unavailable");
   } finally {
     clearTimeout(timer);
   }

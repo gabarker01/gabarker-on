@@ -127,6 +127,23 @@ select id, name, difficulty, added_on from public.locations order by id desc lim
 select * from public.locations where name ilike '%peru%';
 ```
 
+## Photo practice places
+
+Photo practice uses its own table, `photo_places` (102 to start: 33 easy,
+41 medium, 28 hard), graded by how recognisable the photo is rather than how
+well known the name is. Each row's `photo` is the English Wikipedia article
+whose main photo is shown (e.g. `Al-Khazneh` for Petra's Treasury). Add rows
+the same way as locations:
+
+```sql
+insert into public.photo_places (name, lat, lng, difficulty, photo, notes)
+values ('Sydney Harbour Bridge, Australia', -33.8523, 151.2108, 'easy',
+        'Sydney Harbour Bridge', 'Locals call it "the Coathanger".');
+```
+
+If an article's picture is a flag, map or drawing, the round shows a
+satellite view instead, so pick articles whose main picture is a photo.
+
 ## Profiles and invites
 
 - Every player has a page at `https://gabarker.com/tapmap/profile/{username}`
@@ -160,18 +177,89 @@ select * from public.daily_summary order by game_date desc;
 select * from public.weekly_league order by week_start desc, rank;
 ```
 
+**Global leaderboards** (`/tapmap/leaderboard/`: today, this week, all time)
+come from the `leaderboard(period, day, lim)` function. Anyone can read them;
+they show each signed-in player's name, photo, days played and points (never
+their guesses), and games without an account never appear.
+
+```sql
+select * from public.leaderboard('week', current_date);
+```
+
 In the app, `weekly_league` only shows you and the players who accepted your
 follow (it uses the `games` table's row-level security), and the results
 screen ranks those players for the current week.
+
+## Challenges
+
+A challenge starts on purpose: **Challenge** on someone's profile, or **New
+challenge** (your profile or the practice page), then random places or photos.
+When that game ends it's saved in `challenges` (and sent to that player's
+profile), and the results screen's **Share challenge** button shares `https://gabarker.com/tapmap/challenge/{id}` (`/challenge/{id}`
+works too). Anyone with the link can see the challenge and play it, signed in
+or not. Signed-in players' results go in `challenge_results`, which anyone with
+the challenge link can see (their pins show while you play it); signed-out players'
+results stay on their device (and are saved when they next sign in). Your
+profile lists the challenges you've sent and played, separately from your
+daily games. From someone's profile, **Challenge** sends them the next game
+you finish (`challenges.challenged_user`); it waits in their Challenges list.
+
+```sql
+-- Newest challenges and how many have played each
+select c.id, c.kind, c.by_name, c.total, c.created_at, count(r.user_id) as played
+from public.challenges c left join public.challenge_results r on r.challenge_id = c.id
+group by c.id order by c.created_at desc limit 20;
+```
+
+## Players without an account
+
+Daily games played without signing in are rows in `games` too, with no
+`user_id`, `signed_in = false` and a random `device_id` kept on the player's
+device (no personal details). Every game records its `device_id` and
+`signed_in` (whether the player was signed in when they played). Games without
+an account count towards the overall stats but never towards leaderboards,
+friends' results or profile stats. Players can add these rows but can't read
+them; you see them in the dashboard. Challenge results without an account are
+in `anonymous_challenge_results`.
+
+Running `setup.sql` again copies the rows from the old `anonymous_games` table
+into `games` (the old table is kept, and anything still sent to it is copied
+across too). Nothing is deleted.
+
+**A new account takes over its device's games.** When someone creates an
+account, the games that device played without one move to the account (they
+keep `signed_in = false`), so the streak and stats carry over. This only
+happens in the account's first day, so signing in to an older account on a
+shared device doesn't take anyone else's games. Signing in to an existing
+account still saves today's game to it, as before.
+
+**Where it was played.** Each game records `country` (two letters, from the
+`cf-ipcountry` header Cloudflare adds in front of the Supabase API; the IP
+address isn't stored, and there's no lookup or extra service, so no delay) and
+`time_zone` (as the player's device reports it). `country` is empty if that
+header isn't passed through.
+
+```sql
+-- Players per day, with and without an account
+select game_date, game_number, players, signed_in_players, players_without_account, average, best
+from public.daily_summary order by game_date desc;
+
+-- Where today's games were played
+select country, count(*) from public.games where game_date = current_date group by 1 order by 2 desc;
+```
+
+(`daily_summary` is for the dashboard only now: it includes the anonymous
+games, which the app can't read.) A challenge page lists signed-in players'
+results and adds "+ N more played without an account".
 
 ## What's stored
 
 | Table | Contents | Who can read | Who can write |
 | --- | --- | --- | --- |
 | `profiles` | username, display name, photo, time zone | everyone (for search) | the owner (update only) |
-| `follows` | follower, followee, status (`pending` / `accepted`) | the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
+| `follows` | follower, followee, status (`pending` / `accepted`) | accepted: signed-in players; pending: the two players involved | follower: request, cancel or unfollow; followee: accept, decline or remove |
 | `locations` | name, lat, lng, difficulty, added_on, retired_on, notes | everyone | only you, in the dashboard |
-| `games` | one row per player per day: date, game number, each round's score, tier, distance, multiplier and guess, total | the player and followers they have accepted | the owner, today's or yesterday's game only, once |
+| `games` | one row per daily game played: player (or none), device, signed in or not, date, game number, each round's score, tier, distance, multiplier and guess, total, country, time zone | the player and followers they have accepted (games without an account: nobody, only you in the dashboard) | the owner, or anyone for a game without an account; today's or yesterday's game only, once |
 
 Following someone sends a request. When they accept, you follow each other
 (the database adds the follow back automatically), and you can both see each
@@ -190,7 +278,7 @@ current streak counts if the last game was today or yesterday in the player's
 time zone (the game saves it to `profiles.time_zone`), the same rule the game
 uses.
 
-Past games, challenges and satellite practice are unranked and stay on the
+Past games, challenges and photo practice are unranked and stay on the
 player's device; only each day's daily game is saved.
 
 Scores are calculated in the browser, so a determined player could submit a
