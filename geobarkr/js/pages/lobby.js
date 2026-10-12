@@ -32,7 +32,7 @@ watchGame(gameId, async () => {
 
   $("#loading").hidden = true;
   $("#lobby").hidden = false;
-  $("#players-title").textContent = `Players for ${game.code}`;
+  $("#players-title").textContent = "Players";
   const local = game.type === "local_multiplayer";
   $("#host-note").hidden = !local;
   $("#host-note").textContent = `Hosted by ${game.host_name} on this screen. Players join on their phones.`;

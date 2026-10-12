@@ -70,7 +70,7 @@ async function render(state) {
       round.number >= game.round_count
         ? "That was the last round. The results appear here when the host is ready."
         : "The next round starts here when the host is ready.",
-      [h("h3", {}, mine ? "Your guess" : "The host ended the round before you guessed"), row],
+      [h("h3", {}, mine ? "Distance to the target" : "The host ended the round before you guessed"), row],
     );
   } else if (mine) {
     showStatus(

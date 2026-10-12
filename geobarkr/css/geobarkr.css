@@ -440,7 +440,7 @@ a { color: var(--ink); text-decoration-thickness: 2px; text-underline-offset: 3p
 
 @media (min-width: 900px) {
   .gb-play { display: block; }
-  .gb-pano-wrap { position: absolute; inset: 0; }
+  .gb-play .gb-pano-wrap { position: absolute; inset: 0; }
   .gb-panel {
     position: absolute;
     right: 20px;
@@ -514,7 +514,7 @@ a { color: var(--ink); text-decoration-thickness: 2px; text-underline-offset: 3p
 .gb-party-head { font-size: 22px; padding: 4px 4px 0; }
 .gb-party .gb-map-box { flex: 1; }
 .gb-party .gb-button { min-height: 60px; font-size: 19px; }
-.gb-party-status { margin: auto 0; padding: 0 8px; display: grid; gap: 16px; }
+.gb-party-status { margin: 24px 0 auto; padding: 0 8px; display: grid; gap: 16px; }
 .gb-party-status h2 { font-size: 28px; }
 .gb-party-status p { font-size: 18px; margin: 0; max-width: 30em; }
 

@@ -1,8 +1,8 @@
 # GeoBarkr: feature parity (ServiceNow → gabarker.com/geobarkr)
 
-Phase 1 inventory of the ServiceNow app in `gabarker01/geobarkr`, and how each
-piece will be rebuilt as a standalone web app. Nothing here is built yet; every
-row is **Planned** until Phase 3 updates it.
+Inventory of the ServiceNow app in `gabarker01/geobarkr` (Phase 1), how each
+piece was rebuilt as a standalone web app, and its status after Phase 3 (§4
+Status column, and the summary at the end).
 
 ## Source at a glance
 
@@ -156,38 +156,38 @@ locations. Details in Phase 2.
 Portal: **GeoBarkr** at `/geobarkr` (homepage `geobarkr_home`), theme "GeoBarkr
 Theme", logo + pin icon, fixed navbar and footer.
 
-| # | Feature | ServiceNow source | Web app (planned route / approach) |
-|---|---|---|---|
-| 4.1 | Branding | Portal logo (919×272 PNG "GeoBarkr" red outline with pin) and icon (red pin), red `#cc0000` buttons darkening to `#800000`, light grey `#f4f6f9` page, white cards with 16px radius | Same logo/icon files ported to `/geobarkr/assets/`, same colour scheme |
-| 4.2 | Header | Widget **GeoBarkr Header** (clone of the stock Polaris header): logo linking home, user menu (profile / log out), mobile hamburger | Slim header: logo → home, signed-in name, sign out. No search/cart/to-dos (unused stock features) |
-| 4.3 | Footer text | "Created by George Barker 2026" under the map | Same |
-| 4.4 | Home | Page `geobarkr_home` → widget **Redirect to New Game** sends straight to the Start Game form | `/geobarkr/` is the Start Game screen (after sign-in) |
-| 4.5 | Start Game form | Record producer **Start Game** (`sc_cat_item`): "How to play" text; **Select game type** (default Single player); **Start new game or join existing** (multiplayer only); **Select map** (active maps only; shown for new games); **Select existing game to join lobby** (games in Lobby status, showing creator and map). Catalog UI policies show/hide these per type | `/geobarkr/` form with the same fields and show/hide rules, same "How to play" copy |
-| 4.6 | Start single player | Producer script: game In Play, player + rounds created, round 1 started → `play` page | `create_game` RPC → `/geobarkr/play/?game=…` |
-| 4.7 | Street View panorama | Widget **GeoBarkr Panorama**: Google `StreetViewPanorama` at the round's lat/lng/heading/pitch; movement arrows, address, road labels, zoom buttons and close button hidden; pan control on (users can still drag, click-to-move and pinch/scroll zoom) | Same options. Full-width on phones |
-| 4.8 | Return to start | Red **home button** on the panorama resets position and view to the start | Same, large touch target |
-| 4.9 | Guess map | Widget **GeoBarkr Map**: Google map, zoom 1, min zoom 1, centred 21.17, −6.81, latitudes clamped to ±80, no map-type or Pegman controls; click places/moves a single marker; red **Guess** button | Same map settings. Tap to place/move the marker; Guess button |
-| 4.10 | Map enlarges on hover | CSS `#map:hover` grows the map (desktop only) | **Hover-only, so replaced:** an expand/collapse button, and on phones the map is a bottom sheet that can be opened full-height. Pinch/drag work natively |
-| 4.11 | Round result (single) | Widget **GeoBarkr Results Popup**: overlay map with guess marker, green tick-pin target marker, red geodesic line, "You were X km away", **Continue** | Same overlay. See question Q2 about also showing the score |
-| 4.12 | Next round / finish (single) | Continue → `checkIfNextRound` → `nextRound` (page reloads) or `completeGame` → results page | Same flow without page reloads |
-| 4.13 | Single-player results | Page `geobarkr_results_single` → widget **single player results table**: map of all guesses, targets and lines; "{name}'s Scorecard" table (Round, Distance to Target (km), Time, Score) with a Total row; **Play Again** → Start Game | `/geobarkr/results/?game=…` with the same map and table |
-| 4.14 | Create online lobby | Type Multiplayer + "Start a new game": game in Lobby, creator added as a player, rounds created (not started) → `lobby` | `create_game` → `/geobarkr/lobby/?game=…` |
-| 4.15 | Join online lobby | Type Multiplayer + "Join an existing game": pick from all Lobby games → added as player → `lobby` | Same picker of open lobbies; see Q4 about also accepting the room code |
-| 4.16 | Lobby | Page `lobby` → widget **GeoBarkr Lobby players**: "Game Lobby"; "Players for GAME…" list with join time and an **owner** badge; info table (Game Type, Map, Rounds = 5, Players); **Start Game** button only for the owner and only with **more than one player**; live updates via `recordWatch`; everyone is sent to the play page when the game starts | Same, live via Supabase Realtime |
-| 4.17 | Online play | Page `playmulti`: Panorama + **Map Multiplayer** + **Multiplayer Results Popup**. After guessing, the map is replaced by "Guesses this round" (Player, Time; live). Reloading keeps state (already guessed → list shown) | `/geobarkr/play/?game=…` in multiplayer mode, same behaviour |
-| 4.18 | Round completes when everyone has guessed | Server marks the round Results (21) when guesses = players | Inside `submit_guess`, broadcast via Realtime |
-| 4.19 | Round results (multi) | "Round Results" overlay map: green target, every player's marker + red line + an info window "{name} · X km • N pts"; **Next Round** (or **Results** on round 5) only for the owner | Same. Info windows become always-visible labels (tap-friendly) |
-| 4.20 | Advancing everyone | Owner clicks → `nextRound` / `completeGame`; other clients watch the next round / game record and reload or go to results | Realtime subscription; no reloads |
-| 4.21 | Multiplayer results | Page `geobarkr_results_multi` → widget **Results Table Multiplayer**: "Game Results", header (map, type, date), table Player × Round 1–5 (score, "distance • time") + TOTAL, sorted by total score; **Play Again** | `/geobarkr/results/?game=…` (multi layout), sorted the same |
-| 4.22 | Create in-person game | Type Local multiplayer: game in Lobby, rounds created, **host is not a player** → lobby with `type=local_multiplayer` | Same; host screen at `/geobarkr/host/?game=…` |
-| 4.23 | QR code to join | Lobby shows "Scan QR code to join game on mobile" using `api.qrserver.com` (third-party image) of `…/geobarkr?id=join_local&game=…` | QR drawn in the browser (no third party) + a short **room code** to type at `/geobarkr/join/` |
-| 4.24 | Join on phone | Page `join_local` → widget **Join Local Game**: opening the link adds the signed-in user; "Welcome {name}, you're in!" + How to play (5 rounds, use the Street View, tap the map, closer = more points, you'll be redirected automatically); moves to the phone map when the game starts | `/geobarkr/join/?code=…` with the same copy. Signing in first returns to the join link |
-| 4.25 | Host screen during a round | Page `play_localmulti`: big Street View (Panorama) + **In Play Local Guesses** ("Guesses this round": Player, Time; live) + the round results overlay; plays the sound effect on each new guess | Same on `/geobarkr/host/` (see Q6 about the sound file) |
-| 4.26 | Phone during a round | Page `map_mobile` → widget **Map Mobile**: "Round N / 5", full-width map, **Guess** disabled until the map is tapped; phones do **not** show Street View (players look at the host screen) | `/geobarkr/party/?game=…`; same. The target location is never sent to phones (source sent it) |
-| 4.27 | Phone after guessing | Card "Cheers {first name}! Your guess has been locked in. Waiting for the other players…" | Same |
-| 4.28 | Phone after the round | Card "Round Complete — You scored N points this round and were X km away. You will be redirected to the next round shortly…"; reloads when the host starts the next round | Same, via Realtime |
-| 4.29 | Host results and end | Host sees the round results overlay and the owner buttons; on the last round → multiplayer results table (the leaderboard). Phones go to their own single-player scorecard | Same |
-| 4.30 | Backend admin | Application menu **GeoBarkr** with list/form modules for Games, Maps, GeoBarkr Locations, Game Players, Rounds, Guess, and a link to the portal. Forms: Location (number, name, map, round number / lat, lng, heading, pitch), Map (name, active) + related Locations and Games, Game + related Rounds and Players, Round + related Guesses | `/geobarkr/admin/` (admin role only): manage maps (name, active) and their locations (name, round 1–5, lat/lng/heading/pitch, with a Street View preview to check the view), and read-only lists of games, players, rounds and guesses |
+| # | Feature | ServiceNow source | Web app (planned route / approach) | Status |
+|---|---|---|---|---|
+| 4.1 | Branding | Portal logo (919×272 PNG "GeoBarkr" red outline with pin) and icon (red pin), red `#cc0000` buttons darkening to `#800000`, light grey `#f4f6f9` page, white cards with 16px radius | Same logo/icon files ported to `/geobarkr/assets/`, same colour scheme | **Done (changed)**: same logo, icon and red; the rest of the look was redesigned with the frontend-design skill (road signs, see DESIGN.md) |
+| 4.2 | Header | Widget **GeoBarkr Header** (clone of the stock Polaris header): logo linking home, user menu (profile / log out), mobile hamburger | Slim header: logo → home, signed-in name, sign out. No search/cart/to-dos (unused stock features) | **Done**: logo home link, your name, Play / My games / Leaderboard / Admin (admins) / Sign out; a menu button on phones |
+| 4.3 | Footer text | "Created by George Barker 2026" under the map | Same | **Done** |
+| 4.4 | Home | Page `geobarkr_home` → widget **Redirect to New Game** sends straight to the Start Game form | `/geobarkr/` is the Start Game screen (after sign-in) | **Done**: `/geobarkr/` is Start Game |
+| 4.5 | Start Game form | Record producer **Start Game** (`sc_cat_item`): "How to play" text; **Select game type** (default Single player); **Start new game or join existing** (multiplayer only); **Select map** (active maps only; shown for new games); **Select existing game to join lobby** (games in Lobby status, showing creator and map). Catalog UI policies show/hide these per type | `/geobarkr/` form with the same fields and show/hide rules, same "How to play" copy | **Done (changed)**: game type is a three-way choice; map list shows active maps; joining is a separate room-code form (Q4) |
+| 4.6 | Start single player | Producer script: game In Play, player + rounds created, round 1 started → `play` page | `create_game` RPC → `/geobarkr/play/?game=…` | **Done** |
+| 4.7 | Street View panorama | Widget **GeoBarkr Panorama**: Google `StreetViewPanorama` at the round's lat/lng/heading/pitch; movement arrows, address, road labels, zoom buttons and close button hidden; pan control on (users can still drag, click-to-move and pinch/scroll zoom) | Same options. Full-width on phones | **Done**: same options. Checked against a test stand-in; real imagery needs the new key |
+| 4.8 | Return to start | Red **home button** on the panorama resets position and view to the start | Same, large touch target | **Done** |
+| 4.9 | Guess map | Widget **GeoBarkr Map**: Google map, zoom 1, min zoom 1, centred 21.17, −6.81, latitudes clamped to ±80, no map-type or Pegman controls; click places/moves a single marker; red **Guess** button | Same map settings. Tap to place/move the marker; Guess button | **Done**: plus one-finger drag on phones; Guess disabled until a pin is placed |
+| 4.10 | Map enlarges on hover | CSS `#map:hover` grows the map (desktop only) | **Hover-only, so replaced:** an expand/collapse button, and on phones the map is a bottom sheet that can be opened full-height. Pinch/drag work natively | **Done (changed)**: expand button instead of hover |
+| 4.11 | Round result (single) | Widget **GeoBarkr Results Popup**: overlay map with guess marker, green tick-pin target marker, red geodesic line, "You were X km away", **Continue** | Same overlay. See question Q2 about also showing the score | **Done (changed)**: also shows the round's points (Q2), on a distance sign |
+| 4.12 | Next round / finish (single) | Continue → `checkIfNextRound` → `nextRound` (page reloads) or `completeGame` → results page | Same flow without page reloads | **Done**: no page reloads |
+| 4.13 | Single-player results | Page `geobarkr_results_single` → widget **single player results table**: map of all guesses, targets and lines; "{name}'s Scorecard" table (Round, Distance to Target (km), Time, Score) with a Total row; **Play Again** → Start Game | `/geobarkr/results/?game=…` with the same map and table | **Done** |
+| 4.14 | Create online lobby | Type Multiplayer + "Start a new game": game in Lobby, creator added as a player, rounds created (not started) → `lobby` | `create_game` → `/geobarkr/lobby/?game=…` | **Done** |
+| 4.15 | Join online lobby | Type Multiplayer + "Join an existing game": pick from all Lobby games → added as player → `lobby` | Same picker of open lobbies; see Q4 about also accepting the room code | **Done (changed)**: room code or QR only, no list (Q4); lobby only (Q3) |
+| 4.16 | Lobby | Page `lobby` → widget **GeoBarkr Lobby players**: "Game Lobby"; "Players for GAME…" list with join time and an **owner** badge; info table (Game Type, Map, Rounds = 5, Players); **Start Game** button only for the owner and only with **more than one player**; live updates via `recordWatch`; everyone is sent to the play page when the game starts | Same, live via Supabase Realtime | **Done**: room code and QR shown in online lobbies too |
+| 4.17 | Online play | Page `playmulti`: Panorama + **Map Multiplayer** + **Multiplayer Results Popup**. After guessing, the map is replaced by "Guesses this round" (Player, Time; live). Reloading keeps state (already guessed → list shown) | `/geobarkr/play/?game=…` in multiplayer mode, same behaviour | **Done** |
+| 4.18 | Round completes when everyone has guessed | Server marks the round Results (21) when guesses = players | Inside `submit_guess`, broadcast via Realtime | **Done** |
+| 4.19 | Round results (multi) | "Round Results" overlay map: green target, every player's marker + red line + an info window "{name} · X km • N pts"; **Next Round** (or **Results** on round 5) only for the owner | Same. Info windows become always-visible labels (tap-friendly) | **Done**: map labels plus a distance sign listing every player |
+| 4.20 | Advancing everyone | Owner clicks → `nextRound` / `completeGame`; other clients watch the next round / game record and reload or go to results | Realtime subscription; no reloads | **Done**: live updates, no reloads |
+| 4.21 | Multiplayer results | Page `geobarkr_results_multi` → widget **Results Table Multiplayer**: "Game Results", header (map, type, date), table Player × Round 1–5 (score, "distance • time") + TOTAL, sorted by total score; **Play Again** | `/geobarkr/results/?game=…` (multi layout), sorted the same | **Done**: plus your own scorecard and map under the table |
+| 4.22 | Create in-person game | Type Local multiplayer: game in Lobby, rounds created, **host is not a player** → lobby with `type=local_multiplayer` | Same; host screen at `/geobarkr/host/?game=…` | **Done** |
+| 4.23 | QR code to join | Lobby shows "Scan QR code to join game on mobile" using `api.qrserver.com` (third-party image) of `…/geobarkr?id=join_local&game=…` | QR drawn in the browser (no third party) + a short **room code** to type at `/geobarkr/join/` | **Done (changed)**: QR drawn in the browser plus a typed room code |
+| 4.24 | Join on phone | Page `join_local` → widget **Join Local Game**: opening the link adds the signed-in user; "Welcome {name}, you're in!" + How to play (5 rounds, use the Street View, tap the map, closer = more points, you'll be redirected automatically); moves to the phone map when the game starts | `/geobarkr/join/?code=…` with the same copy. Signing in first returns to the join link | **Done** |
+| 4.25 | Host screen during a round | Page `play_localmulti`: big Street View (Panorama) + **In Play Local Guesses** ("Guesses this round": Player, Time; live) + the round results overlay; plays the sound effect on each new guess | Same on `/geobarkr/host/` (see Q6 about the sound file) | **Done**: plus **End round now** (Q1); a "Turn on the guess sound" button appears if the browser blocks sound until a tap |
+| 4.26 | Phone during a round | Page `map_mobile` → widget **Map Mobile**: "Round N / 5", full-width map, **Guess** disabled until the map is tapped; phones do **not** show Street View (players look at the host screen) | `/geobarkr/party/?game=…`; same. The target location is never sent to phones (source sent it) | **Done**: phones never receive the target during a round (tested) |
+| 4.27 | Phone after guessing | Card "Cheers {first name}! Your guess has been locked in. Waiting for the other players…" | Same | **Done** |
+| 4.28 | Phone after the round | Card "Round Complete — You scored N points this round and were X km away. You will be redirected to the next round shortly…"; reloads when the host starts the next round | Same, via Realtime | **Done** |
+| 4.29 | Host results and end | Host sees the round results overlay and the owner buttons; on the last round → multiplayer results table (the leaderboard). Phones go to their own single-player scorecard | Same | **Done (changed)**: at the end phones show the results table and their own scorecard (ServiceNow showed phones only the scorecard) |
+| 4.30 | Backend admin | Application menu **GeoBarkr** with list/form modules for Games, Maps, GeoBarkr Locations, Game Players, Rounds, Guess, and a link to the portal. Forms: Location (number, name, map, round number / lat, lng, heading, pitch), Map (name, active) + related Locations and Games, Game + related Rounds and Players, Round + related Guesses | `/geobarkr/admin/` (admin role only): manage maps (name, active) and their locations (name, round 1–5, lat/lng/heading/pitch, with a Street View preview to check the view), and read-only lists of games, players, rounds and guesses | **Done (changed)**: maps and locations editable with a Street View preview and link paste; recent games listed with links to their results. Players, rounds and guesses are viewed through each game's results page rather than separate lists |
 
 ---
 
@@ -302,7 +302,31 @@ that one.
 
 ---
 
-## Status key
+## Status after Phase 3
 
-Phase 3 will add a status to every row in §4: **Done**, **Done (changed)**
-with the reason, or **Not done** with the reason.
+Every feature in §4 is built. **Done** means it works as in ServiceNow;
+**Done (changed)** says what's different and why (your decisions Q1–Q7, the
+mobile-first and security requirements, or the redesign).
+
+| Area | Status |
+|---|---|
+| Data model and seed (§1) | **Done**: 7 tables, the demo map and its 5 locations ported with their ServiceNow IDs |
+| Server logic (§2) | **Done**: every `GeoBarkrUtils` / `geoBarkrAjax` function and the scoring rule, as database functions; same distance rounding and scoring formula (tested against the ServiceNow formula) |
+| Roles and access (§3) | **Done (tightened)**: player and admin; row-level security tested (see `supabase/tests/` and `dev/e2e.mjs`) |
+| Source bugs (§6) | **Fixed**: all seven listed |
+| Decisions Q1–Q7 | **Done**: End round now, points in the solo popup, lobby-only joining, code/QR-only joining, My games and an all-time leaderboard, the same sound effect, Google Maps |
+| Sign-in | **Done (changed)**: email + password and Google (magic links dropped for now, as decided) |
+
+### Not yet at full parity, or not verifiable here
+
+- **Real Google imagery and map rendering** weren't seen: this environment has
+  no Maps key, so tests used a stand-in that implements the same calls. Check
+  after README steps 7–8.
+- **Real Supabase** wasn't used: tests ran the real SQL on Postgres 16 behind
+  a local stand-in for Supabase's auth, REST and Realtime. Supabase's own
+  Realtime authorisation for private channels should be checked once on the
+  live project (README step 12: an in-person game updates on the host screen
+  without waiting 15 seconds).
+- **Sound on the host screen** depends on the browser: most block sound until
+  the page has been tapped, so the host may need to tap "Turn on the guess
+  sound" once (ServiceNow had the same limit and failed silently).

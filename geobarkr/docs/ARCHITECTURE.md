@@ -12,12 +12,12 @@ this and merge the Phase 3 PR.
 |---|---|
 | Hosting | GitHub Pages, as now. Plain HTML, CSS and JavaScript modules: **no build step, no GitHub Actions needed**. Merge the PR and Pages publishes it |
 | Backend | **Supabase, a new free project just for GeoBarkr** (not TapMap's) |
-| Sign-in | Supabase Auth: **email magic link** and **Google**. Required for every page |
+| Sign-in | Supabase Auth: **email + password** and **Google** (decision D1: no emails sent for now). Required for every page |
 | Data | Supabase Postgres with **row-level security** on every table |
 | Game logic | Postgres functions (the port of `GeoBarkrUtils` + the scoring business rule). The browser never decides a score |
 | Live updates | Supabase **Realtime broadcast**: one private channel per game, sent by the database |
 | Maps | Google Maps JavaScript API + Street View, with a new key locked to gabarker.com |
-| QR codes | Drawn in the browser (`qrcode-generator` from cdnjs); no third-party QR service |
+| QR codes | Drawn in the browser (`qrcode-generator`); no third-party QR service |
 
 ## 2. Why Supabase (and not something else)
 
@@ -172,8 +172,8 @@ caps). No secret keys go in the repo, and no repo secrets are needed.
   live "Guesses this round" list, the room code and QR in the lobby). The
   phone page is just the map, the round number and the Guess button, as in
   ServiceNow.
-- `prefers-reduced-motion` and light/dark follow the system, with the
-  ServiceNow red (`#cc0000`) as the accent.
+- Reduced motion is respected. The look (road signs, the logo's red) is in
+  [DESIGN.md](DESIGN.md); it's light only, to match the maps.
 
 ## 8. File layout
 
@@ -202,18 +202,22 @@ geobarkr/
     live.js             Realtime channel + 15 s refresh fallback
     maps.js             Google Maps loader, guess map, results map, Street View
     geo.js              Distance/score/time formatting shared with tests
-    qr.js, ui.js        QR code, header, cards, toasts
+    round.js            Live guesses list and the round results popup
+    ui.js, load.js      Header, sign-in check, QR code, toasts, script loader
     pages/*.js          One small module per page
   assets/               logo.png, icon.png, minikit.mp3 (from ServiceNow)
   supabase/             SQL (above)
   tests/                Node tests (run by the repo's existing `npm test`)
-  docs/                 FEATURE_PARITY.md, ARCHITECTURE.md
+  dev/                  Local test stack: Supabase stand-in, Google Maps
+                        stand-in, multi-browser end-to-end tests (not used by the site)
+  docs/                 FEATURE_PARITY.md, ARCHITECTURE.md, DESIGN.md
   README.md             Overview + setup checklist (Phase 3)
 ```
 
-**Libraries** (loaded from CDNs with fixed versions, no npm install):
-`@supabase/supabase-js@2.117.1` (the same version TapMap uses),
-`qrcode-generator@1.4.4`, and the Google Maps JS API.
+**Libraries:** `@supabase/supabase-js@2.117.1` (the same version TapMap
+uses) and `qrcode-generator@1.4.4` are copied into `geobarkr/vendor/` from
+npm, so the site doesn't depend on a CDN being up; the Google Maps JS API is
+loaded from Google.
 
 **Outside `geobarkr/`, the only change is the homepage:** a second project
 card in `index.html` matching the TapMap one (number 02, red pin artwork,
@@ -239,6 +243,10 @@ card in `index.html` matching the TapMap one (number 02, red pin artwork,
   TapMap's project, which is what you asked to avoid.
 
 ## 10. Setup walkthrough (all doable on your phone)
+
+> **Updated in Phase 3:** the final checklist is in [`../README.md`](../README.md).
+> It uses email + password (Confirm email off) instead of magic links, so the
+> Resend step below isn't needed.
 
 You'll do these once, in this order. Phase 3's README will repeat them as a
 checklist with the exact values filled in.
@@ -301,7 +309,12 @@ checklist with the exact values filled in.
 
 No GitHub repo secrets are needed, and there's no build to run.
 
-## 11. Decisions for you
+## 11. Decisions (answered)
+
+D1: email + password for now (no magic links). D2: yes. D3: yes. D4: PR
+into the default branch, after `main` was brought up to date with it.
+
+As asked at the time:
 
 - **D1. Email sign-in sender.** Magic links to anyone other than you need a
   custom SMTP sender. My recommendation is Resend (free: 3,000 emails/month,
