@@ -1,9 +1,9 @@
 // The lobby (ServiceNow: "GeoBarkr Lobby players"): who's joined, the room
 // code and QR code, and the host's Start Game button. Everyone moves on to the
 // game as soon as the host starts it.
-import { initPage, $, h, busy, param, qrCode, joinUrl } from "../ui.js";
-import { getGameState, startGame, gamePageUrl } from "../api.js";
-import { watchGame } from "../live.js";
+import { initPage, $, h, busy, param, qrCode, joinUrl, pageError } from "../ui.js";
+import { startGame, gamePageUrl } from "../api.js";
+import { watchGameState } from "../live.js";
 import { GAME_TYPES, formatDate } from "../geo.js";
 
 await initPage();
@@ -11,14 +11,7 @@ const gameId = param("game");
 let qrShown = false;
 let current = null;
 
-watchGame(gameId, async () => {
-  let state;
-  try {
-    state = await getGameState(gameId);
-  } catch (error) {
-    $("#loading").textContent = error.message;
-    return;
-  }
+watchGameState(gameId, async (state) => {
   const { game, players, me } = state;
   current = state;
   if (game.status !== "lobby") {
@@ -63,7 +56,7 @@ watchGame(gameId, async () => {
   $("#waiting-note").textContent = game.is_host
     ? (canStart ? "" : "You can start once at least 2 players have joined.")
     : `Waiting for ${game.host_name} to start the game…`;
-});
+}, pageError);
 
 $("#start-button").addEventListener("click", (event) => {
   busy(event.currentTarget, async () => {

@@ -1,11 +1,11 @@
 // In person, the host screen (ServiceNow page "play_localmulti"): big Street
 // View for the room, the live list of who has guessed (with the sound effect
 // for each new guess), and the round results with the host's buttons.
-import { initPage, $, h, busy, param } from "../ui.js";
-import { getGameState, endRound, nextRound, gamePageUrl } from "../api.js";
-import { watchGame } from "../live.js";
+import { initPage, $, h, busy, param, pageError } from "../ui.js";
+import { endRound, gamePageUrl, resultsUrl } from "../api.js";
+import { watchGameState } from "../live.js";
 import { createPanorama } from "../maps.js";
-import { ResultsPopup, renderGuessRows, roundGuessesForMap, signRows } from "../round.js";
+import { ResultsPopup, renderGuessRows, roundGuessesForMap, signRows, nextRoundOrResults } from "../round.js";
 
 await initPage();
 const gameId = param("game");
@@ -28,7 +28,7 @@ $("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home(
 let roundNumber = null;
 let seenGuesses = null;
 
-const watcher = watchGame(gameId, async () => render(await getGameState(gameId)));
+const watcher = watchGameState(gameId, render, pageError);
 
 $("#end-round").addEventListener("click", () => {
   busy($("#end-round"), async () => {
@@ -37,11 +37,7 @@ $("#end-round").addEventListener("click", () => {
   });
 });
 
-async function goOn() {
-  const result = await nextRound(gameId);
-  if (result === "complete") location.replace(`/geobarkr/results/?game=${encodeURIComponent(gameId)}`);
-  else watcher.refresh();
-}
+const goOn = () => nextRoundOrResults(gameId, watcher);
 
 function render(state) {
   const { game, round, guesses, players, me } = state;
@@ -50,7 +46,7 @@ function render(state) {
     return;
   }
   if (game.status !== "in_play" || !round) {
-    location.replace(`/geobarkr/results/?game=${encodeURIComponent(gameId)}`);
+    location.replace(resultsUrl(gameId));
     return;
   }
 

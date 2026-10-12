@@ -313,6 +313,11 @@ await step("RLS: a player can't read answers, other games, others' guesses or ma
   assert.match(report.insertMap, /row-level security/);
   assert.match(report.insertGuess, /permission denied/);
   assert.match(report.forceNext, /Only the host/);
+  // A game link that isn't yours says so instead of hanging.
+  await phone1.page.goto(`${BASE}/geobarkr/play/?game=${new URL(solo.page.url()).searchParams.get("game")}`);
+  await phone1.page.waitForSelector("text=Can't open this game");
+  await phone1.page.goto(`${BASE}/geobarkr/join/?game=${new URL(solo.page.url()).searchParams.get("game")}`);
+  await phone1.page.waitForSelector("#code-error:not([hidden])");
   // The admin page tells non-admins it's for admins only.
   await phone1.page.goto(`${BASE}/geobarkr/admin/`);
   await phone1.page.waitForSelector("#denied:not([hidden])");

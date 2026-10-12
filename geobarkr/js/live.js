@@ -2,6 +2,7 @@
 // ("game:<id>", sent by the database on every change) plus a slow re-check as
 // a safety net, and another whenever the screen comes back into view.
 import { getClient, getSession } from "./supabase.js";
+import { getGameState } from "./api.js";
 import { POLL_MS } from "./config.js";
 
 // Calls refresh() now and after every change. Overlapping calls are merged:
@@ -45,6 +46,7 @@ export function watchGame(gameId, refresh) {
         .subscribe((status) => {
           if (status === "SUBSCRIBED") run("subscribed");
         });
+      if (stopped) client.removeChannel(channel);
     } catch (error) {
       console.warn("GeoBarkr live updates unavailable; re-checking on a timer", error);
     }
@@ -66,4 +68,25 @@ export function watchGame(gameId, refresh) {
       if (channel) getClient().then((client) => client.removeChannel(channel));
     },
   };
+}
+
+// watchGame for a game screen: renders each new game state. If the game can't
+// be loaded at all (not yours, or a bad link), stops and calls onFail once.
+export function watchGameState(gameId, render, onFail) {
+  let loaded = false;
+  const watcher = watchGame(gameId, async () => {
+    let state;
+    try {
+      state = await getGameState(gameId);
+    } catch (error) {
+      if (!loaded) {
+        watcher.stop();
+        onFail(error);
+      }
+      return;
+    }
+    loaded = true;
+    await render(state);
+  });
+  return watcher;
 }

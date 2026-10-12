@@ -56,12 +56,15 @@ export const firstName = (name) => String(name || "").trim().split(/\s+/)[0] || 
 // The place and view in a Google Maps Street View link, for the admin page, e.g.
 // https://www.google.com/maps/@48.8583,2.2945,3a,75y,250h,90t/…  (pitch = t − 90)
 export function parseStreetViewLink(link) {
-  const match = /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,[^/]*?(\d+(?:\.\d+)?)h)?(?:,(\d+(?:\.\d+)?)t)?/.exec(link);
+  const match = /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)((?:,[^,/]+)*)/.exec(String(link));
   if (!match) return null;
+  const segment = (suffix) => match[3].split(",").find((part) => new RegExp(`^\\d+(?:\\.\\d+)?${suffix}$`).test(part));
+  const heading = segment("h");
+  const tilt = segment("t");
   return {
     lat: Number(match[1]),
     lng: Number(match[2]),
-    heading: match[3] == null ? 0 : Number(match[3]) % 360,
-    pitch: match[4] == null ? 0 : Math.max(-90, Math.min(90, Number(match[4]) - 90)),
+    heading: heading == null ? 0 : parseFloat(heading) % 360,
+    pitch: tilt == null ? 0 : Math.max(-90, Math.min(90, parseFloat(tilt) - 90)),
   };
 }

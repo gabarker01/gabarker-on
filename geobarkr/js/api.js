@@ -34,6 +34,8 @@ export async function renameMe(userId, displayName) {
   if (error) throw new Error(error.message);
 }
 
+export const resultsUrl = (gameId) => `/geobarkr/results/?game=${encodeURIComponent(gameId)}`;
+
 // Which page a game is played on, for me.
 export function gamePageUrl(game, { isHost = false, isPlayer = true } = {}) {
   const id = encodeURIComponent(game.id);

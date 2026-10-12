@@ -121,3 +121,22 @@ export async function qrCode(text) {
 }
 
 export const joinUrl = (code) => `${location.origin}/geobarkr/join/?code=${encodeURIComponent(code)}`;
+
+// A game page that can't show its game: say why and offer a way back.
+export function pageError(error) {
+  const main = document.querySelector("main");
+  main.className = "gb-page gb-notice";
+  main.replaceChildren(
+    h("h1", { class: "gb-page-title" }, "Can't open this game"),
+    h("p", { class: "gb-lede" }, `${error?.message || error}. Check the link, or join with the room code.`),
+    h("p", {}, h("a", { class: "gb-button", href: "/geobarkr/" }, "Back to GeoBarkr")),
+  );
+}
+
+// Room-code fields: capitals and digits only.
+export function codeInput(input) {
+  input.addEventListener("input", () => {
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  });
+  return input;
+}

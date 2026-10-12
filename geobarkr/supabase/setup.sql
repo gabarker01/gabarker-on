@@ -184,8 +184,9 @@ set search_path = ''
 as $$
   select 6371 * 2 * atan2(sqrt(a), sqrt(1 - a))
   from (
-    select sin(radians(lat2 - lat1) / 2) ^ 2
-         + cos(radians(lat1)) * cos(radians(lat2)) * sin(radians(lng2 - lng1) / 2) ^ 2 as a
+    -- Clamped: rounding can push a just past 1 for near-opposite points.
+    select least(1, greatest(0, sin(radians(lat2 - lat1) / 2) ^ 2
+         + cos(radians(lat1)) * cos(radians(lat2)) * sin(radians(lng2 - lng1) / 2) ^ 2)) as a
   ) x;
 $$;
 
@@ -410,9 +411,31 @@ $$;
 
 -- ---------- Playing a round ----------
 
+-- A round's results are shown: move it to Results and only now add its
+-- scores to the players' totals, so nobody can see a total jump before the
+-- reveal. Does nothing if the round isn't in progress.
+create or replace function public.reveal_round(p_round uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.rounds set status = 'results' where id = p_round and status = 'in_progress';
+  if not found then
+    return false;
+  end if;
+  update public.game_players gp
+  set total_score = gp.total_score + g.score, total_distance_km = gp.total_distance_km + g.distance_km
+  from public.guesses g
+  where g.round_id = p_round and g.player_id = gp.id;
+  return true;
+end;
+$$;
+
 -- A player's guess on the current round (createGuess + the score business
 -- rule). The distance is worked out here, never trusted from the browser. When
--- the last player guesses, the round moves to Results.
+-- the last player guesses, the round moves to Results and totals update.
 create or replace function public.submit_guess(p_game uuid, p_lat double precision, p_lng double precision)
 returns jsonb
 language plpgsql
@@ -451,19 +474,15 @@ begin
 
   v_distance := public.round_distance_km(public.haversine_km(p_lat, p_lng, v_round.lat, v_round.lng));
   v_score := public.score_for_distance(v_distance);
-  v_time := greatest(0, floor(extract(epoch from (clock_timestamp() - v_round.started_at)) * 1000))::integer;
+  -- Capped at the integer limit (about 24 days) so a long-abandoned round can still be finished.
+  v_time := least(2147483647, greatest(0, floor(extract(epoch from (clock_timestamp() - v_round.started_at)) * 1000)))::integer;
 
   insert into public.guesses (round_id, player_id, lat, lng, distance_km, score, time_ms)
   values (v_round.id, v_player, p_lat, p_lng, v_distance, v_score, v_time);
 
-  update public.game_players
-  set total_score = total_score + v_score, total_distance_km = total_distance_km + v_distance
-  where id = v_player;
-
   if (select count(*) from public.guesses where round_id = v_round.id)
      >= (select count(*) from public.game_players where game_id = p_game) then
-    update public.rounds set status = 'results' where id = v_round.id;
-    v_complete := true;
+    v_complete := public.reveal_round(v_round.id);
   end if;
 
   perform public.notify_game(p_game, case when v_complete then 'round_results' else 'guess' end);
@@ -487,9 +506,7 @@ begin
     raise exception 'Only the host can end the round';
   end if;
 
-  update public.rounds set status = 'results'
-  where game_id = p_game and status = 'in_progress';
-  if found then
+  if public.reveal_round((select id from public.rounds where game_id = p_game and status = 'in_progress')) then
     perform public.notify_game(p_game, 'round_results');
   end if;
 end;

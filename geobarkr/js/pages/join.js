@@ -1,9 +1,9 @@
 // Joining on a phone (ServiceNow: "GeoBarkr Join Local Game"). Opening the QR
 // link joins straight away; without a code you type one in. In-person players
 // wait here until the host starts, then go to the phone map.
-import { initPage, $, busy, param } from "../ui.js";
-import { joinGame, getGameState, gamePageUrl } from "../api.js";
-import { watchGame } from "../live.js";
+import { initPage, $, busy, param, codeInput } from "../ui.js";
+import { joinGame, gamePageUrl } from "../api.js";
+import { watchGameState } from "../live.js";
 
 const { profile } = await initPage();
 
@@ -17,8 +17,7 @@ function askForCode(message) {
 }
 
 function waitInGame(gameId) {
-  watchGame(gameId, async () => {
-    const { game, me } = await getGameState(gameId);
+  watchGameState(gameId, async ({ game, me }) => {
     if (game.type !== "local_multiplayer" || game.is_host || game.status !== "lobby") {
       location.replace(gamePageUrl(game, { isHost: game.is_host, isPlayer: me.is_player }));
       return;
@@ -27,7 +26,7 @@ function waitInGame(gameId) {
     $("#welcome").hidden = false;
     $("#welcome-title").textContent = `Welcome ${profile?.display_name || ""}, you're in!`;
     $("#round-count").textContent = `${game.round_count} round${game.round_count === 1 ? "" : "s"}`;
-  });
+  }, (error) => askForCode(`${error.message}. Try the room code instead.`));
 }
 
 async function join(code, button) {
@@ -40,10 +39,7 @@ async function join(code, button) {
   });
 }
 
-const code = $("#code");
-code.addEventListener("input", () => {
-  code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-});
+const code = codeInput($("#code"));
 $("#code-form").addEventListener("submit", (event) => {
   event.preventDefault();
   join(code.value, $("#join-button"));

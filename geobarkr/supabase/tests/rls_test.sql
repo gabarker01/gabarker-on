@@ -73,6 +73,7 @@ select test.eq(public.score_for_distance(100), 4756, '100 km');
 select test.eq(public.score_for_distance(1000), 3033, '1000 km');
 select test.eq(public.score_for_distance(5000), 410, '5000 km');
 select test.eq(public.round_distance_km(public.haversine_km(51.5, -0.12, 48.86, 2.35)), 342::double precision, 'London–Paris 342 km (same as the ServiceNow formula)');
+select test.eq(public.round_distance_km(public.haversine_km(38.71, 153.23, -38.71, -26.77)), 20015::double precision, 'opposite side of the world doesn''t error');
 
 -- ---------- Signed out: blocked from everything ----------
 
@@ -166,9 +167,12 @@ select from (select test.act_as(test.id('carol'))) s;
 select test.eq(public.get_game_state(test.id('online')) #> '{guesses,0}' ? 'lat', false, 'other players'' guess positions hidden until results');
 select test.eq(public.get_game_state(test.id('online')) #>> '{guesses,0,name}', 'Bobby', 'but who guessed and when is shown');
 select test.eq((select count(*) from public.guesses), 0::bigint, 'player cannot read other players'' guesses');
+select test.eq((select total_score from public.game_players where game_id = test.id('online') and user_id = test.id('bob')), 0, 'other players'' totals don''t move until results');
+select test.eq((public.get_game_state(test.id('online')) #>> '{players,0,total_score}')::int, 0, 'nor in the game state');
 select test.expect_error($$select public.next_round(test.id('online'))$$, 'Only the host');
 select test.eq((public.submit_guess(test.id('online'), 40, 0) ->> 'round_complete')::boolean, true, 'round ends when everyone has guessed');
 select test.eq(public.get_game_state(test.id('online')) #> '{guesses,0}' ? 'lat', true, 'positions revealed at results');
+select test.eq((select sum(total_score) from public.game_players where game_id = test.id('online')) > 0, true, 'totals added at results');
 select test.eq((select count(*) from public.game_players where game_id = test.id('online')), 2::bigint, 'member sees the game''s players');
 reset role;
 

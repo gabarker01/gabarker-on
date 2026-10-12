@@ -327,6 +327,12 @@ mobile-first and security requirements, or the redesign).
   Realtime authorisation for private channels should be checked once on the
   live project (README step 12: an in-person game updates on the host screen
   without waiting 15 seconds).
+- **Online players can find the target in their browser.** Street View needs
+  the location to show the panorama, so single-player and online players'
+  browsers receive it during the round (as in ServiceNow), and someone using
+  the browser's developer tools could read it. It can't be hidden while
+  Street View runs in the player's own browser. In-person phones never get it,
+  because Street View is only on the host screen.
 - **Sound on the host screen** depends on the browser: most block sound until
   the page has been tapped, so the host may need to tap "Turn on the guess
   sound" once (ServiceNow had the same limit and failed silently).

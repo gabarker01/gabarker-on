@@ -1,9 +1,9 @@
 // In person, a player's phone (ServiceNow page "map_mobile"): just the map and
 // the Guess button. The Street View is on the host's big screen; phones are
 // never sent the target during a round.
-import { initPage, $, h, busy, param } from "../ui.js";
-import { getGameState, submitGuess, gamePageUrl } from "../api.js";
-import { watchGame } from "../live.js";
+import { initPage, $, h, param, showError, pageError } from "../ui.js";
+import { submitGuess, gamePageUrl, resultsUrl } from "../api.js";
+import { watchGameState } from "../live.js";
 import { createGuessMap } from "../maps.js";
 import { formatDistance, formatScore, firstName } from "../geo.js";
 
@@ -17,15 +17,23 @@ const mapPromise = createGuessMap($("#map"), () => {
 mapPromise.catch((error) => $("#map").replaceChildren(h("p", { class: "gb-pano-message" }, error.message)));
 
 let roundNumber = null;
-const watcher = watchGame(gameId, async () => render(await getGameState(gameId)));
+let sending = false;
+const watcher = watchGameState(gameId, render, pageError);
 
-$("#guess").addEventListener("click", () => {
-  busy($("#guess"), async () => {
-    const pick = (await mapPromise).getPick();
-    if (!pick) return;
+// Stays disabled once sent, so a second tap can't send the guess twice.
+$("#guess").addEventListener("click", async () => {
+  const pick = (await mapPromise).getPick();
+  if (!pick || sending) return;
+  sending = true;
+  $("#guess").disabled = true;
+  try {
     await submitGuess(gameId, pick.lat, pick.lng);
     watcher.refresh();
-  });
+  } catch (error) {
+    sending = false;
+    $("#guess").disabled = false;
+    showError(error);
+  }
 });
 
 function showStatus(title, text, sign) {
@@ -45,7 +53,7 @@ async function render(state) {
     return;
   }
   if (game.status !== "in_play" || !round) {
-    location.replace(`/geobarkr/results/?game=${encodeURIComponent(gameId)}`);
+    location.replace(resultsUrl(gameId));
     return;
   }
 
@@ -54,6 +62,7 @@ async function render(state) {
 
   if (round.number !== roundNumber) {
     roundNumber = round.number;
+    sending = false;
     (await mapPromise.catch(() => null))?.reset();
     $("#guess").disabled = true;
     $("#guess").textContent = "Tap the map to place your guess";

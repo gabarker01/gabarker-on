@@ -22,7 +22,7 @@
   const toLatLng = (p) => (p instanceof LatLng ? p : new LatLng(p));
 
   class Map {
-    constructor(element, options = {}) {
+    constructor(element) {
       this.el = element;
       this.listeners = {};
       this.overlays = new Set();

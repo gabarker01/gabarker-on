@@ -4,6 +4,14 @@
 import { $, h, busy } from "./ui.js";
 import { createResultsMap, guessLabel } from "./maps.js";
 import { formatTime, formatDistance, formatScore } from "./geo.js";
+import { nextRound, resultsUrl } from "./api.js";
+
+// The host's Next round / See results button.
+export async function nextRoundOrResults(gameId, watcher) {
+  const result = await nextRound(gameId);
+  if (result === "complete") location.replace(resultsUrl(gameId));
+  else watcher.refresh();
+}
 
 export function renderGuessRows(tbody, guesses) {
   tbody.replaceChildren(...(guesses.length

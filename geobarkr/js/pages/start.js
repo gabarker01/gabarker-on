@@ -1,5 +1,5 @@
 // Start Game (ServiceNow: the "Start Game" record producer) and join by code.
-import { initPage, $, h, busy, showError } from "../ui.js";
+import { initPage, $, h, busy, showError, codeInput } from "../ui.js";
 import { activeMaps, createGame, joinGame, gamePageUrl } from "../api.js";
 
 await initPage();
@@ -24,10 +24,7 @@ $("#start-form").addEventListener("submit", (event) => {
   });
 });
 
-const code = $("#code");
-code.addEventListener("input", () => {
-  code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-});
+const code = codeInput($("#code"));
 
 $("#join-form").addEventListener("submit", (event) => {
   event.preventDefault();

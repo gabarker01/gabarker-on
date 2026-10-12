@@ -1,11 +1,11 @@
 // Single player and online multiplayer (ServiceNow pages "play" and
 // "playmulti"): Street View, the guess map, the live guesses list after you've
 // guessed, and the round results popup.
-import { initPage, $, h, busy, param } from "../ui.js";
-import { getGameState, submitGuess, endRound, nextRound, gamePageUrl } from "../api.js";
-import { watchGame } from "../live.js";
+import { initPage, $, h, busy, param, showError, pageError } from "../ui.js";
+import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js";
+import { watchGameState } from "../live.js";
 import { createPanorama, createGuessMap } from "../maps.js";
-import { ResultsPopup, renderGuessRows, roundGuessesForMap, signRows } from "../round.js";
+import { ResultsPopup, renderGuessRows, roundGuessesForMap, signRows, nextRoundOrResults } from "../round.js";
 
 await initPage();
 const gameId = param("game");
@@ -37,21 +37,24 @@ $("#expand").addEventListener("click", () => {
   $("#expand").setAttribute("aria-label", expanded ? "Make the map smaller" : "Make the map bigger");
 });
 
-const watcher = watchGame(gameId, async () => render(await getGameState(gameId)));
+const watcher = watchGameState(gameId, render, pageError);
 
-$("#guess").addEventListener("click", () => {
-  busy($("#guess"), async () => {
-    const pick = (await mapPromise).getPick();
-    if (!pick) return;
-    submitting = true;
-    try {
-      await submitGuess(gameId, pick.lat, pick.lng);
-    } finally {
-      submitting = false;
-    }
+// The button stays disabled after a guess is sent (until the next round), so a
+// second tap can't send it twice.
+$("#guess").addEventListener("click", async () => {
+  const pick = (await mapPromise).getPick();
+  if (!pick || submitting) return;
+  submitting = true;
+  $("#guess").disabled = true;
+  try {
+    await submitGuess(gameId, pick.lat, pick.lng);
     $("#panel").classList.remove("is-expanded");
     watcher.refresh();
-  });
+  } catch (error) {
+    submitting = false;
+    updateGuessButton();
+    showError(error);
+  }
 });
 
 $("#end-round").addEventListener("click", () => {
@@ -61,11 +64,7 @@ $("#end-round").addEventListener("click", () => {
   });
 });
 
-async function goOn() {
-  const result = await nextRound(gameId);
-  if (result === "complete") location.replace(`/geobarkr/results/?game=${encodeURIComponent(gameId)}`);
-  else watcher.refresh();
-}
+const goOn = () => nextRoundOrResults(gameId, watcher);
 
 async function render(next) {
   state = next;
@@ -76,7 +75,7 @@ async function render(next) {
     return;
   }
   if (game.status !== "in_play" || !round) {
-    location.replace(`/geobarkr/results/?game=${encodeURIComponent(gameId)}`);
+    location.replace(resultsUrl(gameId));
     return;
   }
 
@@ -88,6 +87,7 @@ async function render(next) {
   // A new round: new place, empty map.
   if (round.number !== roundNumber) {
     roundNumber = round.number;
+    submitting = false;
     popup.close();
     (await mapPromise.catch(() => null))?.reset();
     updateGuessButton();

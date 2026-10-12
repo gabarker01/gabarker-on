@@ -4,7 +4,7 @@
 import { initPage, $, h, param, showError } from "../ui.js";
 import { getResults, gamePageUrl } from "../api.js";
 import { createResultsMap } from "../maps.js";
-import { formatDistance, formatScore, formatTime, formatDate, roundDistance, ordinal } from "../geo.js";
+import { formatDistance, formatScore, formatTime, formatDate, ordinal } from "../geo.js";
 
 const { profile } = await initPage();
 const gameId = param("game");
@@ -82,7 +82,7 @@ if (me) {
       }),
       h("tr", { class: "gb-total" },
         h("td", {}, "Total"),
-        h("td", { class: "gb-num" }, formatDistance(roundDistance(me.total_distance_km))),
+        h("td", { class: "gb-num" }, formatDistance(me.total_distance_km)),
         h("td", { class: "gb-num" }, formatTime(me.total_time_ms)),
         h("td", { class: "gb-num" }, formatScore(me.total_score))),
     ),
