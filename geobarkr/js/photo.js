@@ -7,8 +7,8 @@
 // createPhotoView(element) shows a photo whole, centred, on a frosted, blurred
 // copy of itself (like iOS), and lets you pinch, drag, double-tap or scroll to
 // zoom. It has the same show / home / hide as the Street View panorama.
-import { readExifGps } from "./exif.js?v=13";
-import { spring, project, rubberband, velocityTracker, reducedMotion } from "./motion.js?v=13";
+import { readExifGps } from "./exif.js?v=14";
+import { spring, project, rubberband, velocityTracker, reducedMotion } from "./motion.js?v=14";
 
 export async function preparePhoto(file, { maxSide = 2048, quality = 0.85 } = {}) {
   if (!file || !/^image\//.test(file.type || "image/")) throw new Error("Choose a photo");

@@ -1,7 +1,7 @@
 // The real backend: Supabase (see geobarkr/supabase/). Every game action is a
 // database function that checks who's asking; row-level security does the rest.
-import { getClient, getSession as session } from "./supabase.js?v=13";
-import { SUPABASE_URL } from "./config.js?v=13";
+import { getClient, getSession as session } from "./supabase.js?v=14";
+import { SUPABASE_URL } from "./config.js?v=14";
 
 async function rpc(name, args = {}) {
   const client = await getClient();

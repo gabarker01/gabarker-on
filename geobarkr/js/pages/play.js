@@ -1,15 +1,15 @@
 // Solo and online play (ServiceNow pages "play" and "playmulti"): Street View,
 // the guess map with your pin, the live guesses list after you've guessed,
 // and the round results.
-import { initPage, $, h, busy, param, showError, pageError } from "../ui.js?v=13";
-import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js?v=13";
-import { watchGameState } from "../live.js?v=13";
-import { createPanorama, createGuessMap } from "../maps.js?v=13";
-import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=13";
-import { setupTopbar, renderTopbar, setupCompass, setupStage } from "../game-chrome.js?v=13";
-import { ME_COLOUR } from "../players.js?v=13";
-import { formatCoords } from "../geo.js?v=13";
-import { haptic } from "../motion.js?v=13";
+import { initPage, $, h, busy, param, showError, pageError } from "../ui.js?v=14";
+import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js?v=14";
+import { watchGameState } from "../live.js?v=14";
+import { createPanorama, createGuessMap } from "../maps.js?v=14";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=14";
+import { setupTopbar, renderTopbar, setupCompass, setupStage } from "../game-chrome.js?v=14";
+import { ME_COLOUR } from "../players.js?v=14";
+import { formatCoords } from "../geo.js?v=14";
+import { haptic } from "../motion.js?v=14";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();

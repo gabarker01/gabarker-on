@@ -1,7 +1,7 @@
 // Page set-up (sign-in check + header) and small DOM helpers.
-import { isDemo, getSession, getProfile, signOut } from "./api.js?v=13";
-import { loadScript } from "./load.js?v=13";
-import { avatar, ME_COLOUR } from "./players.js?v=13";
+import { isDemo, getSession, getProfile, signOut } from "./api.js?v=14";
+import { loadScript } from "./load.js?v=14";
+import { avatar, ME_COLOUR } from "./players.js?v=14";
 
 // h("p", { class: "x", onclick }, "text", child…) → element. Strings become text, never HTML.
 export function h(tag, attrs = {}, ...children) {

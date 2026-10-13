@@ -1,12 +1,12 @@
 // The lobby (ServiceNow: "GeoBarkr Lobby players"): the room code and QR code,
 // who's joined, and the owner's Start button. Everyone moves on to the game
 // as soon as the owner starts it.
-import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew, toast, showError } from "../ui.js?v=13";
-import { startGame, cancelGame, gamePageUrl, isDemo } from "../api.js?v=13";
-import { watchGameState } from "../live.js?v=13";
-import { drawWorld } from "../worldmap.js?v=13";
-import { avatar, colourMap } from "../players.js?v=13";
-import { GAME_TYPES, formatDate } from "../geo.js?v=13";
+import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew, toast, showError } from "../ui.js?v=14";
+import { startGame, cancelGame, gamePageUrl, isDemo } from "../api.js?v=14";
+import { watchGameState } from "../live.js?v=14";
+import { drawWorld } from "../worldmap.js?v=14";
+import { avatar, colourMap } from "../players.js?v=14";
+import { GAME_TYPES, formatDate } from "../geo.js?v=14";
 
 await initPage();
 drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });

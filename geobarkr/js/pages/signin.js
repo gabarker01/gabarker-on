@@ -1,9 +1,9 @@
 // Sign in: email + password or Google; in demo mode, just your name. Then
 // back to where you were going.
-import { AUTH_PROVIDERS } from "../config.js?v=13";
-import { isDemo, getSession } from "../api.js?v=13";
-import { $, busy, param, toast, logoMark, pageReady } from "../ui.js?v=13";
-import { drawWorld } from "../worldmap.js?v=13";
+import { AUTH_PROVIDERS } from "../config.js?v=14";
+import { isDemo, getSession } from "../api.js?v=14";
+import { $, busy, param, toast, logoMark, pageReady } from "../ui.js?v=14";
+import { drawWorld } from "../worldmap.js?v=14";
 
 $("#brand").prepend(logoMark(34));
 
@@ -32,7 +32,7 @@ if (await getSession()) goNext();
 else Promise.race([mapDrawn, new Promise((done) => setTimeout(done, 1500))]).then(pageReady);
 
 if (isDemo) {
-  const { signInDemo } = await import("../demo.js?v=13");
+  const { signInDemo } = await import("../demo.js?v=14");
   const form = $("#demo-form");
   form.hidden = false;
   form.addEventListener("submit", (event) => {
@@ -43,7 +43,7 @@ if (isDemo) {
     });
   });
 } else {
-  const { getClient } = await import("../supabase.js?v=13");
+  const { getClient } = await import("../supabase.js?v=14");
   const client = await getClient();
   client.auth.onAuthStateChange((event, session) => {
     if (session && event === "SIGNED_IN") goNext(); // back from Google

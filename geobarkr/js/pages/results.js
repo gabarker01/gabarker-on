@@ -1,11 +1,11 @@
 // Game results (ServiceNow pages "geobarkr_results_single" and
 // "geobarkr_results_multi"): every round on a world map, the winner, your
 // stats (points, distance, time), the standings and each round in detail.
-import { initPage, $, h, param } from "../ui.js?v=13";
-import { getResults, gamePageUrl } from "../api.js?v=13";
-import { drawWorld } from "../worldmap.js?v=13";
-import { avatar, colourMap, ME_COLOUR } from "../players.js?v=13";
-import { formatDistance, formatScore, formatTime, formatDate, ordinal, GAME_TYPES } from "../geo.js?v=13";
+import { initPage, $, h, param } from "../ui.js?v=14";
+import { getResults, gamePageUrl } from "../api.js?v=14";
+import { drawWorld } from "../worldmap.js?v=14";
+import { avatar, colourMap, ME_COLOUR } from "../players.js?v=14";
+import { formatDistance, formatScore, formatTime, formatDate, ordinal, GAME_TYPES } from "../geo.js?v=14";
 
 await initPage();
 const gameId = param("game");

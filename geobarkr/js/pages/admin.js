@@ -1,10 +1,10 @@
 // Admin (ServiceNow: the GeoBarkr application menu): maps and their locations,
 // with a Street View preview to set each round's starting view, and recent
 // games. Row-level security also enforces admin-only access.
-import { initPage, $, h, busy, toast, showError, kindIcon } from "../ui.js?v=13";
-import { adminMaps, saveMap, deleteMap, mapLocations, saveLocation, deleteLocation, recentGames, resultsUrl } from "../api.js?v=13";
-import { createPanorama } from "../maps.js?v=13";
-import { GAME_TYPES, GAME_STATUSES, formatDate, parseStreetViewLink } from "../geo.js?v=13";
+import { initPage, $, h, busy, toast, showError, kindIcon } from "../ui.js?v=14";
+import { adminMaps, saveMap, deleteMap, mapLocations, saveLocation, deleteLocation, recentGames, resultsUrl } from "../api.js?v=14";
+import { createPanorama } from "../maps.js?v=14";
+import { GAME_TYPES, GAME_STATUSES, formatDate, parseStreetViewLink } from "../geo.js?v=14";
 
 const { profile } = await initPage();
 const isAdmin = profile?.role === "admin";
