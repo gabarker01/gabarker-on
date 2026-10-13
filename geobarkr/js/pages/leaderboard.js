@@ -1,9 +1,9 @@
 // All-time leaderboard over finished games: total points or best single game.
-import { initPage, $, h, showError } from "../ui.js?v=11";
-import { leaderboard } from "../api.js?v=11";
-import { drawWorld } from "../worldmap.js?v=11";
-import { avatar, ME_COLOUR } from "../players.js?v=11";
-import { formatScore, ordinal } from "../geo.js?v=11";
+import { initPage, $, h, showError } from "../ui.js?v=12";
+import { leaderboard } from "../api.js?v=12";
+import { drawWorld } from "../worldmap.js?v=12";
+import { avatar, ME_COLOUR } from "../players.js?v=12";
+import { formatScore, ordinal } from "../geo.js?v=12";
 
 await initPage();
 drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });

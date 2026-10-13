@@ -3,9 +3,9 @@
 // and results draw each guess to the target as a great-circle (geodesic) line.
 // Without a key (GOOGLE_MAPS_KEY empty) the same functions come from
 // maps-keyless.js: Leaflet maps and Google's keyless Street View embed.
-import { GOOGLE_MAPS_KEY } from "./config.js?v=11";
-import { avatar } from "./players.js?v=11";
-import { haptic, replay } from "./motion.js?v=11";
+import { GOOGLE_MAPS_KEY } from "./config.js?v=12";
+import { avatar } from "./players.js?v=12";
+import { haptic, replay } from "./motion.js?v=12";
 
 // Fog: a quiet light map in the app's colours. Roads and labels stay readable;
 // businesses and transit are hidden so the map doesn't give places away.
@@ -132,7 +132,7 @@ export function targetElement(place) {
 }
 
 // Tap the map to place (or move) your pin.
-const keyless = () => import("./maps-keyless.js?v=11");
+const keyless = () => import("./maps-keyless.js?v=12");
 
 export async function createGuessMap(element, me, onPick) {
   if (!GOOGLE_MAPS_KEY) return (await keyless()).createGuessMap(element, me, onPick);

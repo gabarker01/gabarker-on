@@ -1,10 +1,10 @@
 // Joining on a phone (ServiceNow: "GeoBarkr Join Local Game"). Opening the QR
 // link joins straight away; without a code you type one in. In-person players
 // wait here until the host starts, then go to the phone map.
-import { initPage, $, busy, param, codeInput } from "../ui.js?v=11";
-import { joinGame, gamePageUrl } from "../api.js?v=11";
-import { watchGameState } from "../live.js?v=11";
-import { drawWorld } from "../worldmap.js?v=11";
+import { initPage, $, busy, param, codeInput } from "../ui.js?v=12";
+import { joinGame, gamePageUrl } from "../api.js?v=12";
+import { watchGameState } from "../live.js?v=12";
+import { drawWorld } from "../worldmap.js?v=12";
 
 const { profile } = await initPage();
 drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });

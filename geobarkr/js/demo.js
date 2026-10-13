@@ -2,7 +2,7 @@
 // database functions (geobarkr/supabase/migrations/002_functions.sql), kept in
 // this browser's storage, with bot players so online and party games can be
 // tried on one device. Nothing leaves the device; nobody else can join.
-import { haversineKm, roundDistance, scoreForDistance } from "./geo.js?v=11";
+import { haversineKm, roundDistance, scoreForDistance } from "./geo.js?v=12";
 
 const DB_KEY = "geobarkr-demo-v1";
 const ME_KEY = "geobarkr-demo-me";

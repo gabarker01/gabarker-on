@@ -11,8 +11,7 @@ export const SUPABASE_KEY = "sb_publishable_IkRv524PmJX22EWCNs9TOA_QenumrpU";
 export const GOOGLE_MAPS_KEY = "AIzaSyDRgrrsgVXJ5pJLuV7Yj5aJnjj3jYmTV0Q";
 
 // Sign-in methods to offer, in order: "email" (email and password), "google".
-// Add "google" once Google sign-in is set up in Supabase (README step 5).
-export const AUTH_PROVIDERS = ["email"];
+export const AUTH_PROVIDERS = ["email", "google"];
 
 // How often game screens re-check the game, as a safety net for the live
 // updates (phones sleeping, flaky Wi-Fi).

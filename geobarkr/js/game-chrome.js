@@ -1,6 +1,6 @@
 // The bar above Street View: home link, round number with progress, your total.
-import { $, logoMark, helpButton } from "./ui.js?v=11";
-import { formatScore } from "./geo.js?v=11";
+import { $, logoMark, helpButton } from "./ui.js?v=12";
+import { formatScore } from "./geo.js?v=12";
 
 export function setupTopbar() {
   $("#home-link").append(logoMark(22));
