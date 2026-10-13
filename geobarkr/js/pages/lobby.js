@@ -1,7 +1,7 @@
 // The lobby (ServiceNow: "GeoBarkr Lobby players"): the room code and QR code,
 // who's joined, and the owner's Start button. Everyone moves on to the game
 // as soon as the owner starts it.
-import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew } from "../ui.js";
+import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew, toast, showError } from "../ui.js";
 import { startGame, gamePageUrl, isDemo } from "../api.js";
 import { watchGameState } from "../live.js";
 import { drawWorld } from "../worldmap.js";
@@ -27,6 +27,7 @@ watchGameState(gameId, async (state) => {
   const local = game.type === "local_multiplayer";
   const code = game.code;
   $("#room-code").textContent = code;
+  $("#share-button").hidden = isDemo;
   $("#game-meta").textContent = `${GAME_TYPES[game.type]} · ${game.map_name} · ${game.round_count} rounds`;
   if (!qrShown) {
     qrShown = true;
@@ -61,4 +62,26 @@ $("#start-button").addEventListener("click", (event) => {
     await startGame(gameId);
     location.replace(gamePageUrl({ ...current.game, status: "in_play" }, { isHost: true, isPlayer: current.me.is_player }));
   });
+});
+
+// Share the invite: the phone's share sheet where there is one, otherwise copy the link.
+$("#share-button").addEventListener("click", async () => {
+  const code = current?.game.code;
+  if (!code) return;
+  const url = joinUrl(code);
+  const text = `Join my GeoBarkr game. Room code ${code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "GeoBarkr", text, url });
+    } catch (error) {
+      if (error.name !== "AbortError") showError(error);
+    }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}: ${url}`);
+    toast("Invite link copied.");
+  } catch {
+    toast(url);
+  }
 });
