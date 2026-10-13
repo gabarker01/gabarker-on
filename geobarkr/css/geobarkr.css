@@ -31,7 +31,9 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+/* No pinch or double-tap zoom on the pages (the map and Street View handle
+   their own pinch); text still follows the reader's text-size setting. */
+html { -webkit-text-size-adjust: 100%; background: var(--bg); touch-action: pan-x pan-y; }
 body {
   margin: 0;
   min-height: 100dvh;
@@ -504,10 +506,32 @@ a:hover { text-decoration: underline; }
 }
 .gb-seg button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 6px rgba(14, 23, 38, 0.12); }
 .gb-mode-note { margin: -2px 4px 0; color: var(--muted); font-size: 0.875rem; min-height: 2.6em; }
-.gb-maprow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 4px; }
+.gb-maprow {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 12px 12px 14px; border: 1px solid var(--line); border-radius: 16px;
+  background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; touch-action: manipulation;
+}
 .gb-maprow span { color: var(--muted); }
-.gb-maprow select { appearance: none; border: 0; background: none; color: var(--text); font: 600 1rem var(--font); text-align: right; padding: 8px 18px 8px 0; cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 9px) 16px, calc(100% - 4px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+.gb-maprow b { flex: 1; text-align: right; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-maprow svg { flex: none; color: var(--muted); }
+.gb-maprow:active:not(:disabled) { background: var(--soft); }
+.gb-maprow:disabled { cursor: progress; }
+/* Map picker: a sheet with search (once there are lots) and the list. */
+.gb-picker { padding-bottom: 12px; height: min(640px, calc(100dvh - 40px)); }
+.gb-search {
+  width: 100%; height: 46px; margin: 2px 0 8px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--soft);
+  color: var(--text); font: 400 1rem var(--font);
+}
+.gb-search:focus { outline: 2px solid var(--text); outline-offset: 0; }
+.gb-picklist { display: flex; flex-direction: column; }
+.gb-pick {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 6px 0 4px; border: 0; border-top: 1px solid var(--line);
+  background: none; color: var(--text); font: 500 1rem var(--font); text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.gb-pick:first-child { border-top: 0; }
+.gb-pick .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-pick .tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; color: transparent; border: 1.5px solid var(--line); }
+.gb-pick[aria-selected="true"] .tick { background: var(--text); border-color: var(--text); color: #fff; }
+.gb-pick:active { background: var(--soft); }
 .gb-play { min-height: 56px; border-radius: 16px; font-size: 1.0625rem; }
 .gb-joinrow { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: 16px; border: 1px solid var(--line); }
 .gb-joinrow input { flex: 1; min-width: 0; height: 44px; border: 0; background: none; color: var(--text); font: 600 1rem var(--font); letter-spacing: 0.14em; text-transform: uppercase; }
@@ -557,10 +581,14 @@ a:hover { text-decoration: underline; }
 }
 .gb-help[open] { animation: gb-sheet-in 0.45s var(--ease-out) both; }
 .gb-help::backdrop { background: rgba(14, 23, 38, 0.35); }
-.gb-help-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.gb-help-head {
+  position: sticky; top: -18px; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  margin: -18px -20px 6px; padding: 16px 14px 10px 20px; background: var(--surface);
+}
 .gb-help h2 { font-size: 1.375rem; font-weight: 650; letter-spacing: -0.02em; }
 .gb-help h3 { font-size: 1rem; font-weight: 650; margin: 16px 0 4px; }
-.gb-help-close { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--soft); color: var(--text); font-size: 1.375rem; line-height: 1; cursor: pointer; }
+.gb-help-close { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: var(--soft); color: var(--text); display: grid; place-items: center; cursor: pointer; touch-action: manipulation; }
+.gb-help-close:active { transform: scale(0.92); }
 .gb-help-steps, .gb-help-modes { margin: 6px 0; padding-left: 1.2em; color: #2A3647; line-height: 1.5; }
 .gb-help-steps li, .gb-help-modes li { margin: 7px 0; }
 .gb-help-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-variant-numeric: tabular-nums; font-size: 0.9375rem; }

@@ -59,11 +59,12 @@ async function signIn(d, name) {
   await d.page.fill("#demo-form input[name=name]", name);
   await d.page.click("#demo-form button");
   await d.page.waitForURL(`${BASE}/geobarkr/`);
-  await d.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
+  await d.page.waitForSelector("#map-button:not([disabled])");
 }
 async function chooseMap(page, name) {
-  const value = await page.$eval("#map-select", (s, n) => [...s.options].find((o) => o.textContent.includes(n)).value, name);
-  await page.selectOption("#map-select", value);
+  await page.click("#map-button");
+  await page.click(`#map-list .gb-pick[data-name="${name}"]`);
+  await page.waitForFunction((n) => document.querySelector("#map-name")?.textContent === n, name);
 }
 const SPOTS = [[0.29, 0.27], [0.88, 0.3], [0.55, 0.69], [0.44, 0.14], [0.34, 0.69]]; // World tour, roughly
 
@@ -107,7 +108,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
 
   await step(`${label}: online game against bots, live guesses, results`, async () => {
     await me.page.goto(`${BASE}/geobarkr/`);
-    await me.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
+    await me.page.waitForSelector("#map-button:not([disabled])");
     await chooseMap(me.page, "World tour");
     await me.page.click("#modes [data-type=multiplayer]");
   await me.page.click("#play-button");
@@ -146,7 +147,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
 
   await step(`${label}: party game hosted with bots on phones`, async () => {
     await me.page.goto(`${BASE}/geobarkr/`);
-    await me.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
+    await me.page.waitForSelector("#map-button:not([disabled])");
     await chooseMap(me.page, "GeoBarkr Demo");
     await me.page.click("#modes [data-type=local_multiplayer]");
   await me.page.click("#play-button");

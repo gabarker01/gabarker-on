@@ -22,6 +22,12 @@ export function h(tag, attrs = {}, ...children) {
 
 export const $ = (selector, root = document) => root.querySelector(selector);
 
+// Safari ignores user-scalable=no, so stop its pinch-zoom on the page itself;
+// maps and Street View keep their own pinch.
+document.addEventListener("gesturestart", (event) => {
+  if (!event.target.closest?.(".gb-pano, .gb-map, .gb-results-map, .gm-style, .leaflet-container")) event.preventDefault();
+}, { passive: false });
+
 // After a list re-renders, rows (data-key) that weren't there last time get
 // .is-new, so you see who just joined or guessed. Nothing animates on first
 // draw, and a row still arriving carries on from where it was if the list is
@@ -90,13 +96,19 @@ export function signInUrl(next = location.pathname + location.search) {
 // "How to play": a ? button that opens a short guide. Used in the header and
 // on the game screens' top bar.
 let helpDialog = null;
+const X_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+export function closeButton(onClose) {
+  const button = h("button", { type: "button", class: "gb-help-close", "aria-label": "Close", onclick: onClose });
+  button.innerHTML = X_ICON;
+  return button;
+}
 function openHelp() {
   if (!helpDialog) {
     const row = (km, pts) => h("tr", {}, h("td", {}, km), h("td", { class: "r" }, pts));
     helpDialog = h("dialog", { class: "gb-help", "aria-labelledby": "gb-help-title" },
       h("div", { class: "gb-help-head" },
         h("h2", { id: "gb-help-title" }, "How to play"),
-        h("button", { type: "button", class: "gb-help-close", "aria-label": "Close", onclick: () => helpDialog.close() }, "×")),
+        closeButton(() => helpDialog.close())),
       h("ol", { class: "gb-help-steps" },
         h("li", {}, h("b", {}, "Look around. "), "You're dropped somewhere in Street View. Drag to turn, pinch to zoom, and tap the road to move. Look for signs, languages, which side people drive on, plants and the landscape."),
         h("li", {}, h("b", {}, "Guess. "), "Tap the map bubble in the corner to open the map, then tap where you think you are. Tap again to move your pin. Press Guess when you're happy."),

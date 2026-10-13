@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
   <meta name="theme-color" content="#F3F5F7">
   <title>GeoBarkr</title>
@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=7">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=8">
 </head>
 <body class="has-band is-home">
   <div id="gb-header"></div>
@@ -29,7 +29,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>Party</button>
       </div>
       <p class="gb-mode-note" id="mode-note">Five rounds on your own.</p>
-      <label class="gb-maprow"><span>Map</span><select id="map-select"><option value="">Loading maps…</option></select></label>
+      <button class="gb-maprow" type="button" id="map-button" aria-haspopup="dialog" disabled>
+        <span>Map</span><b id="map-name">Loading maps…</b>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
       <button class="gb-btn block gb-play" type="button" id="play-button">Play solo</button>
       <form class="gb-joinrow" id="join-form">
         <input class="gb-code" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Room code" aria-label="Room code" required>
@@ -38,6 +41,12 @@
       <p class="gb-colophon"><a href="mailto:info@bearings.quest">info@bearings.quest</a> · <a href="/geobarkr/about/">About</a> · <a href="/geobarkr/privacy/">Privacy</a> · <a href="/geobarkr/termsofservice/">Terms</a></p>
     </section>
   </main>
-  <script type="module" src="/geobarkr/js/pages/start.js?v=7"></script>
+  <dialog class="gb-help gb-picker" id="map-picker" aria-labelledby="map-picker-title">
+    <div class="gb-help-head"><h2 id="map-picker-title">Choose a map</h2><span id="map-picker-close"></span></div>
+    <input class="gb-search" id="map-search" type="search" placeholder="Search maps" aria-label="Search maps" autocomplete="off" hidden>
+    <div class="gb-picklist" id="map-list" role="listbox" aria-labelledby="map-picker-title"></div>
+    <p class="gb-muted" id="map-empty" hidden>No maps match that.</p>
+  </dialog>
+  <script type="module" src="/geobarkr/js/pages/start.js?v=8"></script>
 </body>
 </html>
