@@ -1,11 +1,11 @@
 // The start screen (ServiceNow: the "Start Game" record producer): the places
 // you've played on a world map, a Resume strip for a game in progress, then
 // choose how to play, pick a map and press Play, or join with a room code.
-import { initPage, $, h, busy, showError, codeInput, closeButton, pageReady, param, toast, sheetDialog } from "../ui.js?v=11";
-import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js?v=11";
-import { drawWorld } from "../worldmap.js?v=11";
-import { ME_COLOUR } from "../players.js?v=11";
-import { GAME_TYPES, formatScore } from "../geo.js?v=11";
+import { initPage, $, h, busy, showError, codeInput, closeButton, pageReady, param, toast, sheetDialog } from "../ui.js?v=12";
+import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js?v=12";
+import { drawWorld } from "../worldmap.js?v=12";
+import { ME_COLOUR } from "../players.js?v=12";
+import { GAME_TYPES, formatScore } from "../geo.js?v=12";
 
 // Held until the map, your places and the map list are in, so nothing pops in.
 await initPage({ hold: true });
