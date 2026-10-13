@@ -82,9 +82,47 @@ time and room code. Sentence case everywhere.
   the one warm accent is reserved for "you", so colour carries meaning.
 - *Decoration for its own sake?* Every map band shows the player's own data
   (before your first game, the landing band is just the chart and a welcome).
-- *Works on real imagery?* The top bar and sheet are solid `--bg`, not
-  translucent, so they read the same over snow, sea or a city at night.
+- *Works on real imagery?* Over Street View the top bar is frosted (dark
+  tint plus blur), so it reads the same over snow, sea or a city at night;
+  the guess sheet is solid.
 - *Light enough?* One font, one stylesheet, inline SVG logo, no framework.
+
+## Interaction
+
+A second pass using the `apple-design` skill (Apple's "Designing Fluid
+Interfaces", translated for the web). The look stayed; the feel changed.
+
+- **Respond on press.** Buttons scale to 0.97 the moment they're pressed,
+  rows highlight on touch-down, and `touch-action: manipulation` removes the
+  tap delay. Hover styles only apply on devices that hover.
+- **The guess sheet (phones) is a physical object** (`js/sheet.js`): drag its
+  top edge and it follows 1:1 from where you grabbed it; release and it
+  springs to the size you were heading for, using Apple's momentum
+  projection (a flick throws it), with your finger's speed handed to the
+  spring. It can be caught mid-flight. Past the smallest or largest size it
+  rubber-bands. A tap on the edge, or the expand button, toggles it.
+- **Springs, not timed animations, for anything you touch** (`js/motion.js`):
+  critically damped by default; a little bounce only after a flick.
+- **The one orchestrated moment is the reveal.** Round results rise as a
+  sheet from where you guessed (phones) or grow out of the guess panel
+  (desktop), and your distance and points count up.
+- **Motion that answers you:** your pin drops in where you tap, with a
+  haptic tick on Android; a player who joins the lobby or guesses slides in
+  and glows briefly; the leaderboard's segmented control slides to your
+  choice; the menu grows out of your avatar and returns into it (Escape
+  closes it).
+- **Materials:** the top bar over Street View, the recentre and expand
+  buttons and the menu are frosted; page headers gain their frosted backing
+  only once content scrolls under them, with a soft edge instead of a rule.
+- **Type:** sizes in `rem` so the reader's text size setting is respected;
+  negative tracking on large headings, a touch of positive tracking on small
+  labels.
+- **Accessibility:** reduced motion swaps slides and springs for short fades;
+  reduced transparency and increased contrast make the bars solid with
+  clearer edges.
+- **Tried and dropped:** cross-page view transitions. They looked smooth but
+  swallowed taps for the first ~0.4 s on each page, which breaks "never lock
+  out input during a transition".
 
 ## Notes
 

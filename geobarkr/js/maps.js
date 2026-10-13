@@ -5,6 +5,7 @@
 // maps-keyless.js: Leaflet maps and Google's keyless Street View embed.
 import { GOOGLE_MAPS_KEY } from "./config.js";
 import { avatar } from "./players.js";
+import { haptic, replay } from "./motion.js";
 
 // Midnight: the map in the app's colours. Roads and labels stay readable;
 // businesses and transit are hidden so the map doesn't give places away.
@@ -111,6 +112,12 @@ export function pinElement(player, colour, { me = false, label = null } = {}) {
   return pin;
 }
 
+// Your pin drops in where you tapped (and again when you move it), with a tick.
+export function dropIn(pin) {
+  replay(pin, "is-dropping");
+  haptic(5);
+}
+
 export function targetElement(place) {
   const el = document.createElement("div");
   el.className = "gb-target";
@@ -132,10 +139,12 @@ export async function createGuessMap(element, me, onPick) {
   const map = new maps.Map(element, WORLD);
   let marker = null;
   let pick = null;
+  const pin = pinElement(me.player, me.colour, { me: true });
   map.addListener("click", (event) => {
     pick = { lat: event.latLng.lat(), lng: event.latLng.lng() };
     if (marker) marker.move(pick);
-    else marker = htmlMarker(maps, map, pick, pinElement(me.player, me.colour, { me: true }), 10);
+    else marker = htmlMarker(maps, map, pick, pin, 10);
+    dropIn(pin);
     onPick?.(pick);
   });
   return {

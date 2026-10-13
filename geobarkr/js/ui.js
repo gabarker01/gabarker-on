@@ -21,6 +21,29 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 export const $ = (selector, root = document) => root.querySelector(selector);
+
+// After a list re-renders, rows (data-key) that weren't there last time get
+// .is-new, so you see who just joined or guessed. Nothing animates on first
+// draw, and a row still arriving carries on from where it was if the list is
+// drawn again.
+const NEW_FOR_MS = 1600;
+export function markNew(container) {
+  const rows = [...container.children].filter((el) => el.dataset.key);
+  const now = performance.now();
+  const arrived = container.gbArrived || new Map();
+  if (container.gbSeen) {
+    for (const row of rows) if (!container.gbSeen.has(row.dataset.key)) arrived.set(row.dataset.key, now);
+  }
+  for (const row of rows) {
+    const since = now - (arrived.get(row.dataset.key) ?? -Infinity);
+    if (since < NEW_FOR_MS) {
+      row.classList.add("is-new");
+      row.style.animationDelay = `${-since}ms, ${-since}ms`;
+    } else arrived.delete(row.dataset.key);
+  }
+  container.gbArrived = arrived;
+  container.gbSeen = new Set(rows.map((row) => row.dataset.key));
+}
 export const param = (name) => new URLSearchParams(location.search).get(name);
 
 // The GeoBarkr mark: a globe with your pin on it.
@@ -72,24 +95,32 @@ function header(profile) {
     h("button", { type: "button", class: "gb-menu-signout", onclick: async () => { await signOut(); location.href = "/geobarkr/signin/"; } }, "Sign out"),
   );
   const me = { name: profile?.display_name || "Me", avatar_url: profile?.avatar_url };
+  const setOpen = (open) => {
+    toggle.setAttribute("aria-expanded", String(open));
+    menu.classList.toggle("is-open", open);
+  };
   const toggle = h("button", {
     type: "button", class: "gb-me", "aria-expanded": "false", "aria-controls": "gb-menu", "aria-label": `Menu for ${me.name}`,
-    onclick: () => {
-      const open = toggle.getAttribute("aria-expanded") !== "true";
-      toggle.setAttribute("aria-expanded", String(open));
-      menu.classList.toggle("is-open", open);
-    },
+    onclick: () => setOpen(toggle.getAttribute("aria-expanded") !== "true"),
   }, avatar(me, ME_COLOUR, 32));
   document.addEventListener("click", (event) => {
-    if (!menu.contains(event.target) && !toggle.contains(event.target)) {
-      menu.classList.remove("is-open");
-      toggle.setAttribute("aria-expanded", "false");
+    if (!menu.contains(event.target) && !toggle.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu.classList.contains("is-open")) {
+      setOpen(false);
+      toggle.focus();
     }
   });
-  return h("header", { class: "gb-header" },
+  const bar = h("header", { class: "gb-header" },
     h("a", { class: "gb-brand", href: "/geobarkr/" }, logoMark(), "GeoBarkr"),
     h("div", { class: "gb-header-right" }, menu, toggle),
   );
+  // The bar floats over the page; it gains its frosted backing once content scrolls under it.
+  const onScroll = () => bar.classList.toggle("is-scrolled", window.scrollY > 4);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  return bar;
 }
 
 // Every page: signed in? then the header (and a note in demo mode).

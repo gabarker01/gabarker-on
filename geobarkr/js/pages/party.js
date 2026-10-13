@@ -8,6 +8,7 @@ import { createGuessMap } from "../maps.js";
 import { setupTopbar, renderTopbar } from "../game-chrome.js";
 import { avatar, ME_COLOUR } from "../players.js";
 import { formatCoords, formatDistance, formatScore, firstName } from "../geo.js";
+import { haptic } from "../motion.js";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();
@@ -32,6 +33,7 @@ $("#guess").addEventListener("click", async () => {
   $("#guess").disabled = true;
   try {
     await submitGuess(gameId, pick.lat, pick.lng);
+    haptic(12);
     watcher.refresh();
   } catch (error) {
     sending = false;
