@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#0B1426">
+  <title>Admin · GeoBarkr</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page wide">
+    <h1 class="gb-title">Admin</h1>
+    <p class="gb-lede" id="denied" hidden>This page is for GeoBarkr admins. <a href="/geobarkr/">Back to the game</a></p>
+    <div id="admin" hidden>
+      <div class="gb-two">
+        <section class="gb-section">
+          <div class="gb-label">Maps</div>
+          <p class="gb-muted" style="font-size:14px;margin:0 2px 8px">Players can only start games on active maps.</p>
+          <div class="gb-lines" id="maps"></div>
+          <form class="gb-inline" id="new-map" style="margin-top:12px">
+            <input class="gb-input" name="name" maxlength="80" placeholder="New map name" aria-label="New map name" required>
+            <button class="gb-btn" type="submit">Add map</button>
+          </form>
+        </section>
+        <section class="gb-section" id="locations-section" hidden>
+          <div class="gb-label" id="locations-title">Locations</div>
+          <p class="gb-muted" style="font-size:14px;margin:0 2px 8px">One location per round, rounds 1 to 5.</p>
+          <div class="gb-lines" id="locations"></div>
+        </section>
+      </div>
+
+      <section class="gb-section" id="editor-section" hidden>
+        <div class="gb-label" id="editor-title">Add a location</div>
+        <div class="gb-two">
+          <form id="editor">
+            <label class="gb-field"><span>Street View link (optional)</span><input class="gb-input" id="paste" placeholder="Paste a google.com/maps Street View link" autocomplete="off"></label>
+            <div class="gb-grid2">
+              <label class="gb-field span"><span>Name</span><input class="gb-input" name="name" maxlength="80" required></label>
+              <label class="gb-field"><span>Round</span><select class="gb-select" name="round_number" required><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+              <span></span>
+              <label class="gb-field"><span>Latitude</span><input class="gb-input" name="lat" type="number" step="any" min="-90" max="90" inputmode="decimal" required></label>
+              <label class="gb-field"><span>Longitude</span><input class="gb-input" name="lng" type="number" step="any" min="-180" max="180" inputmode="decimal" required></label>
+              <label class="gb-field"><span>Heading (0–359)</span><input class="gb-input" name="heading" type="number" step="any" min="0" max="359.99" inputmode="decimal" value="0" required></label>
+              <label class="gb-field"><span>Pitch (−90 to 90)</span><input class="gb-input" name="pitch" type="number" step="any" min="-90" max="90" inputmode="decimal" value="0" required></label>
+            </div>
+            <div class="gb-inline">
+              <button class="gb-btn" type="submit" id="save-location">Save location</button>
+              <button class="gb-btn quiet" type="button" id="preview" style="flex:none">Preview</button>
+              <button class="gb-btn quiet" type="button" id="cancel-edit" style="flex:none">Cancel</button>
+            </div>
+          </form>
+          <div>
+            <div class="gb-admin-pano"><div class="gb-pano" id="admin-pano"></div></div>
+            <button class="gb-btn quiet block" type="button" id="use-view">Use this view</button>
+            <p class="gb-muted" style="font-size:14px">Move and turn the preview until it's the view players should start with, then press Use this view.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="gb-section">
+        <div class="gb-label">Recent games</div>
+        <div class="gb-lines" id="games"></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/admin.js?v=3"></script>
+</body>
+</html>
