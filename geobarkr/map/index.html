@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#F3F5F7">
+  <title>Map · GeoBarkr</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=13">
+</head>
+<body>
+  <div id="gb-header"></div>
+  <main class="gb-page gb-maker">
+    <a class="gb-back" href="/geobarkr/profile/"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Profile</a>
+
+    <!-- A new map: what players see, a name, who can play it. -->
+    <section id="new" hidden>
+      <h1 class="gb-title">New map</h1>
+      <p class="gb-lede">Five places for people to guess. First, choose how they'll see them.</p>
+      <div class="gb-kinds" id="kinds" role="radiogroup" aria-label="What players see">
+        <button type="button" class="gb-kind-card" role="radio" aria-checked="true" data-kind="street_view">
+          <span class="art sv" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M8.5 11.5c0-1.4 1.1-2.5 2.5-2.5h2c1.4 0 2.5 1.1 2.5 2.5V15h-2l-.6 6h-1.8l-.6-6h-2z"/><path d="M5 17.5c-1.3.5-2 1.1-2 1.7C3 20.8 7 22 12 22s9-1.2 9-2.8c0-.6-.7-1.2-2-1.7"/></svg></span>
+          <b>Street View</b><span>Players look around Google Street View, like the usual game. Find each place by searching or on the map.</span>
+        </button>
+        <button type="button" class="gb-kind-card" role="radio" aria-checked="false" data-kind="photo">
+          <span class="art photo" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8.5 8.5"/></svg></span>
+          <b>Photos</b><span>Players see a photo you took. If it knows where it was taken, the place fills itself in.</span>
+        </button>
+      </div>
+      <form id="new-form" class="gb-maker-form">
+        <label class="gb-field"><span>Name</span><input class="gb-input" name="name" maxlength="80" required placeholder="Our week in Lisbon" autocomplete="off"></label>
+        <label class="gb-field"><span>Description <i class="gb-count" data-for="new-description">0/140</i></span><textarea class="gb-input gb-textarea" id="new-description" name="description" maxlength="140" rows="2" placeholder="One line about the map (optional)"></textarea></label>
+        <div class="gb-field"><span>Who can play it</span>
+          <div class="gb-seg gb-seg-small" id="new-visibility" role="radiogroup" aria-label="Who can play it">
+            <button type="button" role="radio" aria-checked="true" data-public="true">Anyone</button>
+            <button type="button" role="radio" aria-checked="false" data-public="false">Just me</button>
+          </div>
+          <p class="gb-note" id="new-visibility-note">Everyone sees it in the map list.</p>
+        </div>
+        <button class="gb-btn block" type="submit" id="create-button">Create map</button>
+      </form>
+    </section>
+
+    <!-- Editing one of your maps. -->
+    <section id="edit" hidden>
+      <div class="gb-maker-top"><span id="kind-tag"></span><span class="gb-save-state" id="save-state" aria-live="polite"></span></div>
+      <h1 class="gb-title" id="title">Map</h1>
+      <div class="gb-ready" id="ready"></div>
+
+      <div class="gb-label">Places</div>
+      <div class="gb-slots" id="slots"></div>
+
+      <div class="gb-label">Details</div>
+      <form class="gb-group gb-details" id="details" autocomplete="off">
+        <label class="gb-group-field"><span>Name</span><input name="name" maxlength="80" required></label>
+        <label class="gb-group-field"><span>Description <i class="gb-count" data-for="description">0/140</i></span><textarea id="description" name="description" maxlength="140" rows="2" placeholder="One line about the map (optional)"></textarea></label>
+        <div class="gb-group-field"><span>Who can play it</span>
+          <div class="gb-seg gb-seg-small" id="visibility" role="radiogroup" aria-label="Who can play it">
+            <button type="button" role="radio" aria-checked="true" data-public="true">Anyone</button>
+            <button type="button" role="radio" aria-checked="false" data-public="false">Just me</button>
+          </div>
+        </div>
+        <label class="gb-group-field gb-switch-row"><span>On<i>Switch off to hide it from the map list</i></span><input type="checkbox" class="gb-switch" name="active" role="switch"></label>
+      </form>
+      <p class="gb-note" id="visibility-note"></p>
+      <button class="gb-btn quiet block gb-cancel" type="button" id="delete-map">Delete map</button>
+    </section>
+  </main>
+
+  <!-- Setting one place: Street View or a photo, and where it is. -->
+  <dialog class="gb-editor" id="editor" aria-labelledby="editor-title" tabindex="-1">
+    <div class="gb-editor-bar">
+      <span id="editor-close"></span>
+      <b id="editor-title">Round 1</b>
+      <button class="gb-btn small" type="button" id="editor-save" disabled>Save</button>
+    </div>
+    <div class="gb-editor-body">
+      <div class="gb-editor-stage" id="stage">
+        <div class="gb-pano" id="editor-pano"></div>
+        <div class="gb-editor-photo" id="editor-photo"></div>
+        <label class="gb-photo-pick" id="photo-pick">
+          <input type="file" id="photo-input" accept="image/*" class="gb-vh">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8.5 8.5"/></svg>
+          <b>Choose a photo</b><span>From your camera roll or files</span>
+        </label>
+        <form class="gb-editor-search" id="search-form" role="search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+          <input type="search" id="search" placeholder="Search for a place" aria-label="Search for a place" autocomplete="off" enterkeyhint="search">
+        </form>
+        <button class="gb-pill gb-change-photo" type="button" id="change-photo" hidden>Change photo</button>
+        <p class="gb-stage-hint" id="stage-hint"></p>
+      </div>
+      <div class="gb-editor-side">
+        <div class="gb-editor-map"><div class="gb-map" id="editor-map"></div></div>
+        <p class="gb-editor-status" id="editor-status"></p>
+        <label class="gb-field"><span>Place name <i>shown after the round</i></span><input class="gb-input" id="place-name" maxlength="80" autocomplete="off" placeholder="Mayfair, London, UK"></label>
+        <button class="gb-btn quiet small gb-cancel" type="button" id="editor-clear" hidden>Remove this place</button>
+      </div>
+    </div>
+  </dialog>
+  <script type="module" src="/geobarkr/js/pages/map.js?v=13"></script>
+</body>
+</html>

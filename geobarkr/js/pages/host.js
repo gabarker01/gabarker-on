@@ -1,12 +1,12 @@
 // In person, the host screen (ServiceNow page "play_localmulti"): Street View
 // for the room, the live list of who has guessed (with the guess sound), and
 // the round results with the host's buttons.
-import { initPage, $, h, busy, param, pageError } from "../ui.js?v=12";
-import { endRound, gamePageUrl, resultsUrl } from "../api.js?v=12";
-import { watchGameState } from "../live.js?v=12";
-import { createPanorama } from "../maps.js?v=12";
-import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=12";
-import { setupTopbar, renderTopbar, setupCompass } from "../game-chrome.js?v=12";
+import { initPage, $, h, busy, param, pageError } from "../ui.js?v=13";
+import { endRound, gamePageUrl, resultsUrl } from "../api.js?v=13";
+import { watchGameState } from "../live.js?v=13";
+import { createPanorama } from "../maps.js?v=13";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=13";
+import { setupTopbar, renderTopbar, setupCompass, setupStage } from "../game-chrome.js?v=13";
 
 await initPage({ demoNote: false });
 setupTopbar();
@@ -24,7 +24,8 @@ function playSound() {
   sound.play().then(() => { $("#sound").hidden = true; }).catch(() => { $("#sound").hidden = false; });
 }
 $("#sound").addEventListener("click", playSound);
-$("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
+const stage = setupStage(panoPromise, $(".gb-sv"));
+$("#home").addEventListener("click", () => stage.home());
 setupCompass(panoPromise, $(".gb-sv"));
 
 let roundNumber = null;
@@ -53,7 +54,7 @@ function render(state) {
     seenGuesses = null;
     results.close();
   }
-  if (round.target) panoPromise.then((pano) => pano.show(round.target)).catch(() => {});
+  if (round.target) stage.show(round.target);
 
   // A new guess came in: play the sound (not for guesses already there on load).
   if (seenGuesses != null && guesses.length > seenGuesses) playSound();

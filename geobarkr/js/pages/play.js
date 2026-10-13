@@ -1,15 +1,15 @@
 // Solo and online play (ServiceNow pages "play" and "playmulti"): Street View,
 // the guess map with your pin, the live guesses list after you've guessed,
 // and the round results.
-import { initPage, $, h, busy, param, showError, pageError } from "../ui.js?v=12";
-import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js?v=12";
-import { watchGameState } from "../live.js?v=12";
-import { createPanorama, createGuessMap } from "../maps.js?v=12";
-import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=12";
-import { setupTopbar, renderTopbar, setupCompass } from "../game-chrome.js?v=12";
-import { ME_COLOUR } from "../players.js?v=12";
-import { formatCoords } from "../geo.js?v=12";
-import { haptic } from "../motion.js?v=12";
+import { initPage, $, h, busy, param, showError, pageError } from "../ui.js?v=13";
+import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js?v=13";
+import { watchGameState } from "../live.js?v=13";
+import { createPanorama, createGuessMap } from "../maps.js?v=13";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=13";
+import { setupTopbar, renderTopbar, setupCompass, setupStage } from "../game-chrome.js?v=13";
+import { ME_COLOUR } from "../players.js?v=13";
+import { formatCoords } from "../geo.js?v=13";
+import { haptic } from "../motion.js?v=13";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();
@@ -66,7 +66,8 @@ function updateGuessButton() {
   }).catch(() => {});
 }
 
-$("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
+const stage = setupStage(panoPromise, $(".gb-sv"));
+$("#home").addEventListener("click", () => stage.home());
 setupCompass(panoPromise, $(".gb-sv"));
 
 const watcher = watchGameState(gameId, render, pageError);
@@ -121,7 +122,7 @@ async function render(state) {
     panel.dataset.state = "bubble";
     updateGuessButton();
   }
-  if (round.target) panoPromise.then((pano) => pano.show(round.target)).catch(() => {});
+  if (round.target) stage.show(round.target);
 
   const mine = guesses.find((g) => g.user_id === who.user_id);
   const guessing = round.status === "in_progress" && !mine;

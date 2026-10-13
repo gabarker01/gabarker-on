@@ -117,3 +117,17 @@ export function mercator(lat, lng) {
 export function formatCoords(lat, lng) {
   return `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(4)}° ${lng >= 0 ? "E" : "W"}`;
 }
+
+// A short place name from Google's reverse geocoding (address_components):
+// neighbourhood, town, country, as "Mayfair, London, UK".
+const SHORT_COUNTRIES = { GB: "UK", US: "USA", AE: "UAE" };
+export function placeLabel(components = []) {
+  const find = (...types) => components.find((c) => types.some((t) => c.types?.includes(t)));
+  const area = find("neighborhood", "sublocality_level_1", "sublocality", "colloquial_area");
+  const town = find("locality", "postal_town", "administrative_area_level_3", "administrative_area_level_2");
+  const region = town ? null : find("administrative_area_level_1");
+  const country = find("country");
+  const parts = [area?.long_name, town?.long_name, region?.long_name,
+    country ? SHORT_COUNTRIES[country.short_name] || country.long_name : null];
+  return parts.filter((part, i) => part && parts.indexOf(part) === i).join(", ").slice(0, 80);
+}

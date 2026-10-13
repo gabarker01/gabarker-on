@@ -1,10 +1,10 @@
 // Admin (ServiceNow: the GeoBarkr application menu): maps and their locations,
 // with a Street View preview to set each round's starting view, and recent
 // games. Row-level security also enforces admin-only access.
-import { initPage, $, h, busy, toast, showError } from "../ui.js?v=12";
-import { adminMaps, saveMap, deleteMap, mapLocations, saveLocation, deleteLocation, recentGames, resultsUrl } from "../api.js?v=12";
-import { createPanorama } from "../maps.js?v=12";
-import { GAME_TYPES, GAME_STATUSES, formatDate, parseStreetViewLink } from "../geo.js?v=12";
+import { initPage, $, h, busy, toast, showError, kindIcon } from "../ui.js?v=13";
+import { adminMaps, saveMap, deleteMap, mapLocations, saveLocation, deleteLocation, recentGames, resultsUrl } from "../api.js?v=13";
+import { createPanorama } from "../maps.js?v=13";
+import { GAME_TYPES, GAME_STATUSES, formatDate, parseStreetViewLink } from "../geo.js?v=13";
 
 const { profile } = await initPage();
 const isAdmin = profile?.role === "admin";
@@ -26,17 +26,29 @@ async function loadMaps() {
       map.name = name.value.trim();
       toast("Map renamed.");
     }));
+    const byPlayer = Boolean(map.owner_id);
     const active = h("input", { type: "checkbox", checked: map.active, "aria-label": `${map.name} is active` });
     active.addEventListener("change", () => busy(null, async () => {
       map.active = active.checked;
       await saveMap({ id: map.id, name: map.name, active: active.checked });
       toast(active.checked ? "Map is now active." : "Map is now hidden from players.");
     }));
+    // A player's map: block or allow it (its owner can't undo a block).
+    const allowed = h("input", { type: "checkbox", checked: !map.blocked, "aria-label": `${map.name} is allowed` });
+    allowed.addEventListener("change", () => busy(null, async () => {
+      map.blocked = !allowed.checked;
+      await saveMap({ id: map.id, name: map.name, active: map.active, blocked: map.blocked });
+      toast(map.blocked ? "Map blocked: nobody can start a game on it." : "Map allowed again.");
+    }));
+    // Players' own maps: admins can block them; only their owner edits or
+    // deletes them (on the map maker page).
     return h("div", { class: `gb-line${selectedMap?.id === map.id ? " is-me" : ""}` },
-      h("div", { class: "grow" }, name),
-      h("label", { class: "gb-check" }, active, "Active"),
-      h("button", { type: "button", class: "gb-btn quiet small", onclick: () => selectMap(map) }, "Locations"),
-      h("button", { type: "button", class: "gb-btn danger small", onclick: (event) => removeMap(map, event.currentTarget) }, "Delete"));
+      kindIcon(map.kind),
+      h("div", { class: "grow" }, byPlayer ? h("b", {}, map.name) : name,
+        byPlayer ? h("span", {}, `By ${map.owner_name}${map.is_public ? "" : " · private"}`) : null),
+      byPlayer ? h("label", { class: "gb-check" }, allowed, "Allowed") : h("label", { class: "gb-check" }, active, "Active"),
+      byPlayer ? null : h("button", { type: "button", class: "gb-btn quiet small", onclick: () => selectMap(map) }, "Locations"),
+      byPlayer ? null : h("button", { type: "button", class: "gb-btn danger small", onclick: (event) => removeMap(map, event.currentTarget) }, "Delete"));
   }));
 }
 

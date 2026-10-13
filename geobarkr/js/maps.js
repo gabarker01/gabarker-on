@@ -3,9 +3,10 @@
 // and results draw each guess to the target as a great-circle (geodesic) line.
 // Without a key (GOOGLE_MAPS_KEY empty) the same functions come from
 // maps-keyless.js: Leaflet maps and Google's keyless Street View embed.
-import { GOOGLE_MAPS_KEY } from "./config.js?v=12";
-import { avatar } from "./players.js?v=12";
-import { haptic, replay } from "./motion.js?v=12";
+import { GOOGLE_MAPS_KEY } from "./config.js?v=13";
+import { avatar } from "./players.js?v=13";
+import { haptic, replay } from "./motion.js?v=13";
+import { placeLabel } from "./geo.js?v=13";
 
 // Fog: a quiet light map in the app's colours. Roads and labels stay readable;
 // businesses and transit are hidden so the map doesn't give places away.
@@ -132,7 +133,7 @@ export function targetElement(place) {
 }
 
 // Tap the map to place (or move) your pin.
-const keyless = () => import("./maps-keyless.js?v=12");
+const keyless = () => import("./maps-keyless.js?v=13");
 
 export async function createGuessMap(element, me, onPick) {
   if (!GOOGLE_MAPS_KEY) return (await keyless()).createGuessMap(element, me, onPick);
@@ -253,4 +254,129 @@ export async function createResultsMap(element) {
     }
   }
   return { map, show, clear };
+}
+
+// ---------- Making maps ----------
+
+// Where a location is, on the map editor's map: an ink pin.
+export function placePinElement() {
+  const el = document.createElement("div");
+  el.className = "gb-place-pin";
+  return el;
+}
+
+// A map for setting a location: tap to choose (onPick decides what happens);
+// set() moves the pin there.
+export async function createPickMap(element, onPick) {
+  if (!GOOGLE_MAPS_KEY) return (await keyless()).createPickMap(element, onPick);
+  const maps = await loadGoogleMaps();
+  const map = new maps.Map(element, { ...WORLD, zoom: 2, styles: MAP_STYLE });
+  let marker = null;
+  let point = null;
+  const pin = placePinElement();
+  map.addListener("click", (event) => onPick?.({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
+  return {
+    map,
+    get: () => point,
+    clear() {
+      point = null;
+      marker?.setMap(null);
+      marker = null;
+    },
+    set(next, { zoom = null, pan = true } = {}) {
+      point = next;
+      if (marker) marker.move(next);
+      else marker = htmlMarker(maps, map, next, pin, 10);
+      if (zoom != null) map.setZoom(zoom);
+      if (pan) map.panTo(next);
+    },
+  };
+}
+
+// Street View you can walk around, for choosing a round's starting view.
+// onChange({ lat, lng, heading, pitch }) whenever you move or turn.
+export async function createExplorePanorama(element, onChange) {
+  if (!GOOGLE_MAPS_KEY) return (await keyless()).createExplorePanorama(element, onChange);
+  const maps = await loadGoogleMaps();
+  const panorama = new maps.StreetViewPanorama(element, {
+    addressControl: false, fullscreenControl: false, motionTrackingControl: false,
+    zoomControl: false, enableCloseButton: false, showRoadLabels: true, visible: false,
+  });
+  const service = new maps.StreetViewService();
+  const view = () => {
+    const at = panorama.getPosition();
+    if (!at) return null;
+    const pov = panorama.getPov();
+    return { lat: at.lat(), lng: at.lng(), heading: (((pov.heading || 0) % 360) + 360) % 360, pitch: pov.pitch || 0 };
+  };
+  const changed = () => { const v = view(); if (v) onChange?.(v); };
+  panorama.addListener("position_changed", changed);
+  panorama.addListener("pov_changed", changed);
+  return {
+    panorama,
+    get: view,
+    // The nearest Street View to a point (within 1 km), or an error.
+    async goTo(point, { heading = null, pitch = 0, exact = false } = {}) {
+      let at = point;
+      if (!exact) {
+        let found = null;
+        for (const radius of [50, 250, 1000]) {
+          found = await service.getPanorama({ location: point, radius, preference: "nearest", sources: ["outdoor"] })
+            .then((result) => result.data).catch(() => null);
+          if (found) break;
+        }
+        if (!found?.location?.latLng) throw new Error("No Street View near there. Try a road nearby");
+        at = { lat: found.location.latLng.lat(), lng: found.location.latLng.lng() };
+        // Face where you tapped, unless a heading was given.
+        if (heading == null && maps.geometry?.spherical) {
+          heading = maps.geometry.spherical.computeHeading(new maps.LatLng(at), new maps.LatLng(point));
+        }
+      }
+      panorama.setPosition(at);
+      panorama.setPov({ heading: heading || 0, pitch });
+      panorama.setZoom(0);
+      panorama.setVisible(true);
+      return view() || { ...at, heading: heading || 0, pitch };
+    },
+  };
+}
+
+// Search for a place by name: { lat, lng, label } or an error.
+// Needs the Geocoding API switched on for the Maps key.
+let geocoderPromise = null;
+async function geocoder() {
+  if (!GOOGLE_MAPS_KEY) throw new Error("Search needs the Google Maps key");
+  if (!geocoderPromise) {
+    geocoderPromise = loadGoogleMaps().then(async (maps) => {
+      const lib = await maps.importLibrary?.("geocoding").catch(() => null);
+      return new (lib?.Geocoder || maps.Geocoder)();
+    });
+  }
+  return geocoderPromise;
+}
+const geocodeError = (error) => {
+  const code = String(error?.code || error?.message || "");
+  if (/REQUEST_DENIED/.test(code)) return new Error("Place search needs the Geocoding API switched on for the Maps key");
+  if (/ZERO_RESULTS/.test(code)) return new Error("Couldn't find that place");
+  return new Error("Couldn't search right now. Try again");
+};
+
+export async function searchPlace(query) {
+  const coder = await geocoder();
+  const { results } = await coder.geocode({ address: query }).catch((error) => { throw geocodeError(error); });
+  const best = results?.[0];
+  if (!best) throw new Error("Couldn't find that place");
+  return { lat: best.geometry.location.lat(), lng: best.geometry.location.lng(), label: placeLabel(best.address_components) || best.formatted_address };
+}
+
+// A short name for a point, like "Mayfair, London, UK" ("" if unknown).
+export async function placeName(point) {
+  try {
+    const coder = await geocoder();
+    const { results } = await coder.geocode({ location: point });
+    const best = results?.find((r) => r.address_components?.some((c) => c.types.includes("locality") || c.types.includes("postal_town"))) || results?.[0];
+    return best ? placeLabel(best.address_components) : "";
+  } catch {
+    return "";
+  }
 }

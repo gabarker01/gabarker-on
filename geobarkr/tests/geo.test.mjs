@@ -30,3 +30,16 @@ test("admin: Street View links fill in place and view", () => {
   assert.equal(parseStreetViewLink("https://maps.app.goo.gl/abc"), null);
   assert.equal(parseStreetViewLink("https://www.google.com/maps/@-33.85,151.21,3a,75y,10h,180t").pitch, 90);
 });
+
+test("place names from reverse geocoding read like Mayfair, London, UK", async () => {
+  const { placeLabel } = await import("../js/geo.js");
+  const c = (long_name, types, short_name = long_name) => ({ long_name, short_name, types });
+  assert.equal(placeLabel([
+    c("12", ["street_number"]), c("Mount Street", ["route"]), c("Mayfair", ["neighborhood", "political"]),
+    c("London", ["postal_town"]), c("Greater London", ["administrative_area_level_2"]),
+    c("England", ["administrative_area_level_1"]), c("United Kingdom", ["country"], "GB"),
+  ]), "Mayfair, London, UK");
+  assert.equal(placeLabel([c("Reykjavík", ["locality"]), c("Iceland", ["country"], "IS")]), "Reykjavík, Iceland");
+  assert.equal(placeLabel([c("Tasmania", ["administrative_area_level_1"]), c("Australia", ["country"], "AU")]), "Tasmania, Australia");
+  assert.equal(placeLabel([]), "");
+});

@@ -64,6 +64,7 @@
     addListener(name, fn) { (this.listeners[name] ||= []).push(fn); return { remove() {} }; }
     setCenter() {}
     setZoom() {}
+    panTo() {}
     fitBounds() {}
     getDiv() { return this.el; }
     place(latLng) {
@@ -130,12 +131,16 @@
         background: "linear-gradient(#7fb2e5 0 55%, #6c7a5a 55% 100%)", font: "600 18px system-ui",
       });
       element.append(this.el);
+      // Clicking the stand-in walks a little way north, as clicking the road would.
+      this.el.addEventListener("click", () => {
+        if (this.position) this.setPosition(new LatLng(this.position.lat() + 0.0005, this.position.lng()));
+      });
       this.pov = { heading: 0, pitch: 0 };
       this.position = null;
       this.visible = false;
       this.draw();
     }
-    setPosition(p) { this.position = toLatLng(p); this.draw(); }
+    setPosition(p) { this.position = toLatLng(p); this.draw(); for (const fn of this.listeners?.position_changed || []) fn(); }
     getPosition() { return this.position; }
     setPov(pov) { this.pov = { ...pov }; this.draw(); for (const fn of this.listeners?.pov_changed || []) fn(); }
     addListener(name, fn) { this.listeners ||= {}; (this.listeners[name] ||= []).push(fn); return { remove() {} }; }
@@ -153,6 +158,37 @@
   }
 
   class LatLngBounds { extend() { return this; } }
+
+  // Street View coverage: everywhere except the far south (for "no Street View here").
+  class StreetViewService {
+    async getPanorama({ location }) {
+      const at = toLatLng(location);
+      if (at.lat() < -60) throw Object.assign(new Error("ZERO_RESULTS"), { code: "ZERO_RESULTS" });
+      return { data: { location: { latLng: new LatLng(at.lat() + 0.0001, at.lng()) } } };
+    }
+  }
+
+  // Place search and names: a few fixed answers.
+  const PLACES = { tokyo: [35.6595, 139.7005, "Shibuya, Tokyo, Japan"], lisbon: [38.7139, -9.1394, "Baixa, Lisbon, Portugal"] };
+  class Geocoder {
+    async geocode(request) {
+      if (request.address) {
+        const key = Object.keys(PLACES).find((k) => request.address.toLowerCase().includes(k));
+        if (!key) throw Object.assign(new Error("ZERO_RESULTS"), { code: "ZERO_RESULTS" });
+        const [lat, lng, label] = PLACES[key];
+        const [area, town, country] = label.split(", ");
+        return { results: [{ geometry: { location: new LatLng(lat, lng) }, formatted_address: label, address_components: [
+          { long_name: area, short_name: area, types: ["neighborhood"] }, { long_name: town, short_name: town, types: ["locality"] },
+          { long_name: country, short_name: country.slice(0, 2).toUpperCase(), types: ["country"] }] }] };
+      }
+      const at = toLatLng(request.location);
+      return { results: [{ geometry: { location: at }, formatted_address: "Test place", address_components: [
+        { long_name: "Mayfair", short_name: "Mayfair", types: ["neighborhood"] },
+        { long_name: "London", short_name: "London", types: ["postal_town"] },
+        { long_name: "United Kingdom", short_name: "GB", types: ["country"] }] }] };
+    }
+  }
+  const geometry = { spherical: { computeHeading: (a, b) => (Math.atan2(b.lng() - a.lng(), b.lat() - a.lat()) * 180) / Math.PI } };
 
   // Custom HTML markers (our avatar pins) use OverlayView.
   class OverlayView {
@@ -177,7 +213,7 @@
   class Point { constructor(x, y) { this.x = x; this.y = y; } }
 
   const maps = {
-    Map, Marker, Polyline, InfoWindow, StreetViewPanorama, LatLng, LatLngBounds, Point, OverlayView,
+    Map, Marker, Polyline, InfoWindow, StreetViewPanorama, StreetViewService, Geocoder, geometry, LatLng, LatLngBounds, Point, OverlayView,
     event: { trigger() {} },
     importLibrary: async () => maps,
   };

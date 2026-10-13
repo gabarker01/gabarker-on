@@ -23,6 +23,28 @@
 > - **How to play:** a ? button beside your picture (and on the game screens)
 >   opens a short guide with the scoring table.
 >
+> **Profile and map maker (added October 2026).**
+>
+> - **Your picture** in the header opens your profile: your places on a band,
+>   eight number tiles (games, points, average, wins, distance, closest,
+>   time, perfect rounds), your maps as cards, then grouped rows (name, My
+>   games, Leaderboard, Admin, About) and Sign out. On wide screens the page
+>   links also sit in the header.
+> - **Map kinds** are shown everywhere maps are listed: a blue walker for
+>   Street View, an ember picture for Photos. The picker has chips (All,
+>   Street View, Photos, Yours) and says who made a map.
+> - **Map maker:** two big cards to choose the kind, then the map page: a
+>   readiness card (five bars fill as places are added, green when ready,
+>   with Play), five place slots, and details in an iOS-style group that saves
+>   as you type. Each place opens a full-screen editor (a large panel on
+>   desktop): Street View or the photo on top with search floating over it,
+>   the map below, then the place name.
+> - **Photo rounds:** the whole photo, centred, on a blurred and frosted copy
+>   of itself, so landscape photos get glass above and below and portrait
+>   ones at the sides. Pinch, drag, double-tap or scroll to zoom, with
+>   rubber-banding at the edges and springs on release; the recentre button
+>   zooms back out. The compass is hidden.
+>
 > The Midnight notes below are kept for history; the interaction principles
 > (springs, press feedback, reduced motion) still apply.
 

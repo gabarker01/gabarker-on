@@ -2,10 +2,12 @@
 --
 -- Roles (ServiceNow x_geobarkr.user → player, ServiceNow admin → admin):
 --   signed out   nothing at all
---   player       read own profile and rename themselves; read active maps;
---                read games they host or play in, and those games' players;
---                read their own guesses; everything else through the game
---                functions in 002
+--   player       read own profile and rename themselves; read active public
+--                maps and their own maps (with their locations); read games
+--                they host or play in, and those games' players; read their
+--                own guesses; upload photos to their own folder of the
+--                map-photos bucket; everything else (including making maps)
+--                through the functions in 002
 --   admin        read everything; create, edit and delete maps and locations
 --
 -- Nobody, admin included, writes games, players, rounds or guesses directly:
@@ -46,7 +48,7 @@ create policy "rename yourself" on public.profiles
 drop policy if exists "players see active maps" on public.maps;
 create policy "players see active maps" on public.maps
   for select to authenticated
-  using (active or (select public.is_admin()));
+  using ((active and not blocked and (owner_id is null or is_public)) or owner_id = (select auth.uid()) or (select public.is_admin()));
 
 drop policy if exists "admins manage maps" on public.maps;
 create policy "admins manage maps" on public.maps
@@ -54,7 +56,12 @@ create policy "admins manage maps" on public.maps
   using ((select public.is_admin()))
   with check ((select public.is_admin()));
 
--- Locations are the answers: admins only.
+-- Locations are the answers: admins, and the owner of a player's map.
+drop policy if exists "owners see their locations" on public.locations;
+create policy "owners see their locations" on public.locations
+  for select to authenticated
+  using (exists (select 1 from public.maps m where m.id = map_id and m.owner_id = (select auth.uid())));
+
 drop policy if exists "admins manage locations" on public.locations;
 create policy "admins manage locations" on public.locations
   for all to authenticated
@@ -106,8 +113,45 @@ grant execute on function
   public.get_game_state(uuid),
   public.get_results(uuid),
   public.my_games(),
-  public.leaderboard(text, integer)
+  public.leaderboard(text, integer),
+  public.playable_maps(),
+  public.my_maps(),
+  public.get_my_map(uuid),
+  public.create_my_map(text, text, public.map_kind, boolean),
+  public.update_my_map(uuid, text, text, boolean, boolean),
+  public.save_my_location(uuid, integer, text, double precision, double precision, double precision, double precision, text),
+  public.delete_my_location(uuid, integer),
+  public.delete_my_map(uuid),
+  public.can_upload_photo(text),
+  public.photo_unused(text),
+  public.my_stats()
 to authenticated;
+
+-- ---------- Storage: photos for photo maps ----------
+
+-- Public to read (a round's photo is shown to everyone in the game; file
+-- names are random), JPEG or WebP up to 5 MB. The browser re-encodes photos
+-- before uploading, which also strips their location data.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('map-photos', 'map-photos', true, 5242880, array['image/jpeg', 'image/webp'])
+on conflict (id) do update
+set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "geobarkr players upload map photos" on storage.objects;
+create policy "geobarkr players upload map photos" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'map-photos' and public.can_upload_photo(name));
+
+drop policy if exists "geobarkr players see their map photos" on storage.objects;
+create policy "geobarkr players see their map photos" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'map-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- Only photos no map or game uses any more.
+drop policy if exists "geobarkr players delete their map photos" on storage.objects;
+create policy "geobarkr players delete their map photos" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'map-photos' and (storage.foldername(name))[1] = (select auth.uid())::text and public.photo_unused(name));
 
 -- ---------- Realtime ----------
 

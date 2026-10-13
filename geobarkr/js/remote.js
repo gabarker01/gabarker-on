@@ -1,6 +1,7 @@
 // The real backend: Supabase (see geobarkr/supabase/). Every game action is a
 // database function that checks who's asking; row-level security does the rest.
-import { getClient, getSession as session } from "./supabase.js?v=12";
+import { getClient, getSession as session } from "./supabase.js?v=13";
+import { SUPABASE_URL } from "./config.js?v=13";
 
 async function rpc(name, args = {}) {
   const client = await getClient();
@@ -41,10 +42,58 @@ export const getResults = (gameId) => rpc("get_results", { p_game: gameId });
 export const myGames = () => rpc("my_games");
 export const leaderboard = (sort) => rpc("leaderboard", { p_sort: sort, p_limit: 100 });
 
-export async function activeMaps() {
+// Maps you can start a game on: admin maps, public player maps and your own.
+export const playableMaps = () => rpc("playable_maps");
+
+// ---------- Your maps, profile ----------
+
+export const myStats = () => rpc("my_stats");
+export const myMaps = () => rpc("my_maps");
+export const getMyMap = (mapId) => rpc("get_my_map", { p_map: mapId });
+export const createMyMap = ({ name, description, kind, isPublic }) =>
+  rpc("create_my_map", { p_name: name, p_description: description, p_kind: kind, p_public: isPublic });
+export const updateMyMap = (mapId, { name, description, isPublic, active }) =>
+  rpc("update_my_map", { p_map: mapId, p_name: name, p_description: description, p_public: isPublic, p_active: active });
+
+// Photos the database says nobody uses any more; a failed delete only leaves a file behind.
+async function removePhotos(paths) {
+  const unused = paths.filter(Boolean);
+  if (!unused.length) return;
   const client = await getClient();
-  return table(client.from("maps").select("id, name").eq("active", true).order("name"));
+  await client.storage.from(PHOTO_BUCKET).remove(unused).catch(() => {});
 }
+
+export async function saveMyLocation(mapId, round, location) {
+  const result = await rpc("save_my_location", {
+    p_map: mapId, p_round: round, p_name: location.name, p_lat: location.lat, p_lng: location.lng,
+    p_heading: location.heading ?? 0, p_pitch: location.pitch ?? 0, p_photo_path: location.photo_path ?? null,
+  });
+  await removePhotos([result?.removed_photo]);
+}
+export async function deleteMyLocation(mapId, round) {
+  const result = await rpc("delete_my_location", { p_map: mapId, p_round: round });
+  await removePhotos([result?.removed_photo]);
+}
+export async function deleteMyMap(mapId) {
+  const result = await rpc("delete_my_map", { p_map: mapId });
+  await removePhotos(result?.removed_photos || []);
+}
+
+// Photos live in the public map-photos bucket, under your user id.
+const PHOTO_BUCKET = "map-photos";
+export const PHOTO_SIZE = { maxSide: 2048, quality: 0.85 };
+export const photoUrl = (path) => (path ? `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}` : null);
+export async function uploadPhoto(blob) {
+  const current = await session();
+  const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}${Math.random().toString(16).slice(2)}`;
+  const path = `${current.user.id}/${id.replace(/[^A-Za-z0-9_-]/g, "")}.jpg`;
+  const client = await getClient();
+  const { error } = await client.storage.from(PHOTO_BUCKET)
+    .upload(path, await blob.arrayBuffer(), { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(/row-level security|policy/i.test(error.message) ? "You've uploaded a lot of photos. Delete a map to make room" : error.message || "Couldn't upload the photo");
+  return path;
+}
+export const discardPhoto = (path) => removePhotos([path]);
 
 export async function renameMe(name) {
   const current = await session();
@@ -56,11 +105,17 @@ export async function renameMe(name) {
 
 export async function adminMaps() {
   const client = await getClient();
-  return table(client.from("maps").select("id, name, active").order("name"));
+  const maps = await table(client.from("maps").select("id, name, active, kind, is_public, owner_id, blocked").order("name"));
+  const ids = [...new Set(maps.map((map) => map.owner_id).filter(Boolean))];
+  const owners = ids.length ? await table(client.from("profiles").select("id, display_name").in("id", ids)) : [];
+  const names = new Map(owners.map((owner) => [owner.id, owner.display_name]));
+  return maps.map((map) => ({ ...map, owner_name: map.owner_id ? names.get(map.owner_id) || "a player" : null }));
 }
 export async function saveMap(map) {
   const client = await getClient();
-  if (map.id) return table(client.from("maps").update({ name: map.name, active: map.active }).eq("id", map.id));
+  if (map.id) {
+    return table(client.from("maps").update({ name: map.name, active: map.active, ...(map.blocked != null && { blocked: map.blocked }) }).eq("id", map.id));
+  }
   const [created] = await table(client.from("maps").insert({ name: map.name, active: map.active ?? false }).select("id, name, active"));
   return created;
 }
