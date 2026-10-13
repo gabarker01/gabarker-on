@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=4">
 </head>
 <body>
   <main class="gb-game play">
@@ -25,13 +25,16 @@
       </button>
     </div>
     <section class="gb-sheet" id="sheet" aria-label="Your guess">
+      <div class="gb-sheet-head" id="sheet-handle">
+        <span class="gb-grabber" aria-hidden="true"></span>
+        <div class="gb-readout" id="readout"><span>Your pin</span><b id="coords">Tap the map to place it</b></div>
+      </div>
       <div class="gb-mapbox" id="map-box">
         <div class="gb-map" id="map"></div>
         <button class="gb-expand" type="button" id="expand" aria-expanded="false" aria-label="Make the map bigger">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
         </button>
       </div>
-      <div class="gb-readout" id="readout"><span>Your pin</span><b id="coords">Tap the map to place it</b></div>
       <div class="gb-waiting" id="waiting" hidden>
         <h2>Guesses this round</h2>
         <p id="progress"></p>
@@ -55,6 +58,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="/geobarkr/js/pages/play.js?v=3"></script>
+  <script type="module" src="/geobarkr/js/pages/play.js?v=4"></script>
 </body>
 </html>

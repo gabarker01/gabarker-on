@@ -9,6 +9,8 @@ import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js";
 import { setupTopbar, renderTopbar } from "../game-chrome.js";
 import { ME_COLOUR } from "../players.js";
 import { formatCoords } from "../geo.js";
+import { draggableSheet } from "../sheet.js";
+import { haptic } from "../motion.js";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();
@@ -34,13 +36,13 @@ function updateGuessButton() {
 }
 
 $("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
-$("#expand").addEventListener("click", () => {
-  const sheet = $("#sheet");
-  const expanded = !sheet.classList.contains("is-expanded");
-  sheet.classList.toggle("is-expanded", expanded);
-  $("#expand").setAttribute("aria-expanded", String(expanded));
-  $("#expand").setAttribute("aria-label", expanded ? "Make the map smaller" : "Make the map bigger");
+const sheet = draggableSheet($("#sheet"), $("#sheet-handle"), {
+  onChange(expanded) {
+    $("#expand").setAttribute("aria-expanded", String(expanded));
+    $("#expand").setAttribute("aria-label", expanded ? "Make the map smaller" : "Make the map bigger");
+  },
 });
+$("#expand").addEventListener("click", () => sheet.set(!sheet.expanded));
 
 const watcher = watchGameState(gameId, render, pageError);
 
@@ -52,7 +54,8 @@ $("#guess").addEventListener("click", async () => {
   $("#guess").disabled = true;
   try {
     await submitGuess(gameId, pick.lat, pick.lng);
-    $("#sheet").classList.remove("is-expanded");
+    haptic(12);
+    sheet.set(false);
     watcher.refresh();
   } catch (error) {
     submitting = false;
@@ -98,7 +101,7 @@ async function render(state) {
   $("#guess").hidden = !guessing;
   $("#waiting").hidden = guessing || solo;
   $("#end-round").hidden = solo || !game.is_host || round.status !== "in_progress";
-  if (!guessing) $("#sheet").classList.remove("is-expanded");
+  if (!guessing && sheet.expanded) sheet.set(false);
 
   renderGuessList($("#guess-list"), state);
   $("#progress").textContent = `${guesses.length} of ${players.length} have guessed`;

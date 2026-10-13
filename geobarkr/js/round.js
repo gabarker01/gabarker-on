@@ -1,7 +1,8 @@
 // Shared by the game screens: the live "Guesses this round" list, and the
 // round results panel (map with everyone's pins and great-circle lines, then
 // a ranked list).
-import { $, h, busy } from "./ui.js";
+import { $, h, busy, markNew } from "./ui.js";
+import { countUp, replay } from "./motion.js";
 import { createResultsMap } from "./maps.js";
 import { avatar, colourMap } from "./players.js";
 import { formatTime, formatDistance, formatScore } from "./geo.js";
@@ -23,11 +24,12 @@ const playerOf = (state, userId) => state.players.find((p) => p.user_id === user
 export function renderGuessList(container, state) {
   const colours = coloursFor(state);
   container.replaceChildren(...(state.guesses.length
-    ? state.guesses.map((guess) => h("div", { class: "gb-line" },
+    ? state.guesses.map((guess) => h("div", { class: "gb-line", "data-key": `${state.round?.number}:${guess.user_id}` },
         avatar(playerOf(state, guess.user_id), colours.get(guess.user_id), 30),
         h("div", { class: "grow" }, h("b", {}, guess.user_id === state.me.user_id ? `${guess.name} (you)` : guess.name)),
         h("div", { class: "end" }, h("span", {}, formatTime(guess.time_ms)))))
     : [h("p", { class: "gb-muted" }, "No guesses yet.")]));
+  markNew(container);
 }
 
 export class ResultsPanel {
@@ -59,12 +61,21 @@ export class ResultsPanel {
     const mine = guessed.get(meId);
     const closest = [...guessed.values()].sort((a, b) => a.distance_km - b.distance_km)[0];
     const summary = $("#results-summary", root);
-    if (state.me.is_player) {
+    // Leave the summary alone while its reveal is still counting up.
+    if (fresh) this.countingUntil = performance.now() + 700;
+    if (!fresh && performance.now() < (this.countingUntil || 0)) {
+      // same round, numbers already on their way
+    } else if (state.me.is_player) {
+      const km = h("span", { class: "km" }, mine ? `${formatDistance(mine.distance_km)} km away` : "0 points");
+      const pts = mine ? h("span", { class: "pts" }, `+${formatScore(mine.score)}`) : null;
       summary.replaceChildren(
         h("div", { class: "k" }, mine ? "You were" : "You didn't guess this round"),
-        h("div", { class: "row" },
-          h("span", { class: "km" }, mine ? `${formatDistance(mine.distance_km)} km away` : "0 points"),
-          mine ? h("span", { class: "pts" }, `+${formatScore(mine.score)}`) : null));
+        h("div", { class: "row" }, km, pts));
+      // The reveal: your distance and points count up as the sheet arrives.
+      if (fresh && mine) {
+        countUp(km, mine.distance_km, (v) => `${formatDistance(v)} km away`);
+        countUp(pts, mine.score, (v) => `+${formatScore(Math.round(v))}`);
+      }
     } else if (closest) {
       summary.replaceChildren(
         h("div", { class: "k" }, "Closest"),
@@ -94,9 +105,7 @@ export class ResultsPanel {
 
     root.hidden = false;
     if (fresh) {
-      root.classList.remove("is-new");
-      void root.offsetWidth;
-      root.classList.add("is-new");
+      replay(root, "is-new");
       try {
         this.mapPromise ||= createResultsMap($("#results-map", root));
         const map = await this.mapPromise;

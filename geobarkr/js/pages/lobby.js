@@ -1,7 +1,7 @@
 // The lobby (ServiceNow: "GeoBarkr Lobby players"): the room code and QR code,
 // who's joined, and the owner's Start button. Everyone moves on to the game
 // as soon as the owner starts it.
-import { initPage, $, h, busy, param, qrCode, joinUrl, pageError } from "../ui.js";
+import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew } from "../ui.js";
 import { startGame, gamePageUrl, isDemo } from "../api.js";
 import { watchGameState } from "../live.js";
 import { drawWorld } from "../worldmap.js";
@@ -42,10 +42,11 @@ watchGameState(gameId, async (state) => {
   $("#host-note").textContent = `${game.host_name} is hosting on this screen. Players guess on their phones.`;
   $("#players-title").textContent = `${players.length} player${players.length === 1 ? "" : "s"}`;
   const colours = colourMap(players, me.user_id);
-  $("#players").replaceChildren(...(players.length ? players.map((p) => h("div", { class: "gb-line" },
+  $("#players").replaceChildren(...(players.length ? players.map((p) => h("div", { class: "gb-line", "data-key": p.user_id },
     avatar(p, colours.get(p.user_id), 34),
     h("div", { class: "grow" }, h("b", {}, p.name), h("span", {}, `Joined ${formatDate(p.joined_at)}`)),
     p.is_host ? h("span", { class: "gb-tag" }, "Owner") : null)) : [h("p", { class: "gb-muted" }, "No one has joined yet.")]));
+  markNew($("#players"));
 
   const canStart = game.is_host && players.length > 1;
   $("#start-button").hidden = !game.is_host;

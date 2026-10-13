@@ -4,7 +4,7 @@
 // switches to this file while GOOGLE_MAPS_KEY in config.js is empty.
 import { loadScript } from "./load.js";
 import { greatCircle } from "./geo.js";
-import { pinElement, targetElement } from "./maps.js";
+import { pinElement, targetElement, dropIn } from "./maps.js";
 
 const WORLD = { center: [25, 0], zoom: 1 };
 let leafletPromise = null;
@@ -52,11 +52,13 @@ export async function createGuessMap(element, me, onPick) {
   const { L, map } = await newMap(element);
   let marker = null;
   let pick = null;
+  const pin = pinElement(me.player, me.colour, { me: true });
   map.on("click", (event) => {
     const at = event.latlng.wrap();
     pick = { lat: at.lat, lng: at.lng };
     if (marker) marker.setLatLng(event.latlng);
-    else marker = htmlMarker(L, map, event.latlng, pinElement(me.player, me.colour, { me: true }), 10);
+    else marker = htmlMarker(L, map, event.latlng, pin, 10);
+    dropIn(pin);
     onPick?.(pick);
   });
   return {
