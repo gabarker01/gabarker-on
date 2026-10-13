@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#0B1426">
+  <title>My games · GeoBarkr</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
+</head>
+<body class="has-band">
+  <div id="gb-header"></div>
+  <main>
+    <div class="gb-band" id="band"><div class="gb-band-caption" id="band-caption"></div></div>
+    <div class="gb-page">
+      <h1 class="gb-title">My games</h1>
+      <p class="gb-loading" id="loading">Loading your games…</p>
+      <div class="gb-lines" id="games" hidden></div>
+      <p id="empty" class="gb-lede" hidden>You haven't played yet. <a href="/geobarkr/">Start a game</a> and it'll appear here, with a map of where you were dropped.</p>
+      <form id="name-form" class="gb-section" style="margin-top:28px">
+        <div class="gb-label">Your name</div>
+        <div class="gb-inline">
+          <input class="gb-input" id="name" maxlength="40" autocomplete="nickname" required aria-label="Your name">
+          <button class="gb-btn" type="submit" id="name-button">Save</button>
+        </div>
+        <p class="gb-muted" style="font-size:13px;margin:8px 2px 0">Other players see this in lobbies, results and the leaderboard.</p>
+      </form>
+    </div>
+  </main>
+  <script type="module" src="/geobarkr/js/pages/games.js?v=3"></script>
+</body>
+</html>
