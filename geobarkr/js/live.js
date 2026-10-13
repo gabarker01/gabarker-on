@@ -1,8 +1,8 @@
 // Keeping a game screen up to date: live events from the backend (Supabase
 // Realtime, or this browser in demo mode) plus a re-check on a timer and when
 // the screen comes back into view.
-import { subscribe, getGameState, isDemo } from "./api.js?v=13";
-import { POLL_MS } from "./config.js?v=13";
+import { subscribe, getGameState, isDemo } from "./api.js?v=14";
+import { POLL_MS } from "./config.js?v=14";
 
 // Demo bots act on the clock, so demo screens re-check every second.
 const INTERVAL = isDemo ? 1000 : POLL_MS;

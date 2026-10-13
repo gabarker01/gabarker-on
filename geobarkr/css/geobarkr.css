@@ -118,7 +118,7 @@ a:hover { text-decoration: underline; }
 
 /* ---------- Pages ---------- */
 
-.gb-page { width: 100%; max-width: 640px; margin: 0 auto; padding: 8px 16px 40px; }
+.gb-page { width: 100%; max-width: 640px; margin: 0 auto; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
 .gb-page.wide { max-width: 1040px; }
 .gb-title { font-size: 1.875rem; font-weight: 650; letter-spacing: -0.03em; margin: 8px 0 16px; }
 .gb-lede { color: var(--muted); font-size: 1.0625rem; margin: 0 0 20px; max-width: 32em; }

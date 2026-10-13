@@ -1,14 +1,14 @@
 // In person, a player's phone (ServiceNow page "map_mobile"): your map and the
 // Guess button. Street View is on the host's big screen; phones are never sent
 // the target during a round.
-import { initPage, $, h, param, showError, pageError } from "../ui.js?v=13";
-import { submitGuess, gamePageUrl, resultsUrl } from "../api.js?v=13";
-import { watchGameState } from "../live.js?v=13";
-import { createGuessMap } from "../maps.js?v=13";
-import { setupTopbar, renderTopbar } from "../game-chrome.js?v=13";
-import { avatar, ME_COLOUR } from "../players.js?v=13";
-import { formatCoords, formatDistance, formatScore, firstName } from "../geo.js?v=13";
-import { haptic } from "../motion.js?v=13";
+import { initPage, $, h, param, showError, pageError } from "../ui.js?v=14";
+import { submitGuess, gamePageUrl, resultsUrl } from "../api.js?v=14";
+import { watchGameState } from "../live.js?v=14";
+import { createGuessMap } from "../maps.js?v=14";
+import { setupTopbar, renderTopbar } from "../game-chrome.js?v=14";
+import { avatar, ME_COLOUR } from "../players.js?v=14";
+import { formatCoords, formatDistance, formatScore, firstName } from "../geo.js?v=14";
+import { haptic } from "../motion.js?v=14";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();

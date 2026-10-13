@@ -2,9 +2,9 @@
 // the guess and results maps use Leaflet with CARTO's dark OpenStreetMap
 // tiles, and Street View is Google's keyless embed in an iframe. maps.js
 // switches to this file while GOOGLE_MAPS_KEY in config.js is empty.
-import { loadScript } from "./load.js?v=13";
-import { greatCircle } from "./geo.js?v=13";
-import { pinElement, targetElement, dropIn, placePinElement } from "./maps.js?v=13";
+import { loadScript } from "./load.js?v=14";
+import { greatCircle } from "./geo.js?v=14";
+import { pinElement, targetElement, dropIn, placePinElement } from "./maps.js?v=14";
 
 const WORLD = { center: [25, 0], zoom: 1 };
 let leafletPromise = null;

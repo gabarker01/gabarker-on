@@ -1,10 +1,10 @@
 // The one place pages talk to the backend. With a Supabase project configured
 // (js/config.js) it's the real thing; without one, GeoBarkr runs in demo mode
 // in this browser only, with bot players (js/demo.js).
-import { isConfigured } from "./supabase.js?v=13";
+import { isConfigured } from "./supabase.js?v=14";
 
 export const isDemo = !isConfigured();
-const backend = await (isDemo ? import("./demo.js?v=13") : import("./remote.js?v=13"));
+const backend = await (isDemo ? import("./demo.js?v=14") : import("./remote.js?v=14"));
 
 export const {
   getSession, getProfile, signOut,

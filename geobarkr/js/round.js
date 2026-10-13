@@ -1,12 +1,12 @@
 // Shared by the game screens: the live "Guesses this round" list, and the
 // round results panel (map with everyone's pins and great-circle lines, then
 // a ranked list).
-import { $, h, busy, markNew } from "./ui.js?v=13";
-import { countUp, replay } from "./motion.js?v=13";
-import { createResultsMap } from "./maps.js?v=13";
-import { avatar, colourMap } from "./players.js?v=13";
-import { formatTime, formatDistance, formatScore, ordinal } from "./geo.js?v=13";
-import { nextRound, resultsUrl } from "./api.js?v=13";
+import { $, h, busy, markNew } from "./ui.js?v=14";
+import { countUp, replay } from "./motion.js?v=14";
+import { createResultsMap } from "./maps.js?v=14";
+import { avatar, colourMap } from "./players.js?v=14";
+import { formatTime, formatDistance, formatScore, ordinal } from "./geo.js?v=14";
+import { nextRound, resultsUrl } from "./api.js?v=14";
 
 // The host's Next round / See results button.
 export async function nextRoundOrResults(gameId, watcher) {

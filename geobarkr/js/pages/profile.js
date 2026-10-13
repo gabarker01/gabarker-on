@@ -1,12 +1,12 @@
 // Your profile (tap your picture in the header): your numbers over every
 // finished game, the maps you've made (and a button to make one), your name,
 // the other pages and Sign out.
-import { initPage, $, h, busy, toast, showError, pageReady, sheetDialog, closeButton, kindIcon, KIND_NAMES, chevron, signOutAndLeave } from "../ui.js?v=13";
-import { myStats, myMaps, myGames, renameMe, photoUrl } from "../api.js?v=13";
-import { drawWorld } from "../worldmap.js?v=13";
-import { avatar, ME_COLOUR } from "../players.js?v=13";
-import { formatScore, formatDistance, formatTime, ordinal } from "../geo.js?v=13";
-import { countUp } from "../motion.js?v=13";
+import { initPage, $, h, busy, toast, showError, pageReady, sheetDialog, closeButton, kindIcon, KIND_NAMES, chevron, signOutAndLeave } from "../ui.js?v=14";
+import { myStats, myMaps, myGames, renameMe, photoUrl } from "../api.js?v=14";
+import { drawWorld } from "../worldmap.js?v=14";
+import { avatar, ME_COLOUR } from "../players.js?v=14";
+import { formatScore, formatDistance, formatTime, ordinal } from "../geo.js?v=14";
+import { countUp } from "../motion.js?v=14";
 
 const { profile } = await initPage({ hold: true });
 

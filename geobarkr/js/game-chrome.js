@@ -1,8 +1,8 @@
 // The bar above Street View: home link, round number with progress, your total.
-import { $, logoMark, helpButton } from "./ui.js?v=13";
-import { formatScore } from "./geo.js?v=13";
-import { photoUrl } from "./api.js?v=13";
-import { createPhotoView } from "./photo.js?v=13";
+import { $, logoMark, helpButton } from "./ui.js?v=14";
+import { formatScore } from "./geo.js?v=14";
+import { photoUrl } from "./api.js?v=14";
+import { createPhotoView } from "./photo.js?v=14";
 
 // What the round shows: Street View, or (on photo maps) the round's photo.
 // show(target) picks one; home() goes back to the start view or zoom.

@@ -6,17 +6,17 @@
 // - Photos: choose a photo; if it knows where it was taken, the pin and a
 //   place name ("Mayfair, London, UK") fill themselves in. Tap the map to
 //   move the pin.
-import { initPage, $, h, busy, toast, showError, param, pageReady, closeButton, kindTag, sheetDialog } from "../ui.js?v=13";
+import { initPage, $, h, busy, toast, showError, param, pageReady, closeButton, kindTag, sheetDialog } from "../ui.js?v=14";
 import {
   getMyMap, createMyMap, updateMyMap, saveMyLocation, deleteMyLocation, deleteMyMap,
   photoUrl, uploadPhoto, discardPhoto, PHOTO_SIZE,
-} from "../api.js?v=13";
-import { GOOGLE_MAPS_KEY } from "../config.js?v=13";
-import { createPickMap, createExplorePanorama, searchPlace, placeName } from "../maps.js?v=13";
-import { preparePhoto, createPhotoView } from "../photo.js?v=13";
-import { drawWorld } from "../worldmap.js?v=13";
-import { ME_COLOUR } from "../players.js?v=13";
-import { formatCoords, haversineKm } from "../geo.js?v=13";
+} from "../api.js?v=14";
+import { GOOGLE_MAPS_KEY } from "../config.js?v=14";
+import { createPickMap, createExplorePanorama, searchPlace, placeName } from "../maps.js?v=14";
+import { preparePhoto, createPhotoView } from "../photo.js?v=14";
+import { drawWorld } from "../worldmap.js?v=14";
+import { ME_COLOUR } from "../players.js?v=14";
+import { formatCoords, haversineKm } from "../geo.js?v=14";
 
 await initPage({ hold: true });
 
