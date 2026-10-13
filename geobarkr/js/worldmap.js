@@ -73,7 +73,7 @@ export async function drawWorld(el, { view = { lat: 20, lng: 10, zoom: 0 }, arcs
   }
   for (const dot of dots) {
     const [x, y] = pt(dot.lat, dot.lng);
-    svg += `<circle cx="${x}" cy="${y}" r="${(dot.r || 3.5) * unit}" fill="${dot.colour}" stroke="var(--water)" stroke-width="${1.4 * unit}"/>`;
+    svg += `<circle cx="${x}" cy="${y}" r="${(dot.r || 3.5) * unit}" fill="${dot.colour}" stroke="${dot.stroke || "var(--water)"}" stroke-width="${(dot.strokeWidth || 1.4) * unit}"/>`;
   }
   svg += "</svg>";
   // Replace only the map, keeping anything else in el (captions over the band).

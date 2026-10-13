@@ -50,7 +50,7 @@ export const param = (name) => new URLSearchParams(location.search).get(name);
 export function logoMark(size = 22) {
   const wrap = document.createElement("span");
   wrap.className = "gb-mark";
-  wrap.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="1.8"/><ellipse cx="13" cy="13" rx="4.6" ry="11" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".6"/><path d="M2 13h22" stroke="currentColor" stroke-width="1.3" opacity=".6"/><circle cx="17.5" cy="8.5" r="3.2" fill="${ME_COLOUR}" stroke="#0B1426" stroke-width="1.6"/></svg>`;
+  wrap.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="1.8"/><ellipse cx="13" cy="13" rx="4.6" ry="11" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".6"/><path d="M2 13h22" stroke="currentColor" stroke-width="1.3" opacity=".6"/><circle cx="17.5" cy="8.5" r="3.2" fill="${ME_COLOUR}" stroke="#F3F5F7" stroke-width="1.6"/></svg>`;
   return wrap;
 }
 
@@ -87,6 +87,40 @@ export function signInUrl(next = location.pathname + location.search) {
   return `/geobarkr/signin/?next=${encodeURIComponent(next)}`;
 }
 
+// "How to play": a ? button that opens a short guide. Used in the header and
+// on the game screens' top bar.
+let helpDialog = null;
+function openHelp() {
+  if (!helpDialog) {
+    const row = (km, pts) => h("tr", {}, h("td", {}, km), h("td", { class: "r" }, pts));
+    helpDialog = h("dialog", { class: "gb-help", "aria-labelledby": "gb-help-title" },
+      h("div", { class: "gb-help-head" },
+        h("h2", { id: "gb-help-title" }, "How to play"),
+        h("button", { type: "button", class: "gb-help-close", "aria-label": "Close", onclick: () => helpDialog.close() }, "×")),
+      h("ol", { class: "gb-help-steps" },
+        h("li", {}, h("b", {}, "Look around. "), "You're dropped somewhere in Street View. Drag to turn, pinch to zoom, and tap the road to move. Look for signs, languages, which side people drive on, plants and the landscape."),
+        h("li", {}, h("b", {}, "Guess. "), "Tap the map bubble in the corner to open the map, then tap where you think you are. Tap again to move your pin. Press Guess when you're happy."),
+        h("li", {}, h("b", {}, "Score. "), "The closer you are, the more points: up to 5,000 a round, with full marks within 10 metres. Five rounds make a game."),
+        h("li", {}, h("b", {}, "Time. "), "How long you take is shown in the results so you can compare, but only distance counts towards points.")),
+      h("table", { class: "gb-help-table" },
+        h("thead", {}, h("tr", {}, h("th", {}, "If you're off by"), h("th", { class: "r" }, "you score"))),
+        h("tbody", {}, row("10 metres", "5,000"), row("100 km", "4,756"), row("500 km", "3,894"), row("1,000 km", "3,033"), row("3,000 km", "1,116"))),
+      h("h3", {}, "Three ways to play"),
+      h("ul", { class: "gb-help-modes" },
+        h("li", {}, h("b", {}, "Solo: "), "five rounds on your own."),
+        h("li", {}, h("b", {}, "With friends: "), "everyone plays on their own phone; share the room code or link. Scores are revealed together when a round ends."),
+        h("li", {}, h("b", {}, "Party: "), "Street View on a TV or laptop for the room, guesses on phones. The host can end a round when everyone's ready.")),
+      h("p", { class: "gb-help-foot" }, h("a", { href: "/geobarkr/about/" }, "More about GeoBarkr")));
+    helpDialog.addEventListener("click", (event) => { if (event.target === helpDialog) helpDialog.close(); });
+    document.body.append(helpDialog);
+  }
+  helpDialog.showModal();
+}
+
+export function helpButton() {
+  return h("button", { type: "button", class: "gb-help-btn", "aria-label": "How to play", onclick: openHelp }, "?");
+}
+
 function header(profile) {
   const links = [["/geobarkr/", "Play"], ["/geobarkr/games/", "My games"], ["/geobarkr/leaderboard/", "Leaderboard"]];
   if (profile?.role === "admin") links.push(["/geobarkr/admin/", "Admin"]);
@@ -114,7 +148,7 @@ function header(profile) {
   });
   const bar = h("header", { class: "gb-header" },
     h("a", { class: "gb-brand", href: "/geobarkr/" }, logoMark(), "GeoBarkr"),
-    h("div", { class: "gb-header-right" }, menu, toggle),
+    h("div", { class: "gb-header-right" }, menu, helpButton(), toggle),
   );
   // The bar floats over the page; it gains its frosted backing once content scrolls under it.
   const onScroll = () => bar.classList.toggle("is-scrolled", window.scrollY > 4);

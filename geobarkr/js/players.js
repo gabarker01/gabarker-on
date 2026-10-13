@@ -1,7 +1,7 @@
 // Player colours, initials and avatars. You are always ember; everyone else
 // gets a colour in the order they joined, so it's the same on every screen.
-export const ME_COLOUR = "#FF8A5B";
-const PALETTE = ["#B9A6FF", "#6EE7B7", "#F2CF5B", "#5DB0FF", "#F28B82", "#7FD8BE", "#E5A1FF", "#A3E635", "#FDBA74", "#93C5FD"];
+export const ME_COLOUR = "#F26A3D";
+const PALETTE = ["#5B6CFF", "#12A57A", "#D49A1E", "#D6457F", "#2A93D5", "#8A5CE6", "#6E9A1C", "#B0632A", "#0F8F8F", "#9C4DB8"];
 
 export function colourMap(players, meId) {
   const sorted = [...players].sort((a, b) => String(a.joined_at || "").localeCompare(String(b.joined_at || "")));

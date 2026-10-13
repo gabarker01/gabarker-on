@@ -41,6 +41,12 @@ async function step(name, fn) {
   catch (e) { results.push(false); console.log(`not ok - ${name}\n  ${e.message.split("\n")[0]}`); }
 }
 async function tapMap(page, fx, fy) {
+  // On the play screen the map waits in a bubble: open it first.
+  if (await page.locator("#open-map").isVisible().catch(() => false)) {
+    await page.click("#open-map");
+    await page.waitForFunction(() => document.querySelector("#guess-panel")?.getBoundingClientRect().width > 250);
+    await page.waitForTimeout(600);
+  }
   const box = await page.locator("#map").boundingBox();
   await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
 }
@@ -74,6 +80,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
   await step(`${label}: solo game, five rounds, results`, async () => {
     await chooseMap(me.page, "World tour");
     await me.page.click("#modes [data-type=single_player]");
+  await me.page.click("#play-button");
     await me.page.waitForURL(/\/play\//);
     await me.page.waitForSelector("#round-label");
     assert.equal(await me.page.isDisabled("#guess"), true);
@@ -93,7 +100,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
       await me.page.click("#continue");
     }
     await me.page.waitForURL(/\/results\//);
-    await me.page.waitForSelector("#scorecard tbody tr");
+    await me.page.waitForSelector("#rounds .gb-round");
     await me.page.waitForTimeout(500);
     await shot(me, "results-solo", true);
   });
@@ -103,6 +110,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     await me.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
     await chooseMap(me.page, "World tour");
     await me.page.click("#modes [data-type=multiplayer]");
+  await me.page.click("#play-button");
     await me.page.waitForURL(/\/lobby\//);
     await me.page.waitForFunction(() => document.querySelectorAll("#players .gb-line").length === 3, null, { timeout: 15000 });
     await me.page.waitForSelector("#qr svg, .gb-qr svg");
@@ -115,7 +123,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     await shot(me, "waiting");
     await me.page.waitForSelector("#results:not([hidden])", { timeout: 30000 });
     await me.page.waitForTimeout(400);
-    assert.equal(await me.page.locator("#results-ranked .gb-line").count(), 3);
+    assert.equal(await me.page.locator("#results-ranked .gb-bar-row").count(), 3);
     await shot(me, "reveal-online");
     // Round 2: end it before the bots guess.
     await me.page.click("#continue");
@@ -131,7 +139,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
       await me.page.click("#continue");
     }
     await me.page.waitForURL(/\/results\//);
-    await me.page.waitForSelector("#standings tbody tr");
+    await me.page.waitForSelector("#standings .gb-standing");
     await me.page.waitForTimeout(500);
     await shot(me, "results-online", true);
   });
@@ -141,6 +149,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     await me.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
     await chooseMap(me.page, "GeoBarkr Demo");
     await me.page.click("#modes [data-type=local_multiplayer]");
+  await me.page.click("#play-button");
     await me.page.waitForURL(/\/lobby\//);
     await me.page.waitForFunction(() => document.querySelectorAll("#players .gb-line").length === 3, null, { timeout: 15000 });
     await me.page.waitForTimeout(300);
@@ -170,7 +179,7 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     await shot(me, "leaderboard", true);
     console.log("  · landing");
     await me.page.goto(`${BASE}/geobarkr/`);
-    await me.page.waitForSelector(".gb-band-caption .score");
+    await me.page.waitForSelector("#home-chip:not([hidden])");
     await me.page.waitForTimeout(700);
     await shot(me, "landing", true);
     console.log("  · admin");

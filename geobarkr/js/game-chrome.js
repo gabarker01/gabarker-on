@@ -1,9 +1,10 @@
 // The bar above Street View: home link, round number with progress, your total.
-import { $, logoMark } from "./ui.js";
+import { $, logoMark, helpButton } from "./ui.js";
 import { formatScore } from "./geo.js";
 
 export function setupTopbar() {
   $("#home-link").append(logoMark(22));
+  document.querySelector(".gb-topbar")?.append(helpButton());
 }
 
 export function renderTopbar(state, { showScore = true } = {}) {

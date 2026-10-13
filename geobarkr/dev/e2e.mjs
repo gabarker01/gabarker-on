@@ -67,6 +67,12 @@ async function step(name, fn) {
 
 // Tap the map at a fraction of its size (the fake map is a flat world map).
 async function tapMap(page, fx, fy) {
+  // On the play screen the map waits in a bubble: open it first.
+  if (await page.locator("#open-map").isVisible().catch(() => false)) {
+    await page.click("#open-map");
+    await page.waitForFunction(() => document.querySelector("#guess-panel")?.getBoundingClientRect().width > 250);
+    await page.waitForTimeout(600);
+  }
   const box = await page.locator("#map").boundingBox();
   await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
 }
@@ -77,6 +83,7 @@ async function create(page, type) {
   await page.goto(`${BASE}/geobarkr/`);
   await page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
   await page.click(`#modes [data-type=${type}]`);
+  await page.click("#play-button");
 }
 
 // ---------- Signed out ----------
@@ -122,8 +129,8 @@ await step("single player: five rounds, scores, results page", async () => {
     await solo.page.click("#continue");
   }
   await solo.page.waitForURL(/\/results\/\?game=/);
-  await solo.page.waitForSelector("#scorecard tbody tr");
-  assert.equal(await solo.page.locator("#scorecard tbody tr").count(), 6, "five rounds and a total");
+  await solo.page.waitForSelector("#rounds .gb-round");
+  assert.equal(await solo.page.locator("#rounds .gb-round").count(), 5, "five rounds");
   await solo.page.waitForTimeout(300);
   await solo.page.screenshot({ path: path.join(OUT, "results-solo-phone.png"), fullPage: true });
 });
@@ -178,7 +185,7 @@ await step("online: lobby by room code, live guesses, end round, results", async
   assert.equal(await guest.page.isHidden("#end-round"), true, "only the host can end the round");
   await host.page.click("#end-round");
   await guest.page.waitForSelector("#results:not([hidden])");
-  assert.match(await guest.page.textContent("#results-ranked"), /Gina Guest \(you\)No guess0/);
+  assert.match(await guest.page.textContent("#results-ranked"), /Gina GuestNo guess0/);
   await host.page.click("#continue");
 
   for (let round = 3; round <= 5; round++) {
@@ -191,8 +198,8 @@ await step("online: lobby by room code, live guesses, end round, results", async
     await host.page.click("#continue");
   }
   await Promise.all([host.page.waitForURL(/\/results\//), guest.page.waitForURL(/\/results\//)]);
-  await host.page.waitForSelector("#standings tbody tr");
-  assert.equal(await host.page.locator("#standings tbody tr").count(), 2);
+  await host.page.waitForSelector("#standings .gb-standing");
+  assert.equal(await host.page.locator("#standings .gb-standing").count(), 2);
   await host.page.screenshot({ path: path.join(OUT, "results-online-desktop.png"), fullPage: true });
   await guest.page.screenshot({ path: path.join(OUT, "results-online-phone.png"), fullPage: true });
 });
@@ -270,8 +277,8 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
     await partyHost.page.click("#continue");
   }
   await Promise.all([partyHost.page.waitForURL(/\/results\//), phone1.page.waitForURL(/\/results\//), phone2.page.waitForURL(/\/results\//)]);
-  await partyHost.page.waitForSelector("#standings tbody tr");
-  assert.equal(await partyHost.page.isHidden("#scorecard-section"), true, "the host isn't a player");
+  await partyHost.page.waitForSelector("#standings .gb-standing");
+  assert.equal(await partyHost.page.isHidden("#stats"), true, "the host isn't a player");
   await partyHost.page.screenshot({ path: path.join(OUT, "results-in-person-desktop.png"), fullPage: true });
 });
 

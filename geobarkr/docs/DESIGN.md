@@ -1,4 +1,32 @@
-# GeoBarkr: design (Midnight)
+# GeoBarkr: design (Fog)
+
+> **Current: Fog (October 2026).** A light theme chosen from a round of
+> mockups (F1 to H): cool grey paper `#F3F5F7`, white cards, ink-black buttons
+> `#0E1726`, your colour ember `#F26A3D`, light map (water `#D3DEEA`, land
+> `#F7F8FA`). Other players get saturated colours that read on white.
+>
+> - **Start:** your places pinned on a world map; a Resume strip for a game in
+>   progress; Solo / Friends / Party as one switch, so Play is always the same
+>   button; map picker; room code as one row.
+> - **Play:** Street View fills the screen. The map is a bubble in the corner;
+>   tap it and it grows into a card. Shrink it again and it shows your pin up
+>   close, with Guess beside it. After guessing (with friends) the card shows
+>   who has guessed. The host's End round now floats under the top bar.
+> - **Reveal:** the map fills the screen with everyone's lines; a card shows
+>   your distance, points, time and place this round, then a row per player
+>   with distance, time, a score bar and points.
+> - **Lobby:** one card with the QR, the room code and Share invite link.
+> - **Game results:** the winner as the headline; your points, distance off
+>   (total and per round), closest round and time (total, per round,
+>   fastest); standings with each player's distance, time and a per-round
+>   strip; then every round with everyone's distance, time and points.
+> - **How to play:** a ? button beside your picture (and on the game screens)
+>   opens a short guide with the scoring table.
+>
+> The Midnight notes below are kept for history; the interaction principles
+> (springs, press feedback, reduced motion) still apply.
+
+# Previous: Midnight
 
 Made with the `frontend-design` skill: a plan, a review of the plan against
 generic defaults, then the build. The notes at the end record what was tried

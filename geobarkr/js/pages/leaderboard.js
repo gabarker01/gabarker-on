@@ -8,7 +8,7 @@ import { formatScore, ordinal } from "../geo.js";
 await initPage();
 drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });
 
-const PALETTE = ["#6EE7B7", "#B9A6FF", "#F2CF5B", "#5DB0FF", "#F28B82", "#7FD8BE", "#E5A1FF", "#A3E635"];
+const PALETTE = ["#12A57A", "#5B6CFF", "#D49A1E", "#2A93D5", "#D6457F", "#0F8F8F", "#8A5CE6", "#6E9A1C"];
 const colourOf = (row, i) => (row.is_me ? ME_COLOUR : PALETTE[i % PALETTE.length]);
 
 async function show(sort) {

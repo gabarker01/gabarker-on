@@ -21,7 +21,7 @@ $("#name-form").addEventListener("submit", (event) => {
 
 const STATUS = { lobby: "In the lobby", in_play: "Still playing", cancelled: "Cancelled" };
 const arcsOf = (places) => places.filter((p) => p.guess_lat != null).map((p) => ({ from: { lat: p.guess_lat, lng: p.guess_lng }, to: p, colour: ME_COLOUR, width: 1.6 }));
-const dotsOf = (places, r) => places.map((p) => ({ lat: p.lat, lng: p.lng, colour: "#fff", r }));
+const dotsOf = (places, r) => places.map((p) => ({ lat: p.lat, lng: p.lng, colour: "#0E1726", r }));
 
 try {
   const games = await myGames();
