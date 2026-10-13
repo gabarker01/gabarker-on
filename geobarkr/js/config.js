@@ -8,7 +8,7 @@
 // Setup: geobarkr/README.md.
 export const SUPABASE_URL = "https://ouyfjbbgqqjhgikrjcjg.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_IkRv524PmJX22EWCNs9TOA_QenumrpU";
-export const GOOGLE_MAPS_KEY = "";
+export const GOOGLE_MAPS_KEY = "AIzaSyDRgrrsgVXJ5pJLuV7Yj5aJnjj3jYmTV0Q";
 
 // Sign-in methods to offer, in order: "email" (email and password), "google".
 // Add "google" once Google sign-in is set up in Supabase (README step 5).
