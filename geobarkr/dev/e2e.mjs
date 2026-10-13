@@ -81,7 +81,7 @@ const SPOTS = [[0.5, 0.21], [0.5, 0.215], [0.505, 0.23], [0.92, 0.69], [0.38, 0.
 
 async function create(page, type) {
   await page.goto(`${BASE}/geobarkr/`);
-  await page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
+  await page.waitForSelector("#map-button:not([disabled])");
   await page.click(`#modes [data-type=${type}]`);
   await page.click("#play-button");
 }
@@ -379,8 +379,8 @@ await step("admin: add a map and a location from a Street View link, see games",
   await admin.page.screenshot({ path: path.join(OUT, "admin-desktop.png"), fullPage: true });
   // New maps start hidden from players until made active.
   await solo.page.goto(`${BASE}/geobarkr/`);
-  await solo.page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
-  assert.ok(!(await solo.page.textContent("#map-select")).includes("Test Map"));
+  await solo.page.waitForSelector("#map-button:not([disabled])");
+  assert.ok(!(await solo.page.textContent("#map-list")).includes("Test Map"));
   await admin.context.close();
 });
 

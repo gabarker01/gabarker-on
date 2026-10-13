@@ -1,7 +1,7 @@
 // The start screen (ServiceNow: the "Start Game" record producer): the places
 // you've played on a world map, a Resume strip for a game in progress, then
 // choose how to play, pick a map and press Play, or join with a room code.
-import { initPage, $, h, busy, showError, codeInput } from "../ui.js";
+import { initPage, $, h, busy, showError, codeInput, closeButton } from "../ui.js";
 import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js";
 import { drawWorld } from "../worldmap.js";
 import { ME_COLOUR } from "../players.js";
@@ -54,20 +54,61 @@ for (const button of document.querySelectorAll("#modes [data-type]")) {
   });
 }
 
-const select = $("#map-select");
+// ---------- Map: a searchable list, your last map first ----------
+const LAST_MAP = "geobarkr-last-map";
+const remembered = () => { try { return localStorage.getItem(LAST_MAP); } catch { return null; } };
+let maps = [];
+let mapId = null;
+const picker = $("#map-picker");
+$("#map-picker-close").replaceWith(closeButton(() => picker.close()));
+picker.addEventListener("click", (event) => { if (event.target === picker) picker.close(); });
+
+function chooseMap(id) {
+  mapId = id;
+  $("#map-name").textContent = maps.find((m) => m.id === id)?.name || "Choose a map";
+}
+
+function renderMaps() {
+  const query = $("#map-search").value.trim().toLowerCase();
+  const last = remembered();
+  const shown = maps
+    .filter((m) => !query || m.name.toLowerCase().includes(query))
+    .sort((a, b) => (b.id === last) - (a.id === last) || a.name.localeCompare(b.name));
+  $("#map-list").replaceChildren(...shown.map((m) => h("button", {
+    type: "button", role: "option", class: "gb-pick", "data-id": m.id, "data-name": m.name, "aria-selected": String(m.id === mapId),
+    onclick: () => { chooseMap(m.id); picker.close(); },
+  }, h("span", { class: "name" }, m.name), m.id === last ? h("span", { class: "gb-tag" }, "Last played") : null,
+    h("span", { class: "tick", "aria-hidden": "true" }, "✓"))));
+  $("#map-empty").hidden = shown.length > 0;
+}
+
+$("#map-search").addEventListener("input", renderMaps);
+$("#map-button").addEventListener("click", () => {
+  $("#map-search").value = "";
+  renderMaps();
+  picker.showModal();
+});
+
 try {
-  const maps = await activeMaps();
-  select.replaceChildren(...(maps.length
-    ? maps.map((map) => h("option", { value: map.id }, map.name))
-    : [h("option", { value: "" }, "No maps yet")]));
+  maps = await activeMaps();
+  if (maps.length) {
+    const last = remembered();
+    chooseMap(maps.some((m) => m.id === last) ? last : [...maps].sort((a, b) => a.name.localeCompare(b.name))[0].id);
+    $("#map-button").disabled = false;
+    $("#map-search").hidden = maps.length <= 6; // search only once there are lots
+    renderMaps();
+  } else {
+    $("#map-name").textContent = "No maps yet";
+  }
 } catch (error) {
-  select.replaceChildren(h("option", { value: "" }, "Couldn't load maps"));
+  $("#map-name").textContent = "Couldn't load maps";
   showError(error);
 }
 
 $("#play-button").addEventListener("click", (event) => busy(event.currentTarget, async () => {
-  if (!select.value) throw new Error("Choose a map first");
-  const game = await createGame(mode, select.value);
+  if (!mapId) throw new Error("Choose a map first");
+  const game = await createGame(mode, mapId);
+  try { localStorage.setItem(LAST_MAP, mapId); } catch { /* fine without */ }
   location.href = gamePageUrl({ ...game, status: game.type === "single_player" ? "in_play" : "lobby" }, { isHost: true });
 }));
 
