@@ -27,7 +27,7 @@ async function newMap(element, zoom = WORLD.zoom) {
     center: WORLD.center, zoom, minZoom: 1, worldCopyJump: true,
     zoomControl: false, attributionControl: true, zoomSnap: 0.5,
   });
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     subdomains: "abcd", maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
@@ -70,6 +70,9 @@ export async function createGuessMap(element, me, onPick) {
       marker = null;
       map.setView(WORLD.center, WORLD.zoom);
     },
+    getView: () => ({ center: { lat: map.getCenter().lat, lng: map.getCenter().lng }, zoom: map.getZoom() }),
+    setView(center, zoom) { map.setView([center.lat, center.lng], zoom, { animate: false }); },
+    world() { map.setView(WORLD.center, WORLD.zoom, { animate: false }); },
   };
 }
 
@@ -80,8 +83,9 @@ export async function createResultsMap(element) {
     for (const item of drawn) item.remove();
     drawn = [];
   };
-  function show({ targets = [], guesses = [] }) {
+  function show({ targets = [], guesses = [], inset = {} }) {
     clear();
+    const pad = { top: 60, right: 40, bottom: 40, left: 40, ...inset };
     const points = [];
     for (const guess of guesses) {
       if (!guess.target) continue;
@@ -97,8 +101,12 @@ export async function createResultsMap(element) {
       drawn.push(htmlMarker(L, map, [guess.lat, guess.lng], pinElement(guess.player, guess.colour, { me: guess.me }), guess.me ? 12 : 11));
       points.push([guess.lat, guess.lng]);
     }
-    if (targets.length + guesses.length === 1) map.setView(points[0], 5);
-    else if (points.length) map.fitBounds(L.latLngBounds(points), { paddingTopLeft: [40, 60], paddingBottomRight: [40, 40], maxZoom: 12 });
+    if (targets.length + guesses.length === 1) {
+      map.setView(points[0], 5, { animate: false });
+      map.panBy([0, (pad.bottom - pad.top) / 2], { animate: false });
+    } else if (points.length) {
+      map.fitBounds(L.latLngBounds(points), { paddingTopLeft: [pad.left, pad.top], paddingBottomRight: [pad.right, pad.bottom], maxZoom: 12, animate: false });
+    }
   }
   return { map, show, clear };
 }

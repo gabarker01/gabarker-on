@@ -7,20 +7,21 @@ import { GOOGLE_MAPS_KEY } from "./config.js";
 import { avatar } from "./players.js";
 import { haptic, replay } from "./motion.js";
 
-// Midnight: the map in the app's colours. Roads and labels stay readable;
+// Fog: a quiet light map in the app's colours. Roads and labels stay readable;
 // businesses and transit are hidden so the map doesn't give places away.
-const DARK_STYLE = [
-  { elementType: "geometry", stylers: [{ color: "#1B2A47" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8FA3C7" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#0B1426" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0A1324" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4F6182" }] },
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#33476E" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#A9B9D6" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#1D2D4C" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2A3D63" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7F93B8" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#34507F" }] },
+const MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#F7F8FA" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#5E6B7D" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#FFFFFF" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#D3DEEA" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#7D8CA0" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#BFCAD6" }] },
+  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#2A3647" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#F1F3F5" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#FFFFFF" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#E1E6EC" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#6B7787" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#FBE3D8" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
 ];
@@ -30,8 +31,8 @@ const WORLD = {
   zoom: 1,
   minZoom: 1,
   restriction: { latLngBounds: { north: 85, south: -85, east: 180, west: -180 } },
-  styles: DARK_STYLE,
-  backgroundColor: "#0A1324",
+  styles: MAP_STYLE,
+  backgroundColor: "#D3DEEA",
   mapTypeControl: false,
   streetViewControl: false,
   fullscreenControl: false,
@@ -121,7 +122,7 @@ export function dropIn(pin) {
 export function targetElement(place) {
   const el = document.createElement("div");
   el.className = "gb-target";
-  el.innerHTML = '<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="10" fill="none" stroke="#fff" stroke-width="2.4"/><circle cx="17" cy="17" r="4" fill="#fff"/><path d="M17 2v6M17 26v6M2 17h6M26 17h6" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  el.innerHTML = '<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="10" fill="none" stroke="#0E1726" stroke-width="2.4"/><circle cx="17" cy="17" r="4" fill="#0E1726"/><path d="M17 2v6M17 26v6M2 17h6M26 17h6" stroke="#0E1726" stroke-width="2.4" stroke-linecap="round"/></svg>';
   if (place) {
     const label = document.createElement("span");
     label.textContent = place;
@@ -154,6 +155,15 @@ export async function createGuessMap(element, me, onPick) {
       pick = null;
       marker?.setMap(null);
       marker = null;
+      map.setCenter(WORLD.center);
+      map.setZoom(WORLD.zoom);
+    },
+    getView: () => ({ center: { lat: map.getCenter().lat(), lng: map.getCenter().lng() }, zoom: map.getZoom() }),
+    setView(center, zoom) {
+      map.setCenter(center);
+      map.setZoom(zoom);
+    },
+    world() {
       map.setCenter(WORLD.center);
       map.setZoom(WORLD.zoom);
     },
@@ -206,8 +216,10 @@ export async function createResultsMap(element) {
     for (const item of drawn) item.setMap(null);
     drawn = [];
   };
-  // targets: [{ lat, lng, place }]; guesses: [{ lat, lng, target, player, colour, me }]
-  function show({ targets = [], guesses = [] }) {
+  // targets: [{ lat, lng, place }]; guesses: [{ lat, lng, target, player, colour, me }];
+  // inset: room to leave for cards floating over the map, in px.
+  function show({ targets = [], guesses = [], inset = {} }) {
+    const pad = { top: 60, right: 40, bottom: 40, left: 40, ...inset };
     clear();
     const bounds = new maps.LatLngBounds();
     for (const guess of guesses) {
@@ -230,8 +242,9 @@ export async function createResultsMap(element) {
     if (points === 1) {
       map.setCenter(targets[0] || guesses[0]);
       map.setZoom(5);
+      map.panBy(0, (pad.bottom - pad.top) / 2);
     } else if (points > 1) {
-      map.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
+      map.fitBounds(bounds, pad);
     }
   }
   return { map, show, clear };

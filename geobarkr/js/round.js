@@ -5,7 +5,7 @@ import { $, h, busy, markNew } from "./ui.js";
 import { countUp, replay } from "./motion.js";
 import { createResultsMap } from "./maps.js";
 import { avatar, colourMap } from "./players.js";
-import { formatTime, formatDistance, formatScore } from "./geo.js";
+import { formatTime, formatDistance, formatScore, ordinal } from "./geo.js";
 import { nextRound, resultsUrl } from "./api.js";
 
 // The host's Next round / See results button.
@@ -68,9 +68,11 @@ export class ResultsPanel {
     } else if (state.me.is_player) {
       const km = h("span", { class: "km" }, mine ? `${formatDistance(mine.distance_km)} km away` : "0 points");
       const pts = mine ? h("span", { class: "pts" }, `+${formatScore(mine.score)}`) : null;
+      const place = guessed.size > 1 && mine ? [...guessed.values()].sort((a, b) => b.score - a.score).findIndex((g) => g.user_id === meId) + 1 : 0;
       summary.replaceChildren(
         h("div", { class: "k" }, mine ? "You were" : "You didn't guess this round"),
-        h("div", { class: "row" }, km, pts));
+        h("div", { class: "row" }, km, pts),
+        mine ? h("div", { class: "meta" }, [`Guessed in ${formatTime(mine.time_ms)}`, place ? `${ordinal(place)} of ${guessed.size} this round` : null].filter(Boolean).join(" · ")) : null);
       // The reveal: your distance and points count up as the sheet arrives.
       if (fresh && mine) {
         countUp(km, mine.distance_km, (v) => `${formatDistance(v)} km away`);
@@ -84,14 +86,16 @@ export class ResultsPanel {
       summary.replaceChildren(h("div", { class: "k" }, "Nobody guessed this round"));
     }
 
-    // Everyone, closest first; anyone who didn't guess at the bottom.
+    // Everyone, best score first (closest), anyone who didn't guess at the
+    // bottom: distance and time under the name, a bar for the points.
     const rows = state.players.map((p) => ({ p, g: guessed.get(p.user_id) }))
       .sort((a, b) => (a.g?.distance_km ?? Infinity) - (b.g?.distance_km ?? Infinity));
-    $("#results-ranked", root).replaceChildren(...(state.players.length > 1 ? rows.map(({ p, g }) => h("div", { class: `gb-line${p.user_id === meId ? " is-me" : ""}` },
+    const best = Math.max(1, ...[...guessed.values()].map((g) => g.score));
+    $("#results-ranked", root).replaceChildren(...(state.players.length > 1 ? rows.map(({ p, g }) => h("div", { class: `gb-bar-row${p.user_id === meId ? " is-me" : ""}`, style: `--c:${colours.get(p.user_id)}` },
       avatar(p, colours.get(p.user_id), 28),
-      h("div", { class: "grow" }, h("b", {}, p.user_id === meId ? `${p.name} (you)` : p.name)),
-      h("span", { class: "km" }, g ? `${formatDistance(g.distance_km)} km` : "No guess"),
-      h("span", { class: "pts" }, g ? `+${formatScore(g.score)}` : "0"))) : []));
+      h("div", { class: "who" }, h("b", {}, p.name), h("span", {}, g ? `${formatDistance(g.distance_km)} km · ${formatTime(g.time_ms)}` : "No guess")),
+      h("div", { class: "gb-bar" }, h("i", { style: `width:${g ? Math.max(4, (g.score / best) * 100) : 0}%` })),
+      h("span", { class: "pts" }, g ? formatScore(g.score) : "0"))) : []));
 
     const go = $("#continue", root);
     go.hidden = !button;
@@ -109,7 +113,10 @@ export class ResultsPanel {
       try {
         this.mapPromise ||= createResultsMap($("#results-map", root));
         const map = await this.mapPromise;
+        const info = $(".gb-results-info", root).getBoundingClientRect();
+        const wide = window.innerWidth >= 900;
         map.show({
+          inset: wide ? { top: 90, right: info.width + 50, bottom: 40, left: 40 } : { top: 80, bottom: info.height + 30 },
           targets: target ? [{ ...target, place: state.round.place }] : [],
           guesses: [...guessed.values()].map((g) => ({
             lat: g.lat, lng: g.lng, target, player: playerOf(state, g.user_id), colour: colours.get(g.user_id), me: g.user_id === meId,

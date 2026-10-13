@@ -9,7 +9,6 @@ import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js";
 import { setupTopbar, renderTopbar } from "../game-chrome.js";
 import { ME_COLOUR } from "../players.js";
 import { formatCoords } from "../geo.js";
-import { draggableSheet } from "../sheet.js";
 import { haptic } from "../motion.js";
 
 const { profile } = await initPage({ demoNote: false });
@@ -23,6 +22,37 @@ const mapPromise = createGuessMap($("#map"), me, (pick) => {
   $("#coords").textContent = formatCoords(pick.lat, pick.lng);
   updateGuessButton();
 });
+
+// ---------- The map bubble: tucked in the corner, or open as a card ----------
+const panel = $("#guess-panel");
+let openView = null; // where the open map was looking, to go back to it
+let mapReady = null;
+mapPromise.then((map) => { mapReady = map; }).catch(() => {});
+function setPanel(state) {
+  const was = panel.dataset.state;
+  if (was === state) return;
+  const map = mapReady; // null until the map has loaded: just switch the panel
+  if (was === "open" && map) openView = map.getView();
+  panel.dataset.state = state;
+  if (!map) return;
+  const pick = map.getPick();
+  if (state === "bubble") {
+    // The bubble shows your pin up close once you've placed one, else the world.
+    if (pick) map.setView(pick, 4);
+    else map.world();
+  } else if (state === "open" && openView) {
+    map.setView(openView.center, openView.zoom);
+  }
+  $("#quick-guess").hidden = !pick;
+  $("#open-hint").hidden = Boolean(pick);
+}
+const openMap = () => setPanel("open");
+$("#open-map").addEventListener("click", openMap);
+$("#open-hint").addEventListener("click", openMap);
+$("#shrink").addEventListener("click", () => setPanel("bubble"));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && panel.dataset.state === "open" && !document.querySelector("dialog[open]")) setPanel("bubble");
+});
 Promise.all([panoPromise, mapPromise]).catch((error) => {
   $("#pano").replaceChildren(h("p", { class: "gb-pano-msg" }, error.message));
   $("#map").replaceChildren(h("p", { class: "gb-pano-msg" }, "No map without the Google Maps key"));
@@ -32,22 +62,18 @@ let roundNumber = null;
 let submitting = false;
 
 function updateGuessButton() {
-  mapPromise.then((map) => { $("#guess").disabled = submitting || !map.getPick(); }).catch(() => {});
+  mapPromise.then((map) => {
+    $("#guess").disabled = submitting || !map.getPick();
+    $("#quick-guess").disabled = submitting;
+  }).catch(() => {});
 }
 
 $("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
-const sheet = draggableSheet($("#sheet"), $("#sheet-handle"), {
-  onChange(expanded) {
-    $("#expand").setAttribute("aria-expanded", String(expanded));
-    $("#expand").setAttribute("aria-label", expanded ? "Make the map smaller" : "Make the map bigger");
-  },
-});
-$("#expand").addEventListener("click", () => sheet.set(!sheet.expanded));
 
 const watcher = watchGameState(gameId, render, pageError);
 
 // Stays disabled after a guess is sent (until the next round): no double sends.
-$("#guess").addEventListener("click", async () => {
+async function sendGuess() {
   const pick = (await mapPromise).getPick();
   if (!pick || submitting) return;
   submitting = true;
@@ -55,14 +81,15 @@ $("#guess").addEventListener("click", async () => {
   try {
     await submitGuess(gameId, pick.lat, pick.lng);
     haptic(12);
-    sheet.set(false);
     watcher.refresh();
   } catch (error) {
     submitting = false;
     updateGuessButton();
     showError(error);
   }
-});
+}
+$("#guess").addEventListener("click", sendGuess);
+$("#quick-guess").addEventListener("click", sendGuess);
 
 $("#end-round").addEventListener("click", () => busy($("#end-round"), async () => {
   await endRound(gameId);
@@ -89,19 +116,23 @@ async function render(state) {
     submitting = false;
     results.close();
     (await mapPromise.catch(() => null))?.reset();
+    openView = null;
     $("#coords").textContent = "Tap the map to place it";
+    $("#quick-guess").hidden = true;
+    $("#open-hint").hidden = false;
+    panel.dataset.state = "bubble";
     updateGuessButton();
   }
   if (round.target) panoPromise.then((pano) => pano.show(round.target)).catch(() => {});
 
   const mine = guesses.find((g) => g.user_id === who.user_id);
   const guessing = round.status === "in_progress" && !mine;
-  $("#map-box").hidden = !guessing;
-  $("#readout").hidden = !guessing;
-  $("#guess").hidden = !guessing;
   $("#waiting").hidden = guessing || solo;
   $("#end-round").hidden = solo || !game.is_host || round.status !== "in_progress";
-  if (!guessing && sheet.expanded) sheet.set(false);
+  // After your guess (multiplayer): the card shows who has guessed so far;
+  // back to the bubble once the round is over.
+  if (!guessing && !solo && round.status === "in_progress") panel.dataset.state = "done";
+  else if (round.status !== "in_progress" && panel.dataset.state === "done") panel.dataset.state = "bubble";
 
   renderGuessList($("#guess-list"), state);
   $("#progress").textContent = `${guesses.length} of ${players.length} have guessed`;

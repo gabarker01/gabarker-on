@@ -14,8 +14,8 @@ const ROUTES = [["london", "ny"], ["london", "tokyo"], ["paris", "sydney"], ["ny
 const at = (k) => ({ lat: CITIES[k][0], lng: CITIES[k][1] });
 drawWorld($("#signin-map"), {
   view: { lat: 28, lng: 10, zoom: 0.25 },
-  arcs: ROUTES.map(([a, b]) => ({ from: at(a), to: at(b), colour: "#7CC4FF", width: 1.5, opacity: 0.75 })),
-  dots: Object.keys(CITIES).map((k) => ({ ...at(k), colour: "#7CC4FF", r: 2.6 })),
+  arcs: ROUTES.map(([a, b]) => ({ from: at(a), to: at(b), colour: "#5E6B7D", width: 1.5, opacity: 0.75 })),
+  dots: Object.keys(CITIES).map((k) => ({ ...at(k), colour: "#5E6B7D", r: 2.6 })),
 });
 
 // Only ever return to a GeoBarkr page.
