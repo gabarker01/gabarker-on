@@ -284,6 +284,7 @@ a:hover { text-decoration: underline; }
 .gb-qr { width: 160px; flex: none; background: #fff; padding: 8px; border-radius: 14px; border: 1px solid var(--line); }
 .gb-qr svg { display: block; width: 100%; height: auto; }
 .gb-share { min-height: 52px; border-radius: 16px; }
+.gb-btn.gb-cancel { margin-top: 10px; color: var(--danger); border-color: var(--line); }
 .gb-roomcode { font-size: 2.5rem; font-weight: 650; letter-spacing: 0.12em; line-height: 1; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) {
   .gb-lobby { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: start; }
@@ -317,8 +318,9 @@ a:hover { text-decoration: underline; }
 .gb-sv-embed { position: absolute; left: 0; top: -90px; width: 100%; height: calc(100% + 90px); border: 0; }
 .gb-pano:has(.gb-sv-embed), .gb-sv:has(.gb-sv-embed) { overflow: hidden; }
 .gb-pano-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+/* Over Street View: back-to-start top left, compass top right. */
 .gb-recentre {
-  position: absolute; left: 12px; bottom: 34px; z-index: 4;
+  position: absolute; left: 12px; top: 12px; z-index: 4;
   width: 44px; height: 44px; display: grid; place-items: center;
   border-radius: 12px; border: 1px solid var(--edge); background: var(--material); color: var(--text); cursor: pointer;
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); transition: transform 0.16s var(--ease-out);
@@ -371,9 +373,18 @@ a:hover { text-decoration: underline; }
 }
 .gb-pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--me); }
 /* The host can end the round from anywhere on the play screen. */
-.gb-end-pill { position: absolute; z-index: 6; top: calc(62px + env(safe-area-inset-top)); right: 14px; padding: 10px 14px; font-size: 0.875rem; }
+.gb-end-pill { position: absolute; z-index: 6; top: calc(124px + env(safe-area-inset-top)); right: 14px; padding: 10px 14px; font-size: 0.875rem; }
 .gb-pill-btn { min-height: 50px; padding: 0 26px; border-radius: 999px; box-shadow: 0 8px 22px rgba(14, 23, 38, 0.3); }
-.gb-game.play .gb-recentre { left: 14px; bottom: calc(30px + env(safe-area-inset-bottom)); border-radius: 50%; width: 48px; height: 48px; top: auto; }
+.gb-recentre { border-radius: 50%; width: 48px; height: 48px; box-shadow: 0 4px 14px rgba(14, 23, 38, 0.18); }
+.gb-compass {
+  position: absolute; right: 12px; top: 12px; z-index: 4; width: 48px; height: 48px; border-radius: 50%; color: var(--text);
+  background: var(--material); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border: 1px solid var(--edge); box-shadow: 0 4px 14px rgba(14, 23, 38, 0.18); pointer-events: none;
+}
+.gb-compass svg { display: block; width: 100%; height: 100%; }
+.gb-compass .dial { transform-origin: 24px 24px; transition: transform 0.12s linear; }
+.gb-game.play .gb-recentre { top: calc(66px + env(safe-area-inset-top)); left: 14px; }
+.gb-game.play .gb-compass { top: calc(66px + env(safe-area-inset-top)); right: 14px; }
 @media (min-width: 900px) {
   .gb-guess[data-state="open"] { width: min(520px, 46vw); right: 18px; height: min(640px, calc(100% - 110px)); }
   .gb-guess[data-state="done"] { width: 420px; right: 18px; }
@@ -580,7 +591,18 @@ a:hover { text-decoration: underline; }
   border: 0; border-radius: 26px; background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(14, 23, 38, 0.3); overflow-y: auto;
 }
 .gb-help[open] { animation: gb-sheet-in 0.45s var(--ease-out) both; }
-.gb-help::backdrop { background: rgba(14, 23, 38, 0.35); }
+.gb-help::backdrop { background: rgba(14, 23, 38, 0.35); animation: gb-fade 0.3s ease both; }
+@keyframes gb-sheet-out { to { transform: translateY(110%); } }
+@keyframes gb-fade-out { to { opacity: 0; } }
+.gb-help.is-closing { animation: gb-sheet-out 0.3s cubic-bezier(0.4, 0, 1, 1) both; }
+.gb-help.is-closing::backdrop { animation: gb-fade-out 0.3s ease both; }
+@media (min-width: 700px) {
+  .gb-help[open] { animation: gb-pop-in 0.35s var(--ease-out) both; }
+  .gb-help.is-closing { animation: gb-pop-out 0.22s ease-in both; }
+}
+@keyframes gb-pop-in { from { opacity: 0; transform: translateY(16px) scale(0.97); } }
+@keyframes gb-pop-out { to { opacity: 0; transform: translateY(10px) scale(0.98); } }
+.gb-picker[open] .gb-pick { animation: gb-rise 0.35s var(--ease-out) both; animation-delay: calc(0.08s + var(--i, 0) * 25ms); }
 .gb-help-head {
   position: sticky; top: -18px; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 12px;
   margin: -18px -20px 6px; padding: 16px 14px 10px 20px; background: var(--surface);
@@ -597,6 +619,32 @@ a:hover { text-decoration: underline; }
 .gb-help-table .r { text-align: right; }
 .gb-help-foot { margin: 14px 0 0; font-size: 0.875rem; }
 @media (min-width: 700px) { .gb-help { margin: auto; } }
+
+/* First load: the start screen settles in (map, then your places, then the
+   sheet and its controls one after another); other pages rise in gently. */
+@keyframes gb-rise { from { opacity: 0; transform: translateY(16px); } }
+@keyframes gb-settle { from { opacity: 0; transform: scale(1.04); } }
+@keyframes gb-drop-in { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes gb-pop-dot { from { transform: scale(0); } }
+body.is-ready > main:not(.gb-home):not(.gb-game) { animation: gb-rise 0.45s var(--ease-out) both; }
+body.is-ready .gb-home-map { animation: gb-settle 1s var(--ease-out) both; }
+body.is-ready .gb-home-map circle { transform-box: fill-box; transform-origin: center; animation: gb-pop-dot 0.45s 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+body.is-ready .gb-home-chip { animation: gb-drop-in 0.45s 0.55s var(--ease-out) both; }
+body.is-ready .gb-home-sheet { animation: gb-rise 0.6s 0.1s var(--ease-out) both; }
+body.is-ready .gb-home-sheet > * { animation: gb-rise 0.5s var(--ease-out) both; }
+body.is-ready .gb-home-sheet > :nth-child(2) { animation-delay: 0.18s; }
+body.is-ready .gb-home-sheet > :nth-child(3) { animation-delay: 0.24s; }
+body.is-ready .gb-home-sheet > :nth-child(4) { animation-delay: 0.3s; }
+body.is-ready .gb-home-sheet > :nth-child(5) { animation-delay: 0.36s; }
+body.is-ready .gb-home-sheet > :nth-child(6) { animation-delay: 0.42s; }
+body.is-ready .gb-home-sheet > :nth-child(7) { animation-delay: 0.48s; }
+body.is-ready .gb-home-sheet > :nth-child(n+8) { animation-delay: 0.54s; }
+
+/* Loading: app pages stay blank until they're ready, then fade in, so
+   nothing half-drawn shows. A page can never stay hidden for long. */
+body:has(> script[src*="/js/pages/"]) > main { transition: opacity 0.35s ease; }
+body:has(> script[src*="/js/pages/"]):not(.is-ready) > main { opacity: 0; animation: gb-unhide 0s 5s forwards; }
+@keyframes gb-unhide { to { opacity: 1; } }
 
 /* Misc */
 .gb-toast {
@@ -621,7 +669,10 @@ a:hover { text-decoration: underline; }
 /* Reduced motion: no sliding or scaling; things fade instead. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-property: opacity, color, background-color, visibility !important; }
-  .gb-line.is-new, .gb-results.is-new .gb-results-info, .gb-results.is-new .gb-bar i, .gb-pin.is-dropping .gb-av { animation: gb-fade 0.2s ease both !important; }
+  .gb-line.is-new, .gb-results.is-new .gb-results-info, .gb-results.is-new .gb-bar i, .gb-pin.is-dropping .gb-av,
+  body.is-ready > main, body.is-ready .gb-home-map, body.is-ready .gb-home-sheet, body.is-ready .gb-home-sheet > *, body.is-ready .gb-home-chip,
+  .gb-help[open], .gb-picker[open] .gb-pick { animation: gb-fade 0.2s ease both !important; }
+  body.is-ready .gb-home-map circle { animation: none !important; }
   .gb-btn:active:not(:disabled), .gb-me:active, .gb-expand:active, .gb-recentre:active { transform: none; }
   .gb-menu, .gb-toast { transform: none; }
   .gb-toast.is-shown, .gb-toast { transform: translateX(-50%); }

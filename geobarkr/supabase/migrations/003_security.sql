@@ -99,6 +99,7 @@ grant execute on function
   public.create_game(public.game_type, uuid),
   public.join_game(text),
   public.start_game(uuid),
+  public.cancel_game(uuid),
   public.submit_guess(uuid, double precision, double precision),
   public.end_round(uuid),
   public.next_round(uuid),

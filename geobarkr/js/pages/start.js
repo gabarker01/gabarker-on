@@ -1,16 +1,17 @@
 // The start screen (ServiceNow: the "Start Game" record producer): the places
 // you've played on a world map, a Resume strip for a game in progress, then
 // choose how to play, pick a map and press Play, or join with a room code.
-import { initPage, $, h, busy, showError, codeInput, closeButton } from "../ui.js";
-import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js";
-import { drawWorld } from "../worldmap.js";
-import { ME_COLOUR } from "../players.js";
-import { GAME_TYPES, formatScore } from "../geo.js";
+import { initPage, $, h, busy, showError, codeInput, closeButton, pageReady, param, toast, sheetDialog } from "../ui.js?v=11";
+import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js?v=11";
+import { drawWorld } from "../worldmap.js?v=11";
+import { ME_COLOUR } from "../players.js?v=11";
+import { GAME_TYPES, formatScore } from "../geo.js?v=11";
 
-await initPage();
+// Held until the map, your places and the map list are in, so nothing pops in.
+await initPage({ hold: true });
 
 // ---------- Your places, and a game to resume ----------
-(async () => {
+const placesShown = (async () => {
   let games = [];
   try { games = await myGames(); } catch { /* the map still draws */ }
   const seen = new Map();
@@ -36,7 +37,7 @@ await initPage();
       h("span", { class: "go" }, "Resume"));
     resume.hidden = false;
   }
-})();
+})().catch(() => {});
 
 // ---------- How to play, map, Play ----------
 const NOTES = {
@@ -60,8 +61,8 @@ const remembered = () => { try { return localStorage.getItem(LAST_MAP); } catch 
 let maps = [];
 let mapId = null;
 const picker = $("#map-picker");
-$("#map-picker-close").replaceWith(closeButton(() => picker.close()));
-picker.addEventListener("click", (event) => { if (event.target === picker) picker.close(); });
+const closePicker = sheetDialog(picker);
+$("#map-picker-close").replaceWith(closeButton(closePicker));
 
 function chooseMap(id) {
   mapId = id;
@@ -74,9 +75,14 @@ function renderMaps() {
   const shown = maps
     .filter((m) => !query || m.name.toLowerCase().includes(query))
     .sort((a, b) => (b.id === last) - (a.id === last) || a.name.localeCompare(b.name));
-  $("#map-list").replaceChildren(...shown.map((m) => h("button", {
+  $("#map-list").replaceChildren(...shown.map((m, i) => h("button", {
     type: "button", role: "option", class: "gb-pick", "data-id": m.id, "data-name": m.name, "aria-selected": String(m.id === mapId),
-    onclick: () => { chooseMap(m.id); picker.close(); },
+    style: `--i:${Math.min(i, 12)}`,
+    onclick: (event) => {
+      chooseMap(m.id);
+      for (const b of $("#map-list").children) b.setAttribute("aria-selected", String(b === event.currentTarget));
+      setTimeout(closePicker, 120); // let the tick show first
+    },
   }, h("span", { class: "name" }, m.name), m.id === last ? h("span", { class: "gb-tag" }, "Last played") : null,
     h("span", { class: "tick", "aria-hidden": "true" }, "✓"))));
   $("#map-empty").hidden = shown.length > 0;
@@ -95,7 +101,6 @@ try {
     const last = remembered();
     chooseMap(maps.some((m) => m.id === last) ? last : [...maps].sort((a, b) => a.name.localeCompare(b.name))[0].id);
     $("#map-button").disabled = false;
-    $("#map-search").hidden = maps.length <= 6; // search only once there are lots
     renderMaps();
   } else {
     $("#map-name").textContent = "No maps yet";
@@ -103,6 +108,13 @@ try {
 } catch (error) {
   $("#map-name").textContent = "Couldn't load maps";
   showError(error);
+}
+
+await Promise.race([placesShown, new Promise((done) => setTimeout(done, 2500))]);
+pageReady();
+if (param("cancelled")) {
+  toast("That game was cancelled by its host.");
+  history.replaceState(null, "", "/geobarkr/");
 }
 
 $("#play-button").addEventListener("click", (event) => busy(event.currentTarget, async () => {

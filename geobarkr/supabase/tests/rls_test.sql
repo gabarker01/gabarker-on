@@ -156,6 +156,24 @@ select from (select test.act_as(test.id('bob'))) s;
 select from (select public.start_game(test.id('online'))) s;
 reset role;
 
+-- Cancelling a lobby: host only, before it starts; nobody can join after.
+select from (select test.act_as(test.id('bob'))) s;
+insert into test.ids select 'called_off', (public.create_game('multiplayer', test.id('map')) ->> 'id')::uuid;
+reset role;
+select from (select set_config('test.code2', (select code from public.games where id = test.id('called_off')), false)) s;
+select from (select test.act_as(test.id('carol'))) s;
+select from (select public.join_game(current_setting('test.code2'))) s;
+select test.expect_error($$select public.cancel_game(test.id('called_off'))$$, 'Only the host');
+reset role;
+select from (select test.act_as(test.id('bob'))) s;
+select from (select public.cancel_game(test.id('called_off'))) s;
+select test.eq(public.get_game_state(test.id('called_off')) #>> '{game,status}', 'cancelled', 'host can cancel a lobby');
+select test.expect_error($$select public.cancel_game(test.id('online'))$$, 'already started');
+reset role;
+select from (select test.act_as(test.id('dave'))) s;
+select test.expect_error($$select public.join_game(current_setting('test.code2'))$$, 'was cancelled');
+reset role;
+
 select from (select test.act_as(test.id('dave'))) s;
 select test.expect_error($$select public.join_game(current_setting('test.code'))$$, 'already started');
 reset role;
@@ -237,7 +255,7 @@ reset role;
 select from (select test.act_as(test.id('admin'))) s;
 select test.eq((select count(*) from public.locations), 10::bigint, 'admin reads locations');
 select test.eq((select count(*) from public.rounds) >= 15, true, 'admin reads all rounds');
-select test.eq((select count(*) from public.games), 3::bigint, 'admin reads all games');
+select test.eq((select count(*) from public.games), 4::bigint, 'admin reads all games (one cancelled)');
 select test.eq((select count(*) from public.profiles), 4::bigint, 'admin reads all profiles');
 insert into public.maps (id, name) values ('11111111-1111-1111-1111-111111111111', 'Admin map');
 insert into public.locations (map_id, name, round_number, lat, lng) values ('11111111-1111-1111-1111-111111111111', 'Somewhere', 1, 10, 10);

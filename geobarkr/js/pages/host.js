@@ -1,12 +1,12 @@
 // In person, the host screen (ServiceNow page "play_localmulti"): Street View
 // for the room, the live list of who has guessed (with the guess sound), and
 // the round results with the host's buttons.
-import { initPage, $, h, busy, param, pageError } from "../ui.js";
-import { endRound, gamePageUrl, resultsUrl } from "../api.js";
-import { watchGameState } from "../live.js";
-import { createPanorama } from "../maps.js";
-import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js";
-import { setupTopbar, renderTopbar } from "../game-chrome.js";
+import { initPage, $, h, busy, param, pageError } from "../ui.js?v=11";
+import { endRound, gamePageUrl, resultsUrl } from "../api.js?v=11";
+import { watchGameState } from "../live.js?v=11";
+import { createPanorama } from "../maps.js?v=11";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=11";
+import { setupTopbar, renderTopbar, setupCompass } from "../game-chrome.js?v=11";
 
 await initPage({ demoNote: false });
 setupTopbar();
@@ -25,6 +25,7 @@ function playSound() {
 }
 $("#sound").addEventListener("click", playSound);
 $("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
+setupCompass(panoPromise, $(".gb-sv"));
 
 let roundNumber = null;
 let seenGuesses = null;

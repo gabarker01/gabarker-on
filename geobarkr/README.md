@@ -162,6 +162,10 @@ Postgres 16 and Node 22:
   Google Maps is replaced by a flat test map there. `DEMO=1 geobarkr/dev/start.sh`
   then `node geobarkr/dev/e2e-demo.mjs` checks demo mode the same way.
 
+After changing any JS or CSS, run `node geobarkr/dev/version.mjs`: it stamps a
+new version on every page and script import, so browsers don't mix new pages
+with cached old modules.
+
 If you change the SQL, rebuild `setup.sql` from the migrations and seed (the
 unit tests check it), run it again in the SQL Editor, and rerun the SQL
 tests.

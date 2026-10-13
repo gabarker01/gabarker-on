@@ -1,7 +1,7 @@
 // Page set-up (sign-in check + header) and small DOM helpers.
-import { isDemo, getSession, getProfile, signOut } from "./api.js";
-import { loadScript } from "./load.js";
-import { avatar, ME_COLOUR } from "./players.js";
+import { isDemo, getSession, getProfile, signOut } from "./api.js?v=11";
+import { loadScript } from "./load.js?v=11";
+import { avatar, ME_COLOUR } from "./players.js?v=11";
 
 // h("p", { class: "x", onclick }, "text", child…) → element. Strings become text, never HTML.
 export function h(tag, attrs = {}, ...children) {
@@ -95,7 +95,24 @@ export function signInUrl(next = location.pathname + location.search) {
 
 // "How to play": a ? button that opens a short guide. Used in the header and
 // on the game screens' top bar.
+// Sheets (<dialog>) slide up when opened and back down when closed, whether
+// closed by the X, a tap outside or Escape. Returns the animated close().
+export function sheetDialog(dialog) {
+  const close = () => {
+    if (!dialog.open || dialog.classList.contains("is-closing")) return;
+    const done = () => { dialog.classList.remove("is-closing"); dialog.close(); };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+    dialog.classList.add("is-closing");
+    dialog.addEventListener("animationend", done, { once: true });
+    setTimeout(() => { if (dialog.classList.contains("is-closing")) done(); }, 400);
+  };
+  dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
+  return close;
+}
+
 let helpDialog = null;
+let closeHelp = null;
 const X_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 export function closeButton(onClose) {
   const button = h("button", { type: "button", class: "gb-help-close", "aria-label": "Close", onclick: onClose });
@@ -108,7 +125,7 @@ function openHelp() {
     helpDialog = h("dialog", { class: "gb-help", "aria-labelledby": "gb-help-title" },
       h("div", { class: "gb-help-head" },
         h("h2", { id: "gb-help-title" }, "How to play"),
-        closeButton(() => helpDialog.close())),
+        closeButton(() => closeHelp())),
       h("ol", { class: "gb-help-steps" },
         h("li", {}, h("b", {}, "Look around. "), "You're dropped somewhere in Street View. Drag to turn, pinch to zoom, and tap the road to move. Look for signs, languages, which side people drive on, plants and the landscape."),
         h("li", {}, h("b", {}, "Guess. "), "Tap the map bubble in the corner to open the map, then tap where you think you are. Tap again to move your pin. Press Guess when you're happy."),
@@ -123,7 +140,7 @@ function openHelp() {
         h("li", {}, h("b", {}, "With friends: "), "everyone plays on their own phone; share the room code or link. Scores are revealed together when a round ends."),
         h("li", {}, h("b", {}, "Party: "), "Street View on a TV or laptop for the room, guesses on phones. The host can end a round when everyone's ready.")),
       h("p", { class: "gb-help-foot" }, h("a", { href: "/geobarkr/about/" }, "More about GeoBarkr")));
-    helpDialog.addEventListener("click", (event) => { if (event.target === helpDialog) helpDialog.close(); });
+    closeHelp = sheetDialog(helpDialog);
     document.body.append(helpDialog);
   }
   helpDialog.showModal();
@@ -171,7 +188,13 @@ function header(profile) {
 
 // Every page: signed in? then the header (and a note in demo mode).
 // Resolves to { session, profile } (never resolves if sent to sign in).
-export async function initPage({ demoNote = true } = {}) {
+// Pages fade in once they're ready (see "Loading" in the CSS). A page that
+// needs its data first passes { hold: true } and calls pageReady() itself.
+export function pageReady() {
+  document.body.classList.add("is-ready");
+}
+
+export async function initPage({ demoNote = true, hold = false } = {}) {
   const session = await getSession();
   if (!session) {
     location.replace(signInUrl());
@@ -184,7 +207,7 @@ export async function initPage({ demoNote = true } = {}) {
     document.body.append(h("p", { class: "gb-demo-note" },
       "Demo mode: games are saved on this device only, and bots play the other players."));
   }
-  document.body.classList.add("is-ready");
+  if (!hold) pageReady();
   return { session, profile };
 }
 

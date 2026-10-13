@@ -1,15 +1,15 @@
 // Solo and online play (ServiceNow pages "play" and "playmulti"): Street View,
 // the guess map with your pin, the live guesses list after you've guessed,
 // and the round results.
-import { initPage, $, h, busy, param, showError, pageError } from "../ui.js";
-import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js";
-import { watchGameState } from "../live.js";
-import { createPanorama, createGuessMap } from "../maps.js";
-import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js";
-import { setupTopbar, renderTopbar } from "../game-chrome.js";
-import { ME_COLOUR } from "../players.js";
-import { formatCoords } from "../geo.js";
-import { haptic } from "../motion.js";
+import { initPage, $, h, busy, param, showError, pageError } from "../ui.js?v=11";
+import { submitGuess, endRound, gamePageUrl, resultsUrl } from "../api.js?v=11";
+import { watchGameState } from "../live.js?v=11";
+import { createPanorama, createGuessMap } from "../maps.js?v=11";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js?v=11";
+import { setupTopbar, renderTopbar, setupCompass } from "../game-chrome.js?v=11";
+import { ME_COLOUR } from "../players.js?v=11";
+import { formatCoords } from "../geo.js?v=11";
+import { haptic } from "../motion.js?v=11";
 
 const { profile } = await initPage({ demoNote: false });
 setupTopbar();
@@ -44,11 +44,9 @@ function setPanel(state) {
     map.setView(openView.center, openView.zoom);
   }
   $("#quick-guess").hidden = !pick;
-  $("#open-hint").hidden = Boolean(pick);
 }
 const openMap = () => setPanel("open");
 $("#open-map").addEventListener("click", openMap);
-$("#open-hint").addEventListener("click", openMap);
 $("#shrink").addEventListener("click", () => setPanel("bubble"));
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && panel.dataset.state === "open" && !document.querySelector("dialog[open]")) setPanel("bubble");
@@ -69,6 +67,7 @@ function updateGuessButton() {
 }
 
 $("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
+setupCompass(panoPromise, $(".gb-sv"));
 
 const watcher = watchGameState(gameId, render, pageError);
 
@@ -119,7 +118,6 @@ async function render(state) {
     openView = null;
     $("#coords").textContent = "Tap the map to place it";
     $("#quick-guess").hidden = true;
-    $("#open-hint").hidden = false;
     panel.dataset.state = "bubble";
     updateGuessButton();
   }
@@ -128,7 +126,8 @@ async function render(state) {
   const mine = guesses.find((g) => g.user_id === who.user_id);
   const guessing = round.status === "in_progress" && !mine;
   $("#waiting").hidden = guessing || solo;
-  $("#end-round").hidden = solo || !game.is_host || round.status !== "in_progress";
+  // The host can end the round early, but only once they've guessed themselves.
+  $("#end-round").hidden = solo || !game.is_host || round.status !== "in_progress" || guessing;
   // After your guess (multiplayer): the card shows who has guessed so far;
   // back to the bubble once the round is over.
   if (!guessing && !solo && round.status === "in_progress") panel.dataset.state = "done";

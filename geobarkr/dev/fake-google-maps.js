@@ -137,7 +137,8 @@
     }
     setPosition(p) { this.position = toLatLng(p); this.draw(); }
     getPosition() { return this.position; }
-    setPov(pov) { this.pov = { ...pov }; this.draw(); }
+    setPov(pov) { this.pov = { ...pov }; this.draw(); for (const fn of this.listeners?.pov_changed || []) fn(); }
+    addListener(name, fn) { this.listeners ||= {}; (this.listeners[name] ||= []).push(fn); return { remove() {} }; }
     getPov() { return this.pov; }
     setZoom() {}
     setVisible(v) { this.visible = v; this.draw(); }

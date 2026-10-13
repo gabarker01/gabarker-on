@@ -1,6 +1,6 @@
 // The real backend: Supabase (see geobarkr/supabase/). Every game action is a
 // database function that checks who's asking; row-level security does the rest.
-import { getClient, getSession as session } from "./supabase.js";
+import { getClient, getSession as session } from "./supabase.js?v=11";
 
 async function rpc(name, args = {}) {
   const client = await getClient();
@@ -32,6 +32,7 @@ export async function signOut() {
 export const createGame = (type, mapId) => rpc("create_game", { p_type: type, p_map: mapId });
 export const joinGame = (code) => rpc("join_game", { p_code: code });
 export const startGame = (gameId) => rpc("start_game", { p_game: gameId });
+export const cancelGame = (gameId) => rpc("cancel_game", { p_game: gameId });
 export const submitGuess = (gameId, lat, lng) => rpc("submit_guess", { p_game: gameId, p_lat: lat, p_lng: lng });
 export const endRound = (gameId) => rpc("end_round", { p_game: gameId });
 export const nextRound = (gameId) => rpc("next_round", { p_game: gameId });

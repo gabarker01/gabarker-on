@@ -1,7 +1,7 @@
 // Small world maps drawn in the browser (no Google Maps): the bands on pages
 // without Street View and the game thumbnails. Same projection as Google Maps
 // (Web Mercator). Coastlines come from the file TapMap already serves.
-import { mercator, greatCircle } from "./geo.js";
+import { mercator, greatCircle } from "./geo.js?v=11";
 
 const LAND_URL = "/tapmap/land-110m.geojson";
 const SIZE = 1000; // the world is SIZE × SIZE in map units
