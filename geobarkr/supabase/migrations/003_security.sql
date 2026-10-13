@@ -117,3 +117,6 @@ drop policy if exists "game members receive game events" on realtime.messages;
 create policy "game members receive game events" on realtime.messages
   for select to authenticated
   using (realtime.messages.extension = 'broadcast' and public.can_listen((select realtime.topic())));
+
+-- Tell the API (PostgREST) to pick up new or changed functions straight away.
+notify pgrst, 'reload schema';
