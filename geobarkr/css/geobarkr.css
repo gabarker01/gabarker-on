@@ -427,6 +427,23 @@ a:hover { text-decoration: underline; }
 .gb-signin-brand { display: flex; align-items: center; gap: 10px; font-size: 1.875rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 6px; }
 @media (min-width: 900px) { .gb-signin { justify-content: center; } .gb-signin-map::after { background: radial-gradient(ellipse at center, var(--bg) 22%, rgba(11, 20, 38, 0.35) 70%); } }
 
+/* About, privacy and terms: readable text pages (public, no sign-in). */
+.gb-legal { max-width: 680px; padding-top: 18px; }
+.gb-legal .gb-title { font-size: 2.25rem; letter-spacing: -0.03em; line-height: 1.08; margin: 6px 0 14px; }
+.gb-legal h2 { font-size: 1.25rem; font-weight: 650; letter-spacing: -0.015em; margin: 34px 0 10px; }
+.gb-legal h3 { font-size: 1rem; font-weight: 650; margin: 20px 0 6px; }
+.gb-legal p, .gb-legal li { color: #C3D0E6; line-height: 1.6; }
+.gb-legal ul { padding-left: 1.2em; margin: 8px 0 12px; }
+.gb-legal li { margin: 6px 0; }
+.gb-legal li::marker { color: var(--muted); }
+.gb-legal strong { color: var(--text); font-weight: 600; }
+.gb-legal .gb-lede { color: var(--muted); }
+.gb-legal a:not(.gb-btn) { text-decoration: underline; text-decoration-color: rgba(124, 196, 255, 0.4); text-underline-offset: 3px; }
+.gb-kicker { color: var(--primary); font-size: 0.875rem; font-weight: 600; margin: 0; }
+.gb-colophon { margin: 40px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.01em; line-height: 1.8; }
+.gb-colophon a { color: var(--muted); }
+.gb-signin .gb-colophon { margin-top: 18px; border-top: 0; padding-top: 0; text-align: center; }
+
 /* Misc */
 .gb-toast {
   position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 100;
