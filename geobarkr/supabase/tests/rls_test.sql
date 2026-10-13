@@ -50,7 +50,7 @@ grant execute on function test.id(text) to anon, authenticated;
 -- ---------- Users ----------
 
 insert into auth.users (id, email, raw_user_meta_data) values
-  ('a0000000-0000-0000-0000-00000000000a', 'george@example.com', '{"full_name": "George Barker"}'),
+  ('a0000000-0000-0000-0000-00000000000a', 'george@example.com', '{"full_name": "George Barker", "avatar_url": "https://lh3.googleusercontent.com/a/photo"}'),
   ('b0000000-0000-0000-0000-00000000000b', 'bob@example.com', '{}'),
   ('c0000000-0000-0000-0000-00000000000c', 'carol@example.com', '{"name": "Carol"}'),
   ('d0000000-0000-0000-0000-00000000000d', 'dave@example.com', '{}');
@@ -63,6 +63,8 @@ insert into test.ids values
 select test.eq((select display_name from public.profiles where id = test.id('admin')), 'George Barker', 'profile named from Google full_name');
 select test.eq((select display_name from public.profiles where id = test.id('bob')), 'bob', 'profile named from email');
 select test.eq((select display_name from public.profiles where id = test.id('carol')), 'Carol', 'profile named from name');
+select test.eq((select avatar_url from public.profiles where id = test.id('admin')), 'https://lh3.googleusercontent.com/a/photo', 'Google photo kept for the pin');
+select test.eq((select avatar_url from public.profiles where id = test.id('bob')), null, 'no photo: initials');
 
 -- ---------- Scoring matches ServiceNow ----------
 
@@ -89,7 +91,7 @@ reset role;
 -- ---------- A player can't see answers or admin data ----------
 
 select from (select test.act_as(test.id('bob'))) s;
-select test.eq((select count(*) from public.maps), 1::bigint, 'player sees the active map');
+select test.eq((select count(*) from public.maps), 2::bigint, 'player sees the active maps');
 select test.eq((select count(*) from public.locations), 0::bigint, 'player cannot read locations (answers)');
 select test.eq((select count(*) from public.profiles), 1::bigint, 'player sees only own profile');
 select test.expect_error($$insert into public.maps (name) values ('Hack')$$, 'row-level security');
@@ -111,7 +113,9 @@ select test.eq(public.get_game_state(test.id('solo')) #>> '{game,status}', 'in_p
 select test.eq(public.get_game_state(test.id('solo')) #>> '{round,number}', '1', 'round 1 started');
 select test.eq((public.get_game_state(test.id('solo')) #>> '{round,target,heading}')::numeric, 120::numeric, 'single player sees the Street View target');
 -- Guess at the Eiffel Tower for 4 Medley Road.
+select test.eq(public.get_game_state(test.id('solo')) #>> '{round,place}', null, 'place name hidden during the round');
 select test.eq((public.submit_guess(test.id('solo'), 48.859, 2.296) ->> 'round_complete')::boolean, true, 'solo round ends on guess');
+select test.eq(public.get_game_state(test.id('solo')) #>> '{round,place}', '4 Medley Road', 'place name shown at results');
 select test.expect_error($$select public.submit_guess(test.id('solo'), 0, 0)$$, 'round has finished');
 select test.eq((public.get_game_state(test.id('solo')) #>> '{guesses,0,score}')::int, public.score_for_distance(public.round_distance_km(public.haversine_km(48.859, 2.296, 51.54713683719802, -0.1947690014365771))), 'score computed on the server');
 select test.eq(public.next_round(test.id('solo')), 'next', 'next round');
@@ -231,7 +235,7 @@ reset role;
 -- ---------- Admin ----------
 
 select from (select test.act_as(test.id('admin'))) s;
-select test.eq((select count(*) from public.locations), 5::bigint, 'admin reads locations');
+select test.eq((select count(*) from public.locations), 10::bigint, 'admin reads locations');
 select test.eq((select count(*) from public.rounds) >= 15, true, 'admin reads all rounds');
 select test.eq((select count(*) from public.games), 3::bigint, 'admin reads all games');
 select test.eq((select count(*) from public.profiles), 4::bigint, 'admin reads all profiles');
@@ -241,16 +245,17 @@ update public.maps set active = false where id = '11111111-1111-1111-1111-111111
 select test.expect_error($$update public.games set status = 'complete'$$, 'permission denied');
 reset role;
 select from (select test.act_as(test.id('bob'))) s;
-select test.eq((select count(*) from public.maps), 1::bigint, 'players don''t see inactive maps');
+select test.eq((select count(*) from public.maps), 2::bigint, 'players don''t see inactive maps');
 select test.expect_error($$select public.create_game('single_player', '11111111-1111-1111-1111-111111111111')$$, 'isn''t available');
 delete from public.maps;
 reset role;
-select test.eq((select count(*) from public.maps), 2::bigint, 'player delete removed nothing');
+select test.eq((select count(*) from public.maps), 3::bigint, 'player delete removed nothing');
 
 -- ---------- History and leaderboard ----------
 
 select from (select test.act_as(test.id('bob'))) s;
 select test.eq(jsonb_array_length(public.my_games()), 3, 'my games lists played and hosted games');
+select test.eq(jsonb_array_length((select g -> 'places' from jsonb_array_elements(public.my_games()) g where g ->> 'id' = test.id('solo')::text)), 5, 'my games has the five places of a finished game');
 select test.eq(public.leaderboard() #>> '{0,name}', 'Bobby', 'leaderboard ranks completed games');
 select test.eq((public.leaderboard() #>> '{0,games}')::int, 1, 'only completed games count');
 reset role;

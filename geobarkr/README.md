@@ -14,6 +14,26 @@ depending on how close you were. Five rounds a game, in three modes:
 Docs: [what was ported and how](docs/FEATURE_PARITY.md) ·
 [architecture](docs/ARCHITECTURE.md) · [design](docs/DESIGN.md)
 
+## Demo mode (before Supabase is set up)
+
+While `SUPABASE_URL` and `SUPABASE_KEY` in [`js/config.js`](js/config.js) are
+empty, the site runs in **demo mode**, so you can try it straight away:
+
+- Sign in with just a name; you're an admin, so the Admin page works too.
+- Games, scores and maps are saved in this browser only (nothing leaves the
+  device). Nobody else can join your games.
+- Three bots (Pip, Gina and Quinn) join multiplayer and in-person lobbies and
+  guess during rounds, so you can see how those modes feel on one device.
+- **No Google Maps key yet?** While `GOOGLE_MAPS_KEY` is empty, the maps
+  are OpenStreetMap (via CARTO's free dark tiles) and Street View is Google's
+  keyless embed. The embed has fewer controls, and someone curious could find
+  the place through its "View on Google Maps" link, so it's for trying the
+  game, not for scores that matter. Pasting a key (steps 7 to 9) switches to
+  the real Google map and Street View.
+
+Filling in the two Supabase settings (step 6) switches demo mode off; demo
+games stay behind in the browser and don't move across.
+
 ## How it works
 
 - **No build step.** Plain HTML, CSS and JavaScript modules served by GitHub
@@ -36,8 +56,8 @@ Docs: [what was ported and how](docs/FEATURE_PARITY.md) ·
 geobarkr/
   index.html, signin/, play/, lobby/, join/, host/, party/, results/,
   games/, leaderboard/, admin/        one folder per page
-  js/config.js                        the three public settings (step 6 and 8)
-  js/  css/  assets/  vendor/         code, styles, logo + sound, libraries
+  js/config.js                        the three public settings (steps 6 and 8)
+  js/  css/  assets/  vendor/         code, styles, sound, libraries
   supabase/setup.sql                  the whole database, to paste in (step 2)
   supabase/migrations/, seed.sql      the same, in parts
   supabase/tests/                     SQL tests (local Postgres)
@@ -139,7 +159,8 @@ Postgres 16 and Node 22:
 - `geobarkr/dev/start.sh`: the site at `http://localhost:8080/geobarkr/` with
   a local stand-in for Supabase. Then `node geobarkr/dev/e2e.mjs` plays every
   mode in several browsers at phone and desktop sizes (needs Playwright).
-  Google Maps is replaced by a flat test map there.
+  Google Maps is replaced by a flat test map there. `DEMO=1 geobarkr/dev/start.sh`
+  then `node geobarkr/dev/e2e-demo.mjs` checks demo mode the same way.
 
 If you change the SQL, rebuild `setup.sql` from the migrations and seed (the
 unit tests check it), run it again in the SQL Editor, and rerun the SQL

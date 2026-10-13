@@ -1,117 +1,99 @@
-# GeoBarkr: design plan
+# GeoBarkr: design (Midnight)
 
-Made with the `frontend-design` skill: a short plan, a review of the plan
-against generic defaults, then the build. Notes at the end record what was
-tried, for later passes.
+Made with the `frontend-design` skill: a plan, a review of the plan against
+generic defaults, then the build. The notes at the end record what was tried
+and rejected, for later passes.
 
 ## Brief
 
-- **Subject:** GeoBarkr, George's Street View guessing game. You're dropped
+- **Subject:** GeoBarkr, a Street View guessing game. You're dropped
   somewhere in the world, look around, and tap a map where you think you are.
-- **Audience:** friends and family, mostly on phones; in person, one laptop or
+- **Audience:** friends and family, mostly on phones. In person, one laptop or
   TV shows Street View to the room while everyone guesses on their phone.
 - **Primary job:** get people into a round in seconds, then make the reveal
-  (how far off you were, and the points) the moment everyone looks up for.
-- **Fixed assets:** the ServiceNow logo (red #EE0000 outlined wordmark with a
-  map pin) and the green tick-pin used for targets.
+  (where it was, how far off everyone was, the points) the moment everyone
+  looks up for.
+- **Constraints:** most of the screen on game pages is real Google imagery
+  (Street View photos, the map), so the interface must sit well on top of
+  photos of any colour. It should be light (no framework, one font), dark and
+  look made by a person, not generated. It keeps the name but drops the
+  ServiceNow red road-sign look.
 
-## Plan (first pass)
+## Plan
 
-**Idea: road signs.** Geography games are about finding your way, and the
-most familiar wayfinding objects are road signs: a green primary-route sign
-with white lettering and yellow numbers, a fingerpost pointing at
-destinations, a distance sign saying how far it is to Paris. GeoBarkr uses
-that language at its three key moments and stays quiet everywhere else.
+**Idea: a night chart.** The game is about where on Earth you are, so the
+interface is a navigator's chart at night: deep navy water, slightly lighter
+land, a faint graticule, and lines that are true great-circle routes. Your own
+pin is the one warm thing on the chart (ember), so you always find yourself
+first. Everything else stays cool and quiet so Street View carries the colour.
 
-**Colour**
+**Colour** (tokens in `css/geobarkr.css`)
 
-| Name | Hex | Use |
+| Token | Hex | Use |
 |---|---|---|
-| Pin red | `#EE0000` (pressed `#B30000`) | The logo's red: primary buttons, your guess pin |
-| Route green | `#005F35` | Signs: room code, mode chooser, round results; the target pin |
-| Route yellow | `#FFD200` | Numbers on green signs (points, room code) |
-| Ink | `#18212B` | Text |
-| Map paper | `#EDF1EC` | Page ground: the pale grey-green of a printed map's land |
-| White | `#FFFFFF` | Sign lettering and borders; working surfaces (forms, tables, maps) |
+| `--bg` | `#0B1426` | Page ground, top bars, sheets over the map |
+| `--surface` | `#111D35` | Cards, rows, inputs |
+| `--line` | `#1F2E4D` | Borders and rules |
+| `--text` / `--muted` | `#E6EEFA` / `#8597B5` | Text |
+| `--primary` | `#7CC4FF` (ink `#06101F`) | Buttons, links, focus, the room-code tail |
+| `--me` | `#FF8A5B` | Your pin, your line, your score. Used for nothing else |
+| `--water` / `--land` / `--coast` | `#0A1324` / `#1B2A47` / `#2A3D63` | Drawn world maps and the Google map style |
 
-Muted text `#56636E`, rules `#D3DBD4`.
+Other players get colours from a fixed palette in the order they joined
+(`js/players.js`), so a player is the same colour on every screen of a game.
 
-**Type:** Overpass, a Google Font based on Highway Gothic, the US road-sign
-face: it reads as signage at large sizes and stays clear at small ones. One
-family: 800 for sign lettering and headings, 600 for buttons and labels, 400
-for text. Tabular figures for every score, distance and time. Scale (roughly
-a 1.25 step): 14, 16, 20, 25, 32, and 56 for the room code. Sentence case
-everywhere, as on UK road signs.
+**Type:** Instrument Sans (one Google Font, weights 400 to 700). Tight
+negative tracking on headings, tabular figures for every score, distance,
+time and room code. Sentence case everywhere.
+
+**Maps**
+
+- Google Maps uses a dark style in the same colours (`js/maps.js`), with
+  businesses and transit hidden so labels don't give places away.
+- Pins are players' avatars (Google photo, or initials in their colour) in a
+  ring of their colour, drawn as HTML overlays. The target is a white
+  crosshair with the place name once the round is revealed.
+- Results lines are geodesic (great-circle) polylines in each player's colour.
+- Pages without Google Maps (landing, lobby, join, results, my games,
+  leaderboard, sign in) carry a **map band**: a drawn Web Mercator world map
+  (`js/worldmap.js`, land from `/tapmap/land-110m.geojson`) showing something
+  real: your last game's routes on the landing page, the rounds of a game on
+  its results, every place you've played on My games, small route thumbnails
+  on each game row.
 
 **Layout**
 
-- Start page: logo, then a fingerpost: the three game types as sign blades
-  pointing right (single player, multiplayer, in person). Picking one is
-  "choosing your route". Map choice and the Start button sit under it. Join is
-  its own short form: a room-code field shaped like a blank sign.
+- **Landing:** map band with your last game and its score, then map choice,
+  the three modes as rows (tap one to start), and the join form.
+- **Play (phone):** Street View full-bleed; a bottom sheet with the guess map
+  that expands, the coordinates of your pin, and Guess. The round reveal is
+  a full-screen sheet: map with lines, place name, ranked players.
+- **Host (laptop/TV):** Street View large, a side panel with live guesses as
+  avatars arrive, sound on each guess, End round.
+- **Party (phone):** just the map and Guess, then a status card.
+- **Lobby:** a room-code card with the QR, the code in large tabular
+  figures, the player list with avatars, Start for the owner.
 
-  ```
-  [GeoBarkr logo]
-  ┌──────────────────────────╲
-  │ Single player             ╲     ← green blades; the chosen one is
-  ├──────────────────────────╱       raised with a yellow edge
-  │ Multiplayer              ╲
-  ├──────────────────────────╱
-  │ In person                ╲
-  └──────────────────────────╱
-  Map [GeoBarkr Demo ▾]
-  [ Start game ]                     Join a game  [ A B C 1 2 3 ] [Join]
-  ```
+## Review against defaults
 
-- Game screens: Street View is the whole screen, nothing decorative. Phone:
-  Street View on top, map docked below with an expand button. Desktop: map
-  docked bottom-right over Street View.
+- *Purple gradient, glassmorphism, emoji icons, "AI startup" hero?* None. Flat
+  navy surfaces, 1px rules, no gradients except the map's own shading.
+- *Generic blue SaaS?* The blue is a pale glacier blue on near-black navy, and
+  the one warm accent is reserved for "you", so colour carries meaning.
+- *Decoration for its own sake?* Every map band shows the player's own data
+  (before your first game, the landing band is just the chart and a welcome).
+- *Works on real imagery?* The top bar and sheet are solid `--bg`, not
+  translucent, so they read the same over snow, sea or a city at night.
+- *Light enough?* One font, one stylesheet, inline SVG logo, no framework.
 
-  ```
-  phone                    desktop
-  ┌────────────────┐       ┌──────────────────────────────┐
-  │ Round 2 of 5   │       │ Round 2 of 5                 │
-  │  street view   │       │        street view           │
-  │ [⌂]            │       │                    ┌────────┐│
-  ├────────────────┤       │ [⌂]                │  map   ││
-  │      map    [⤢]│       │                    │ [Guess]││
-  │ [   Guess    ] │       └────────────────────┴────────┘┘
-  └────────────────┘
-  ```
+## Notes
 
-- The reveal: a distance sign over the results map, e.g. white "Target
-  342 km" with "+3,033" in yellow. Multiplayer shows one sign row per player,
-  sorted by distance, like the destinations stacked on a real sign.
-- Lobby: the room code is a big route sign (yellow letters on green) with the
-  QR beside it. Players are a plain list.
-- Everything else (results tables, My games, leaderboard, admin) is plain:
-  left-aligned text, right-aligned numbers, hairline rules, no cards.
-
-**Principles**
-
-1. Signs are for the moments that matter: choosing a game, sharing the code,
-   seeing how far off you were. Nowhere else.
-2. Street View and the map get the screen. Chrome stays small.
-3. Plain words: "Start game", "Guess", "Next round", "See results".
-
-## Review against generic defaults
-
-| Default it could drift into | What I changed |
-|---|---|
-| The SaaS card kit: every block in a white rounded card with the same soft shadow (my first pass did exactly this, copied from ServiceNow) | Removed. Plain sections on the map-paper ground; only signs and working surfaces have edges, and their corners differ (signs 8px with an inset white border like real sign plates; inputs and buttons 10px; maps 14px) |
-| Warm cream page with a serif display | Cool map-paper grey-green and one sans family |
-| Tracked-out ALL-CAPS labels, monospace data labels | None: sentence case like UK signs; numbers in Overpass tabular figures |
-| `→` on buttons and links | Fingerpost blades are drawn shapes, not arrows in text. Buttons say what they do |
-| A big-number hero with a gradient | The hero is the fingerpost, which is also the form |
-| Fade-in on every section | One motion: the results sign slides up when a round is revealed. The map expands when you tap the expand button |
-
-## Notes for next time
-
-- Tried first: the ServiceNow look (white cards, `rgba(0,0,0,.1)` shadows,
-  16px radius everywhere). It read as a template; replaced with the sign
-  system above.
-- Contrast (checked): the first green, `#00703C` (UK sign green), only gave
-  4.3:1 for yellow, so it was darkened to `#005F35`: white 7.8:1, yellow
-  5.4:1. White on pin red is 4.5:1 (buttons are 16px+ semibold); ink on map
-  paper 14.3:1; muted text 5.4:1. Focus rings are 3px yellow on green signs
-  and 3px ink elsewhere.
+- Tried before settling: a road-sign look (the ServiceNow port), "Sodium"
+  (amber street-light), "Passport" (paper and stamps) and a 3D globe
+  ("Graticule"). The flat graticule won; among its colour schemes Midnight
+  (C1) was picked over Graphite, Deep sea and Dusk, and two heavier redesigns
+  of it were rejected in favour of adding the map bands.
+- Date-line shapes in the land data are unwrapped rather than dropped
+  (dropping them deletes Eurasia). Antarctica is left out of the bands.
+- Great-circle points are generated with continuous longitudes so arcs that
+  cross the date line draw as one line.

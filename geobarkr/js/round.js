@@ -1,8 +1,9 @@
-// Pieces shared by the game screens: the live "Guesses this round" list and
-// the round results popup with its distance sign (ServiceNow: GeoBarkr
-// Results Popup and GeoBarkr Multiplayer Results Popup).
+// Shared by the game screens: the live "Guesses this round" list, and the
+// round results panel (map with everyone's pins and great-circle lines, then
+// a ranked list).
 import { $, h, busy } from "./ui.js";
-import { createResultsMap, guessLabel } from "./maps.js";
+import { createResultsMap } from "./maps.js";
+import { avatar, colourMap } from "./players.js";
 import { formatTime, formatDistance, formatScore } from "./geo.js";
 import { nextRound, resultsUrl } from "./api.js";
 
@@ -13,72 +14,79 @@ export async function nextRoundOrResults(gameId, watcher) {
   else watcher.refresh();
 }
 
-export function renderGuessRows(tbody, guesses) {
-  tbody.replaceChildren(...(guesses.length
-    ? guesses.map((guess) => h("tr", {}, h("td", {}, guess.name), h("td", { class: "gb-num" }, formatTime(guess.time_ms))))
-    : [h("tr", {}, h("td", { colspan: "2", class: "gb-muted" }, "No guesses yet."))]));
+export function coloursFor(state) {
+  return colourMap(state.players, state.me.user_id);
 }
 
-// Everyone's guess for the round, with their name, km and points on the map.
-export function roundGuessesForMap(state, { labels = true } = {}) {
-  const target = state.round?.target;
-  return state.guesses
-    .filter((guess) => guess.lat != null)
-    .map((guess) => ({
-      lat: guess.lat,
-      lng: guess.lng,
-      target,
-      title: guess.name,
-      label: labels ? guessLabel(guess.name, guess.distance_km, guess.score) : null,
-    }));
+const playerOf = (state, userId) => state.players.find((p) => p.user_id === userId) || { name: "Player" };
+
+export function renderGuessList(container, state) {
+  const colours = coloursFor(state);
+  container.replaceChildren(...(state.guesses.length
+    ? state.guesses.map((guess) => h("div", { class: "gb-line" },
+        avatar(playerOf(state, guess.user_id), colours.get(guess.user_id), 30),
+        h("div", { class: "grow" }, h("b", {}, guess.user_id === state.me.user_id ? `${guess.name} (you)` : guess.name)),
+        h("div", { class: "end" }, h("span", {}, formatTime(guess.time_ms)))))
+    : [h("p", { class: "gb-muted" }, "No guesses yet.")]));
 }
 
-// One distance-sign row per player, closest first; players who didn't guess last.
-export function signRows(state) {
-  const guessed = new Map(state.guesses.filter((g) => g.lat != null).map((g) => [g.user_id, g]));
-  const rows = state.players.map((player) => {
-    const guess = guessed.get(player.user_id);
-    return { name: player.name, distance_km: guess?.distance_km ?? null, score: guess?.score ?? null };
-  });
-  return rows.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity));
-}
-
-function signRow({ name, distance_km, score }) {
-  if (distance_km == null) {
-    return h("div", { class: "gb-distance-row is-none" }, h("span", { class: "gb-name" }, name), h("span", {}, "No guess"), h("span", { class: "gb-points" }, "0"));
-  }
-  return h("div", { class: "gb-distance-row" },
-    h("span", { class: "gb-name" }, name),
-    h("span", {}, `${formatDistance(distance_km)} km`),
-    h("span", { class: "gb-points" }, `+${formatScore(score)}`),
-  );
-}
-
-export class ResultsPopup {
+export class ResultsPanel {
   constructor(root = $("#results")) {
     this.root = root;
     this.mapPromise = null;
     this.shownFor = null;
   }
 
-  isShowingFor(key) {
-    return !this.root.hidden && this.shownFor === key;
+  close() {
+    this.root.hidden = true;
+    this.shownFor = null;
   }
 
-  // { key, title, targets, guesses, heading, rows, button: { label, onClick }, wait }
-  async open({ key, title, targets, guesses, heading, rows, button, wait }) {
+  // { key, title, state, button: { label, onClick }, wait }
+  async open({ key, title, state, button, wait }) {
     const root = this.root;
     const fresh = this.shownFor !== key;
     this.shownFor = key;
+    const colours = coloursFor(state);
+    const meId = state.me.user_id;
+    const target = state.round.target;
+    const guessed = new Map(state.guesses.filter((g) => g.lat != null).map((g) => [g.user_id, g]));
+
     $("#results-title", root).textContent = title;
+    $("#results-place", root).textContent = state.round.place || "";
 
-    $("#results-sign", root).replaceChildren(h("h3", {}, heading), ...rows.map(signRow));
+    // Summary: how far you were, or (for a host who isn't playing) the closest.
+    const mine = guessed.get(meId);
+    const closest = [...guessed.values()].sort((a, b) => a.distance_km - b.distance_km)[0];
+    const summary = $("#results-summary", root);
+    if (state.me.is_player) {
+      summary.replaceChildren(
+        h("div", { class: "k" }, mine ? "You were" : "You didn't guess this round"),
+        h("div", { class: "row" },
+          h("span", { class: "km" }, mine ? `${formatDistance(mine.distance_km)} km away` : "0 points"),
+          mine ? h("span", { class: "pts" }, `+${formatScore(mine.score)}`) : null));
+    } else if (closest) {
+      summary.replaceChildren(
+        h("div", { class: "k" }, "Closest"),
+        h("div", { class: "row" }, h("span", { class: "km" }, closest.name), h("span", { class: "pts" }, `${formatDistance(closest.distance_km)} km`)));
+    } else {
+      summary.replaceChildren(h("div", { class: "k" }, "Nobody guessed this round"));
+    }
 
-    const continueButton = $("#continue", root);
-    continueButton.hidden = !button;
+    // Everyone, closest first; anyone who didn't guess at the bottom.
+    const rows = state.players.map((p) => ({ p, g: guessed.get(p.user_id) }))
+      .sort((a, b) => (a.g?.distance_km ?? Infinity) - (b.g?.distance_km ?? Infinity));
+    $("#results-ranked", root).replaceChildren(...(state.players.length > 1 ? rows.map(({ p, g }) => h("div", { class: `gb-line${p.user_id === meId ? " is-me" : ""}` },
+      avatar(p, colours.get(p.user_id), 28),
+      h("div", { class: "grow" }, h("b", {}, p.user_id === meId ? `${p.name} (you)` : p.name)),
+      h("span", { class: "km" }, g ? `${formatDistance(g.distance_km)} km` : "No guess"),
+      h("span", { class: "pts" }, g ? `+${formatScore(g.score)}` : "0"))) : []));
+
+    const go = $("#continue", root);
+    go.hidden = !button;
     if (button) {
-      continueButton.textContent = button.label;
-      continueButton.onclick = () => busy(continueButton, button.onClick);
+      go.textContent = button.label;
+      go.onclick = () => busy(go, button.onClick);
     }
     const waitLine = $("#results-wait", root);
     waitLine.hidden = !wait;
@@ -86,23 +94,21 @@ export class ResultsPopup {
 
     root.hidden = false;
     if (fresh) {
-      // The one bit of motion: the sign slides up as the round is revealed.
-      root.classList.remove("gb-reveal");
+      root.classList.remove("is-new");
       void root.offsetWidth;
-      root.classList.add("gb-reveal");
-      continueButton.focus({ preventScroll: true });
+      root.classList.add("is-new");
+      try {
+        this.mapPromise ||= createResultsMap($("#results-map", root));
+        const map = await this.mapPromise;
+        map.show({
+          targets: target ? [{ ...target, place: state.round.place }] : [],
+          guesses: [...guessed.values()].map((g) => ({
+            lat: g.lat, lng: g.lng, target, player: playerOf(state, g.user_id), colour: colours.get(g.user_id), me: g.user_id === meId,
+          })),
+        });
+      } catch (error) {
+        $("#results-map", root).replaceChildren(h("p", { class: "gb-pano-msg" }, error.message));
+      }
     }
-    if (!this.mapPromise) this.mapPromise = createResultsMap($("#results-map", root));
-    try {
-      const results = await this.mapPromise;
-      if (fresh) results.show({ targets, guesses });
-    } catch (error) {
-      $("#results-map", root).replaceChildren(h("p", { class: "gb-pano-message" }, error.message));
-    }
-  }
-
-  close() {
-    this.root.hidden = true;
-    this.shownFor = null;
   }
 }

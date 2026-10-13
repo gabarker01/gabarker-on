@@ -1,17 +1,19 @@
-// In person, the host screen (ServiceNow page "play_localmulti"): big Street
-// View for the room, the live list of who has guessed (with the sound effect
-// for each new guess), and the round results with the host's buttons.
+// In person, the host screen (ServiceNow page "play_localmulti"): Street View
+// for the room, the live list of who has guessed (with the guess sound), and
+// the round results with the host's buttons.
 import { initPage, $, h, busy, param, pageError } from "../ui.js";
 import { endRound, gamePageUrl, resultsUrl } from "../api.js";
 import { watchGameState } from "../live.js";
 import { createPanorama } from "../maps.js";
-import { ResultsPopup, renderGuessRows, roundGuessesForMap, signRows, nextRoundOrResults } from "../round.js";
+import { ResultsPanel, renderGuessList, nextRoundOrResults } from "../round.js";
+import { setupTopbar, renderTopbar } from "../game-chrome.js";
 
-await initPage();
+await initPage({ demoNote: false });
+setupTopbar();
 const gameId = param("game");
-const popup = new ResultsPopup();
+const results = new ResultsPanel();
 const panoPromise = createPanorama($("#pano"));
-panoPromise.catch((error) => $("#pano").replaceChildren(h("p", { class: "gb-pano-message" }, error.message)));
+panoPromise.catch((error) => $("#pano").replaceChildren(h("p", { class: "gb-pano-msg" }, error.message)));
 
 // The guess sound. Browsers only play sound after a tap on the page, so the
 // button stays until a sound has played.
@@ -22,21 +24,16 @@ function playSound() {
   sound.play().then(() => { $("#sound").hidden = true; }).catch(() => { $("#sound").hidden = false; });
 }
 $("#sound").addEventListener("click", playSound);
-
-$("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()));
+$("#home").addEventListener("click", () => panoPromise.then((pano) => pano.home()).catch(() => {}));
 
 let roundNumber = null;
 let seenGuesses = null;
-
 const watcher = watchGameState(gameId, render, pageError);
 
-$("#end-round").addEventListener("click", () => {
-  busy($("#end-round"), async () => {
-    await endRound(gameId);
-    watcher.refresh();
-  });
-});
-
+$("#end-round").addEventListener("click", () => busy($("#end-round"), async () => {
+  await endRound(gameId);
+  watcher.refresh();
+}));
 const goOn = () => nextRoundOrResults(gameId, watcher);
 
 function render(state) {
@@ -49,14 +46,11 @@ function render(state) {
     location.replace(resultsUrl(gameId));
     return;
   }
-
-  document.title = `Round ${round.number} · GeoBarkr`;
-  $("#round-badge").hidden = false;
-  $("#round-badge").textContent = `Round ${round.number} of ${game.round_count}`;
+  renderTopbar(state, { showScore: false });
   if (round.number !== roundNumber) {
     roundNumber = round.number;
     seenGuesses = null;
-    popup.close();
+    results.close();
   }
   if (round.target) panoPromise.then((pano) => pano.show(round.target)).catch(() => {});
 
@@ -64,19 +58,16 @@ function render(state) {
   if (seenGuesses != null && guesses.length > seenGuesses) playSound();
   seenGuesses = guesses.length;
 
-  renderGuessRows($("#guess-rows"), guesses);
-  $("#progress").textContent = `${guesses.length} of ${players.length} players have guessed.`;
+  renderGuessList($("#guess-list"), state);
+  $("#progress").textContent = `${guesses.length} of ${players.length} have guessed`;
   $("#end-round").hidden = round.status !== "in_progress";
 
   if (round.status === "results") {
     const last = round.number >= game.round_count;
-    popup.open({
+    results.open({
       key: round.number,
-      title: `Round ${round.number} results`,
-      targets: [round.target],
-      guesses: roundGuessesForMap(state),
-      heading: "Distance to the target",
-      rows: signRows(state),
+      title: `Round ${round.number} of ${game.round_count}`,
+      state,
       button: { label: last ? "See results" : "Next round", onClick: goOn },
     });
   }

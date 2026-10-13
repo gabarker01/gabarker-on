@@ -1,26 +1,30 @@
-// In person, a player's phone (ServiceNow page "map_mobile"): just the map and
-// the Guess button. The Street View is on the host's big screen; phones are
-// never sent the target during a round.
+// In person, a player's phone (ServiceNow page "map_mobile"): your map and the
+// Guess button. Street View is on the host's big screen; phones are never sent
+// the target during a round.
 import { initPage, $, h, param, showError, pageError } from "../ui.js";
 import { submitGuess, gamePageUrl, resultsUrl } from "../api.js";
 import { watchGameState } from "../live.js";
 import { createGuessMap } from "../maps.js";
-import { formatDistance, formatScore, firstName } from "../geo.js";
+import { setupTopbar, renderTopbar } from "../game-chrome.js";
+import { avatar, ME_COLOUR } from "../players.js";
+import { formatCoords, formatDistance, formatScore, firstName } from "../geo.js";
 
-await initPage();
+const { profile } = await initPage({ demoNote: false });
+setupTopbar();
 const gameId = param("game");
+const me = { player: { name: profile?.display_name, avatar_url: profile?.avatar_url }, colour: ME_COLOUR };
+$("#status-avatar").replaceWith(avatar(me.player, ME_COLOUR, 56));
 
-const mapPromise = createGuessMap($("#map"), () => {
-  $("#guess").disabled = false;
-  $("#guess").textContent = "Guess";
+const mapPromise = createGuessMap($("#map"), me, (pick) => {
+  $("#coords").textContent = formatCoords(pick.lat, pick.lng);
+  if (!sending) $("#guess").disabled = false;
 });
-mapPromise.catch((error) => $("#map").replaceChildren(h("p", { class: "gb-pano-message" }, error.message)));
+mapPromise.catch((error) => $("#map").replaceChildren(h("p", { class: "gb-pano-msg" }, error.message)));
 
 let roundNumber = null;
 let sending = false;
 const watcher = watchGameState(gameId, render, pageError);
 
-// Stays disabled once sent, so a second tap can't send the guess twice.
 $("#guess").addEventListener("click", async () => {
   const pick = (await mapPromise).getPick();
   if (!pick || sending) return;
@@ -36,59 +40,48 @@ $("#guess").addEventListener("click", async () => {
   }
 });
 
-function showStatus(title, text, sign) {
-  $("#map-box").hidden = true;
-  $("#guess").hidden = true;
+function showStatus(title, text, summary = null) {
+  for (const id of ["#map-box", "#readout", "#guess"]) $(id).hidden = true;
   $("#status").hidden = false;
   $("#status-title").textContent = title;
   $("#status-text").textContent = text;
-  $("#status-sign").hidden = !sign;
-  if (sign) $("#status-sign").replaceChildren(...sign);
+  $("#status-summary").replaceChildren(...(summary || []));
 }
 
 async function render(state) {
-  const { game, round, me, guesses } = state;
+  const { game, round, me: who, guesses } = state;
   if (game.type !== "local_multiplayer" || game.is_host || game.status === "lobby") {
-    location.replace(gamePageUrl(game, { isHost: game.is_host, isPlayer: me.is_player }));
+    location.replace(gamePageUrl(game, { isHost: game.is_host, isPlayer: who.is_player }));
     return;
   }
   if (game.status !== "in_play" || !round) {
     location.replace(resultsUrl(gameId));
     return;
   }
-
-  $("#round-head").textContent = `Round ${round.number} of ${game.round_count}`;
-  document.title = `Round ${round.number} · GeoBarkr`;
-
+  renderTopbar(state);
   if (round.number !== roundNumber) {
     roundNumber = round.number;
     sending = false;
     (await mapPromise.catch(() => null))?.reset();
     $("#guess").disabled = true;
-    $("#guess").textContent = "Tap the map to place your guess";
+    $("#coords").textContent = "Tap the map to place it";
   }
 
-  const mine = guesses.find((guess) => guess.user_id === me.user_id);
+  const mine = guesses.find((g) => g.user_id === who.user_id);
   if (round.status === "results") {
-    const row = mine
-      ? h("div", { class: "gb-distance-row" }, h("span", { class: "gb-name" }, "You"),
-        h("span", {}, `${formatDistance(mine.distance_km)} km`), h("span", { class: "gb-points" }, `+${formatScore(mine.score)}`))
-      : h("div", { class: "gb-distance-row is-none" }, h("span", { class: "gb-name" }, "No guess"), h("span", {}, ""), h("span", { class: "gb-points" }, "0"));
+    const last = round.number >= game.round_count;
     showStatus(
-      "Round complete",
-      round.number >= game.round_count
-        ? "That was the last round. The results appear here when the host is ready."
-        : "The next round starts here when the host is ready.",
-      [h("h3", {}, mine ? "Distance to the target" : "The host ended the round before you guessed"), row],
+      round.place ? `It was ${round.place}` : "Round complete",
+      last ? "That was the last round. The results appear here when the host is ready." : "The next round starts here when the host is ready.",
+      [h("div", { class: "k" }, mine ? "You were" : "The host ended the round before you guessed"),
+        h("div", { class: "row" },
+          h("span", { class: "km" }, mine ? `${formatDistance(mine.distance_km)} km away` : "0 points"),
+          mine ? h("span", { class: "pts" }, `+${formatScore(mine.score)}`) : null)],
     );
   } else if (mine) {
-    showStatus(
-      `Cheers ${firstName(me.display_name)}!`,
-      "Your guess is locked in. Waiting for the other players to guess…",
-    );
+    showStatus(`Locked in, ${firstName(who.display_name)}`, "Waiting for everyone else to guess…");
   } else {
     $("#status").hidden = true;
-    $("#map-box").hidden = false;
-    $("#guess").hidden = false;
+    for (const id of ["#map-box", "#readout", "#guess"]) $(id).hidden = false;
   }
 }

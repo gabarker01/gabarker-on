@@ -65,6 +65,7 @@
     setCenter() {}
     setZoom() {}
     fitBounds() {}
+    getDiv() { return this.el; }
     place(latLng) {
       return { left: `${((latLng.lng() + 180) / 360) * 100}%`, top: `${((90 - latLng.lat()) / 180) * 100}%` };
     }
@@ -151,10 +152,31 @@
   }
 
   class LatLngBounds { extend() { return this; } }
+
+  // Custom HTML markers (our avatar pins) use OverlayView.
+  class OverlayView {
+    setMap(map) {
+      if (this.map && this.onRemove) this.onRemove();
+      this.map = map;
+      if (map) { this.onAdd?.(); this.draw?.(); }
+    }
+    getMap() { return this.map; }
+    getPanes() { return { overlayMouseTarget: this.map.root, overlayLayer: this.map.root }; }
+    getProjection() {
+      const map = this.map;
+      return {
+        fromLatLngToDivPixel(latLng) {
+          const box = map.root.getBoundingClientRect();
+          const ll = toLatLng(latLng);
+          return { x: ((ll.lng() + 180) / 360) * box.width, y: ((90 - ll.lat()) / 180) * box.height };
+        },
+      };
+    }
+  }
   class Point { constructor(x, y) { this.x = x; this.y = y; } }
 
   const maps = {
-    Map, Marker, Polyline, InfoWindow, StreetViewPanorama, LatLng, LatLngBounds, Point,
+    Map, Marker, Polyline, InfoWindow, StreetViewPanorama, LatLng, LatLngBounds, Point, OverlayView,
     event: { trigger() {} },
     importLibrary: async () => maps,
   };

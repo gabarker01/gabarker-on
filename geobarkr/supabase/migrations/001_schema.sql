@@ -40,6 +40,10 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Profile photo from Google sign-in (shown on map pins); initials otherwise.
+alter table public.profiles
+  add column if not exists avatar_url text check (avatar_url is null or (avatar_url ~ '^https://' and char_length(avatar_url) <= 500));
+
 create table if not exists public.maps (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 80),

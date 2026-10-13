@@ -54,7 +54,7 @@ flowchart LR
   subgraph Phones and laptops
     A[GeoBarkr pages<br/>gabarker.com/geobarkr]
   end
-  A -- sign in --> AUTH[Supabase Auth<br/>magic link, Google]
+  A -- sign in --> AUTH[Supabase Auth<br/>email + password, Google]
   A -- "rpc(create_game, submit_guess, …)" --> DB[(Postgres<br/>tables + RLS<br/>game functions)]
   DB -- "realtime.send → game:&lt;id&gt;" --> RT[Supabase Realtime]
   RT -- broadcast --> A
@@ -197,15 +197,21 @@ geobarkr/
   css/geobarkr.css
   js/
     config.js           Supabase URL + publishable key, Google Maps key
-    supabase.js         Client, session check, sign-in redirect
-    api.js              One function per RPC
+    supabase.js         Supabase client and session
+    api.js              The game's backend: remote.js, or demo.js when config.js is empty
+    remote.js           One function per RPC, admin table edits, realtime
+    demo.js             Demo mode: the same rules in this browser's storage, with bots
+    players.js          Player colours, initials and avatars
+    worldmap.js         The drawn world-map bands on pages without Google Maps
+    game-chrome.js      Top bar on the game screens
     live.js             Realtime channel + 15 s refresh fallback
     maps.js             Google Maps loader, guess map, results map, Street View
+    maps-keyless.js     The same three with no key: Leaflet + CARTO tiles, Street View embed
     geo.js              Distance/score/time formatting shared with tests
     round.js            Live guesses list and the round results popup
     ui.js, load.js      Header, sign-in check, QR code, toasts, script loader
     pages/*.js          One small module per page
-  assets/               logo.png, icon.png, minikit.mp3 (from ServiceNow)
+  assets/               guess-sound.mp3 (from ServiceNow); the logo is inline SVG
   supabase/             SQL (above)
   tests/                Node tests (run by the repo's existing `npm test`)
   dev/                  Local test stack: Supabase stand-in, Google Maps
@@ -215,15 +221,25 @@ geobarkr/
 ```
 
 **Libraries:** `@supabase/supabase-js@2.117.1` (the same version TapMap
-uses) and `qrcode-generator@1.4.4` are copied into `geobarkr/vendor/` from
+uses), `qrcode-generator@1.4.4` and `leaflet@1.9.4` (only used while there's
+no Google Maps key) are copied into `geobarkr/vendor/` from
 npm, so the site doesn't depend on a CDN being up; the Google Maps JS API is
 loaded from Google.
 
 **Outside `geobarkr/`, the only change is the homepage:** a second project
-card in `index.html` matching the TapMap one (number 02, red pin artwork,
+card in `index.html` matching the TapMap one (number 02, small map artwork,
 "Play at gabarker.com/geobarkr →") and the project count changing from 01 to
 02. No change to `styles.css`, `site.js`, `404.html`, `tapmap/`,
 `bearingssummary/` or `supabase/`.
+
+## 8b. Demo mode
+
+Until `SUPABASE_URL` and `SUPABASE_KEY` are filled in, `api.js` loads
+`demo.js` instead of `remote.js`. It has the same functions and follows the
+same rules as the SQL (rounds, reveal, scoring, owner-only actions), but
+keeps everything in `localStorage` on one device and adds three bot players
+to multiplayer and in-person games. It needs no keys and sends nothing
+anywhere, so it's safe to publish; it can't be used to play with other people.
 
 ## 9. Keeping it separate from TapMap / Bearings
 

@@ -44,6 +44,10 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Profile photo from Google sign-in (shown on map pins); initials otherwise.
+alter table public.profiles
+  add column if not exists avatar_url text check (avatar_url is null or (avatar_url ~ '^https://' and char_length(avatar_url) <= 500));
+
 create table if not exists public.maps (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 80),
@@ -266,7 +270,8 @@ $$;
 
 -- ---------- New users ----------
 
--- Every new account gets a profile, named from Google or the email address.
+-- Every new account gets a profile, named from Google or the email address,
+-- with Google's profile photo when there is one.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -274,7 +279,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, display_name)
+  insert into public.profiles (id, display_name, avatar_url)
   values (
     new.id,
     left(coalesce(
@@ -282,7 +287,10 @@ begin
       nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
       nullif(split_part(coalesce(new.email, ''), '@', 1), ''),
       'Player'
-    ), 40)
+    ), 40),
+    -- Google's profile photo, if any.
+    (select u from (select coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture') as u) x
+     where u ~ '^https://' and char_length(u) <= 500)
   )
   on conflict (id) do nothing;
   return new;
@@ -611,12 +619,14 @@ begin
     'me', jsonb_build_object(
       'user_id', v_uid,
       'display_name', (select display_name from public.profiles where id = v_uid),
+      'avatar_url', (select avatar_url from public.profiles where id = v_uid),
       'is_player', exists (select 1 from public.game_players where game_id = p_game and user_id = v_uid)
     ),
     'players', (
       select coalesce(jsonb_agg(jsonb_build_object(
         'user_id', gp.user_id,
         'name', p.display_name,
+        'avatar_url', p.avatar_url,
         'joined_at', gp.joined_at,
         'total_score', gp.total_score,
         'total_distance_km', gp.total_distance_km,
@@ -631,7 +641,9 @@ begin
       'started_at', v_round.started_at,
       'target', case when v_show_target then jsonb_build_object(
         'lat', v_round.lat, 'lng', v_round.lng, 'heading', v_round.heading, 'pitch', v_round.pitch
-      ) end
+      ) end,
+      -- The place's name only once the round is over.
+      'place', case when v_reveal then v_round.location_name end
     ) end,
     'guesses', (
       select coalesce(jsonb_agg(
@@ -685,6 +697,7 @@ begin
         select gp.total_score, gp.joined_at, jsonb_build_object(
           'user_id', gp.user_id,
           'name', p.display_name,
+          'avatar_url', p.avatar_url,
           'is_me', gp.user_id = v_uid,
           'total_score', gp.total_score,
           'total_distance_km', gp.total_distance_km,
@@ -707,7 +720,8 @@ begin
 end;
 $$;
 
--- My games: everything I've played or hosted, newest first.
+-- My games: everything I've played or hosted, newest first, with the places
+-- of finished rounds and my guesses there.
 create or replace function public.my_games()
 returns jsonb
 language sql
@@ -723,7 +737,15 @@ as $$
            (select count(*) from public.game_players where game_id = g.id) as player_count,
            case when me.id is not null then
              (select 1 + count(*) from public.game_players o where o.game_id = g.id and o.total_score > me.total_score)
-           end as my_rank
+           end as my_rank,
+           -- Finished rounds only: each place, and my guess there (for the small maps).
+           (select coalesce(jsonb_agg(jsonb_build_object(
+              'lat', r.lat, 'lng', r.lng,
+              'guess_lat', mg.lat, 'guess_lng', mg.lng
+            ) order by r.round_number), '[]'::jsonb)
+            from public.rounds r
+            left join public.guesses mg on mg.round_id = r.id and mg.player_id = me.id
+            where r.game_id = g.id and r.status in ('results', 'complete')) as places
     from public.games g
     left join public.game_players me on me.game_id = g.id and me.user_id = auth.uid()
     where g.host_id = auth.uid() or me.id is not null
@@ -747,6 +769,7 @@ as $$
              order by case when p_sort = 'best' then max(gp.total_score) else sum(gp.total_score) end desc, count(*) desc
            ) as rank,
            p.display_name as name,
+           p.avatar_url,
            gp.user_id = auth.uid() as is_me,
            count(*) as games,
            sum(gp.total_score) as total_score,
@@ -756,7 +779,7 @@ as $$
     join public.games g on g.id = gp.game_id and g.status = 'complete'
     join public.profiles p on p.id = gp.user_id
     where auth.uid() is not null
-    group by gp.user_id, p.display_name
+    group by gp.user_id, p.display_name, p.avatar_url
     order by case when p_sort = 'best' then max(gp.total_score) else sum(gp.total_score) end desc, count(*) desc
     limit least(greatest(coalesce(p_limit, 50), 1), 200)
   ) x;
@@ -894,5 +917,18 @@ insert into public.locations (id, map_id, name, round_number, lat, lng, heading,
   ('7da0acdb-935a-ba10-0fa1-7bfdfaba10a9', 'eb30f2ba-939a-f610-0fa1-7bfdfaba1097', 'Eiffel Tower', 3, 48.859, 2.296, 250, 0),
   ('3a71ec5f-935a-ba10-0fa1-7bfdfaba104b', 'eb30f2ba-939a-f610-0fa1-7bfdfaba1097', 'Sydney harbour', 4, -33.8524678, 151.2105238, 0, 0),
   ('69c2ac13-939a-ba10-0fa1-7bfdfaba100b', 'eb30f2ba-939a-f610-0fa1-7bfdfaba1097', 'CopaCobana', 5, -22.9682017, -43.1797941, 244.26, 0)
+on conflict (id) do nothing;
+
+-- A second map with five far-apart, well-covered Street View spots.
+insert into public.maps (id, name, active)
+values ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'World tour', true)
+on conflict (id) do nothing;
+
+insert into public.locations (id, map_id, name, round_number, lat, lng, heading, pitch) values
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a11', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Times Square, New York', 1, 40.7580, -73.9855, 30, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a12', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Shibuya, Tokyo', 2, 35.6595, 139.7005, 60, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a13', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'V&A Waterfront, Cape Town', 3, -33.9036, 18.4207, 200, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a14', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Laugavegur, Reykjavík', 4, 64.1455, -21.9300, 90, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a15', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Avenida 9 de Julio, Buenos Aires', 5, -34.6037, -58.3816, 0, 0)
 on conflict (id) do nothing;
 

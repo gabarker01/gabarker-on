@@ -317,9 +317,10 @@ async function pumpMessages() {
 
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".mp3": "audio/mpeg", ".svg": "image/svg+xml", ".json": "application/json", ".geojson": "application/json" };
 
-const devConfig = `export const SUPABASE_URL = ${JSON.stringify(API_URL)};
-export const SUPABASE_KEY = ${JSON.stringify(ANON_KEY)};
-export const GOOGLE_MAPS_KEY = ${JSON.stringify(process.env.GOOGLE_MAPS_KEY || "dev")};
+const DEMO = process.env.DEMO === "1";
+const devConfig = `export const SUPABASE_URL = ${JSON.stringify(DEMO ? "" : API_URL)};
+export const SUPABASE_KEY = ${JSON.stringify(DEMO ? "" : ANON_KEY)};
+export const GOOGLE_MAPS_KEY = ${JSON.stringify(process.env.GOOGLE_MAPS_KEY ?? "dev")};
 export const AUTH_PROVIDERS = ["email", "google"];
 export const POLL_MS = ${Number(process.env.POLL_MS || 15000)};
 `;

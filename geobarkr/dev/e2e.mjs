@@ -42,11 +42,11 @@ async function newPlayer(label, viewport) {
 async function signUp(player, name) {
   const { page } = player;
   await page.goto(`${BASE}/geobarkr/signin/`);
-  await page.click("#tab-signup");
-  await page.fill("input[name=name]", name);
+  await page.click("#switch-link");
+  await page.fill("#email-form input[name=name]", name);
   player.email = `${name.toLowerCase().replace(/\W+/g, "")}${stamp}@example.com`;
-  await page.fill("input[name=email]", player.email);
-  await page.fill("input[name=password]", "password123");
+  await page.fill("#email-form input[name=email]", player.email);
+  await page.fill("#email-form input[name=password]", "password123");
   await page.click("#email-button");
   await page.waitForURL(`${BASE}/geobarkr/`);
 }
@@ -76,8 +76,7 @@ const SPOTS = [[0.5, 0.21], [0.5, 0.215], [0.505, 0.23], [0.92, 0.69], [0.38, 0.
 async function create(page, type) {
   await page.goto(`${BASE}/geobarkr/`);
   await page.waitForSelector("#map-select option[value]:not([value=''])", { state: "attached" });
-  await page.check(`input[name=type][value=${type}]`, { force: true });
-  await page.click("#start-button");
+  await page.click(`#modes [data-type=${type}]`);
 }
 
 // ---------- Signed out ----------
@@ -109,21 +108,21 @@ await step("single player: five rounds, scores, results page", async () => {
   await shot(solo, "start");
   await create(solo.page, "single_player");
   await solo.page.waitForURL(/\/play\/\?game=/);
-  await solo.page.waitForSelector("#round-badge:not([hidden])");
+  await solo.page.waitForSelector("#round-label");
   assert.equal(await solo.page.isDisabled("#guess"), true, "Guess is disabled until you tap the map");
   await shot(solo, "play");
   for (let round = 1; round <= 5; round++) {
-    await solo.page.waitForFunction((n) => document.querySelector("#round-badge")?.textContent === `Round ${n} of 5`, round);
+    await solo.page.waitForFunction((n) => document.querySelector("#round-label")?.textContent === `Round ${n}`, round);
     await tapMap(solo.page, ...SPOTS[round - 1]);
     await solo.page.click("#guess");
     await solo.page.waitForSelector("#results:not([hidden])");
-    const sign = await solo.page.textContent("#results-sign");
-    assert.match(sign, /You[\d,.]+ km\+[\d,]+/, `round ${round} sign shows distance and points`);
+    const summary = await solo.page.textContent("#results-summary");
+    assert.match(summary, /[\d,.]+ km away\+[\d,]+/, `round ${round} shows distance and points`);
     if (round === 1) await shot(solo, "reveal-solo");
     await solo.page.click("#continue");
   }
   await solo.page.waitForURL(/\/results\/\?game=/);
-  await solo.page.waitForSelector("#scorecard tbody tr.gb-total");
+  await solo.page.waitForSelector("#scorecard tbody tr");
   assert.equal(await solo.page.locator("#scorecard tbody tr").count(), 6, "five rounds and a total");
   await solo.page.waitForTimeout(300);
   await solo.page.screenshot({ path: path.join(OUT, "results-solo-phone.png"), fullPage: true });
@@ -142,12 +141,12 @@ await step("online: lobby by room code, live guesses, end round, results", async
   const code = (await host.page.textContent("#room-code")).trim();
   assert.match(code, /^[A-Z2-9]{6}$/);
   assert.equal(await host.page.isDisabled("#start-button"), true, "can't start alone");
-  await host.page.waitForSelector("#qr svg");
+  await host.page.waitForSelector(".gb-qr svg");
 
   await guest.page.fill("#code", code.toLowerCase());
   await guest.page.click("#join-button");
   await guest.page.waitForURL(/\/lobby\/\?game=/);
-  await host.page.waitForFunction(() => document.querySelectorAll("#players li").length === 2);
+  await host.page.waitForFunction(() => document.querySelectorAll("#players .gb-line").length === 2);
   await shot(host, "lobby");
   await shot(guest, "lobby");
   assert.equal(await guest.page.isHidden("#start-button"), true, "only the owner sees Start");
@@ -159,7 +158,7 @@ await step("online: lobby by room code, live guesses, end round, results", async
   await tapMap(host.page, ...SPOTS[0]);
   await host.page.click("#guess");
   await host.page.waitForSelector("#waiting:not([hidden])");
-  await guest.page.waitForFunction(() => document.querySelector("#guess-rows")?.textContent.includes("George Barker"));
+  await guest.page.waitForFunction(() => document.querySelector("#guess-list")?.textContent.includes("George Barker"));
   await shot(host, "waiting");
   await tapMap(guest.page, 0.45, 0.25);
   await guest.page.click("#guess");
@@ -172,18 +171,18 @@ await step("online: lobby by room code, live guesses, end round, results", async
   await host.page.click("#continue");
 
   // Round 2: the guest doesn't guess; the host ends the round.
-  await guest.page.waitForFunction(() => document.querySelector("#round-badge")?.textContent === "Round 2 of 5");
+  await guest.page.waitForFunction(() => document.querySelector("#round-label")?.textContent === "Round 2");
   await tapMap(host.page, ...SPOTS[1]);
   await host.page.click("#guess");
   await host.page.waitForSelector("#end-round:not([hidden])");
   assert.equal(await guest.page.isHidden("#end-round"), true, "only the host can end the round");
   await host.page.click("#end-round");
   await guest.page.waitForSelector("#results:not([hidden])");
-  assert.match(await guest.page.textContent("#results-sign"), /Gina GuestNo guess0/);
+  assert.match(await guest.page.textContent("#results-ranked"), /Gina Guest \(you\)No guess0/);
   await host.page.click("#continue");
 
   for (let round = 3; round <= 5; round++) {
-    await guest.page.waitForFunction((n) => document.querySelector("#round-badge")?.textContent === `Round ${n} of 5`, round);
+    await guest.page.waitForFunction((n) => document.querySelector("#round-label")?.textContent === `Round ${n}`, round);
     for (const player of [host, guest]) {
       await tapMap(player.page, ...SPOTS[round - 1]);
       await player.page.click("#guess");
@@ -192,8 +191,8 @@ await step("online: lobby by room code, live guesses, end round, results", async
     await host.page.click("#continue");
   }
   await Promise.all([host.page.waitForURL(/\/results\//), guest.page.waitForURL(/\/results\//)]);
-  await host.page.waitForSelector("#multi-table tbody tr");
-  assert.equal(await host.page.locator("#multi-table tbody tr").count(), 2);
+  await host.page.waitForSelector("#standings tbody tr");
+  assert.equal(await host.page.locator("#standings tbody tr").count(), 2);
   await host.page.screenshot({ path: path.join(OUT, "results-online-desktop.png"), fullPage: true });
   await guest.page.screenshot({ path: path.join(OUT, "results-online-phone.png"), fullPage: true });
 });
@@ -215,7 +214,7 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
   partyId = new URL(partyHost.page.url()).searchParams.get("game");
   await partyHost.page.waitForSelector("#room-code:not(:empty)");
   partyCode = (await partyHost.page.textContent("#room-code")).trim();
-  assert.match(await partyHost.page.textContent("#host-note"), /Hosted by Hannah Host/);
+  await partyHost.page.waitForFunction(() => /Hannah Host is hosting/.test(document.querySelector("#host-note")?.textContent || ""));
 
   // Phone 1 types the code; phone 2 opens the QR link.
   await phone1.page.fill("#code", partyCode);
@@ -223,15 +222,15 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
   await phone1.page.waitForSelector("#welcome:not([hidden])");
   await phone2.page.goto(`${BASE}/geobarkr/join/?code=${partyCode}`);
   await phone2.page.waitForSelector("#welcome:not([hidden])");
-  assert.match(await phone2.page.textContent("#welcome-title"), /Welcome Quinn QR, you're in!/);
+  assert.match(await phone2.page.textContent("#welcome-title"), /You're in, Quinn QR/);
   await shot(phone2, "join");
-  await partyHost.page.waitForFunction(() => document.querySelectorAll("#players li").length === 2);
+  await partyHost.page.waitForFunction(() => document.querySelectorAll("#players .gb-line").length === 2);
   await shot(partyHost, "lobby-in-person");
 
   await partyHost.page.click("#start-button");
   await partyHost.page.waitForURL(/\/host\/\?game=/);
   await Promise.all([phone1.page.waitForURL(/\/party\/\?game=/), phone2.page.waitForURL(/\/party\/\?game=/)]);
-  await phone1.page.waitForFunction(() => document.querySelector("#round-head")?.textContent === "Round 1 of 5");
+  await phone1.page.waitForFunction(() => document.querySelector("#round-label")?.textContent === "Round 1");
   await shot(phone1, "party-guess");
 
   // Phones never get the target during the round.
@@ -244,17 +243,18 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
   await tapMap(phone1.page, ...SPOTS[0]);
   await phone1.page.click("#guess");
   await phone1.page.waitForSelector("#status:not([hidden])");
-  assert.match(await phone1.page.textContent("#status-title"), /Cheers Pip!/);
-  await partyHost.page.waitForFunction(() => document.querySelector("#guess-rows")?.textContent.includes("Pip Phone"));
+  assert.match(await phone1.page.textContent("#status-title"), /Locked in, Pip/);
+  await partyHost.page.waitForFunction(() => document.querySelector("#guess-list")?.textContent.includes("Pip Phone"));
   assert.match(await partyHost.page.textContent("#progress"), /1 of 2/);
   await shot(phone1, "party-waiting");
   await shot(partyHost, "host-live");
 
   await partyHost.page.click("#end-round");
   await partyHost.page.waitForSelector("#results:not([hidden])");
-  await phone1.page.waitForFunction(() => document.querySelector("#status-title")?.textContent === "Round complete");
-  await phone2.page.waitForFunction(() => document.querySelector("#status-title")?.textContent === "Round complete");
-  assert.match(await phone2.page.textContent("#status-sign"), /No guess/);
+  await phone1.page.waitForFunction(() => document.querySelector("#status-title")?.textContent === "It was 4 Medley Road");
+  await phone2.page.waitForFunction(() => document.querySelector("#status-title")?.textContent === "It was 4 Medley Road");
+  assert.match(await phone2.page.textContent("#status-summary"), /ended the round before you guessed/);
+  assert.match(await phone1.page.textContent("#status-summary"), /km away\+/);
   await partyHost.page.waitForTimeout(400);
   await shot(partyHost, "host-reveal");
   await shot(phone1, "party-reveal");
@@ -262,7 +262,7 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
 
   for (let round = 2; round <= 5; round++) {
     for (const player of [phone1, phone2]) {
-      await player.page.waitForFunction((n) => document.querySelector("#round-head")?.textContent === `Round ${n} of 5` && !document.querySelector("#map-box").hidden, round);
+      await player.page.waitForFunction((n) => document.querySelector("#round-label")?.textContent === `Round ${n}` && !document.querySelector("#map-box").hidden, round);
       await tapMap(player.page, ...SPOTS[round - 1]);
       await player.page.click("#guess");
     }
@@ -270,7 +270,7 @@ await step("in person: QR join, phones guess, host screen live, end round, resul
     await partyHost.page.click("#continue");
   }
   await Promise.all([partyHost.page.waitForURL(/\/results\//), phone1.page.waitForURL(/\/results\//), phone2.page.waitForURL(/\/results\//)]);
-  await partyHost.page.waitForSelector("#multi-table tbody tr");
+  await partyHost.page.waitForSelector("#standings tbody tr");
   assert.equal(await partyHost.page.isHidden("#scorecard-section"), true, "the host isn't a player");
   await partyHost.page.screenshot({ path: path.join(OUT, "results-in-person-desktop.png"), fullPage: true });
 });
@@ -327,17 +327,17 @@ await step("RLS: a player can't read answers, other games, others' guesses or ma
 
 await step("my games and the all-time leaderboard", async () => {
   await host.page.goto(`${BASE}/geobarkr/games/`);
-  await host.page.waitForSelector("#games tbody tr");
-  assert.match(await host.page.textContent("#games"), /Multiplayer on GeoBarkr Demo/);
+  await host.page.waitForSelector("#games .gb-line");
+  assert.match(await host.page.textContent("#games"), /GeoBarkr Demo.*Multiplayer/);
   await shot(host, "my-games");
   await guest.page.goto(`${BASE}/geobarkr/leaderboard/`);
-  await guest.page.waitForSelector("#board tbody tr");
-  const names = await guest.page.locator("#board tbody td.gb-strong").allTextContents();
-  for (const name of ["Sam Solo", "George Barker", "Gina Guest", "Pip Phone", "Quinn QR"]) assert.ok(names.includes(name), `${name} on the leaderboard`);
-  assert.ok(!names.includes("Hannah Host"), "hosts who didn't play aren't ranked");
+  await guest.page.waitForSelector("#podium:not([hidden])");
+  const board = await guest.page.textContent("main");
+  for (const name of ["Sam Solo", "George Barker", "Gina Guest", "Pip Phone", "Quinn QR"]) assert.ok(board.includes(name), `${name} on the leaderboard`);
+  assert.ok(!board.includes("Hannah Host"), "hosts who didn't play aren't ranked");
   await shot(guest, "leaderboard");
   await guest.page.click("#tab-best");
-  await guest.page.waitForFunction(() => document.querySelector("#board th:nth-child(3)")?.textContent === "Best game");
+  await guest.page.waitForSelector("#tab-best[aria-selected=true]");
 });
 
 // ---------- Admin ----------
@@ -359,7 +359,7 @@ await step("admin: add a map and a location from a Street View link, see games",
   await admin.page.goto(`${BASE}/geobarkr/admin/`);
   await admin.page.waitForSelector("#admin:not([hidden])");
   assert.ok(await admin.page.locator(".gb-menu a[href='/geobarkr/admin/']").count(), "admin link in the menu");
-  await admin.page.waitForSelector("#games tbody tr a");
+  await admin.page.waitForSelector("#games a.gb-line");
   await admin.page.fill("#new-map input[name=name]", "Test Map");
   await admin.page.click("#new-map button");
   await admin.page.waitForSelector("#editor-section:not([hidden])");

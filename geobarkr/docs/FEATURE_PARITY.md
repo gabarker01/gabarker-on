@@ -310,12 +310,15 @@ mobile-first and security requirements, or the redesign).
 
 | Area | Status |
 |---|---|
-| Data model and seed (§1) | **Done**: 7 tables, the demo map and its 5 locations ported with their ServiceNow IDs |
+| Data model and seed (§1) | **Done**: 7 tables, the demo map and its 5 locations ported with their ServiceNow IDs; plus a second map, "World tour" (5 well-known places), and an optional profile photo (`avatar_url`, from Google sign-in) |
 | Server logic (§2) | **Done**: every `GeoBarkrUtils` / `geoBarkrAjax` function and the scoring rule, as database functions; same distance rounding and scoring formula (tested against the ServiceNow formula) |
 | Roles and access (§3) | **Done (tightened)**: player and admin; row-level security tested (see `supabase/tests/` and `dev/e2e.mjs`) |
 | Source bugs (§6) | **Fixed**: all seven listed |
 | Decisions Q1–Q7 | **Done**: End round now, points in the solo popup, lobby-only joining, code/QR-only joining, My games and an all-time leaderboard, the same sound effect, Google Maps |
 | Sign-in | **Done (changed)**: email + password and Google (magic links dropped for now, as decided) |
+| Look and feel | **Done (changed)**: new "Midnight" design (docs/DESIGN.md) replacing the ServiceNow road-sign branding, as asked. Pins show each player's photo or initials in their colour; results lines are great circles; the round reveal names the place |
+| Maps with no key | **New, temporary**: until a Google Maps key is added, maps are Leaflet with OpenStreetMap/CARTO tiles and Street View is Google's keyless embed (no key, fewer controls, not cheat-proof) |
+| Demo mode | **New**: with no Supabase settings the site runs entirely in the browser with bot players, so it can be tried before Supabase is set up (README "Demo mode"). Not a parity feature; it switches off once `js/config.js` is filled in |
 
 ### Not yet at full parity, or not verifiable here
 

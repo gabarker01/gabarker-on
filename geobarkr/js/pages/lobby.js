@@ -1,12 +1,15 @@
-// The lobby (ServiceNow: "GeoBarkr Lobby players"): who's joined, the room
-// code and QR code, and the host's Start Game button. Everyone moves on to the
-// game as soon as the host starts it.
+// The lobby (ServiceNow: "GeoBarkr Lobby players"): the room code and QR code,
+// who's joined, and the owner's Start button. Everyone moves on to the game
+// as soon as the owner starts it.
 import { initPage, $, h, busy, param, qrCode, joinUrl, pageError } from "../ui.js";
-import { startGame, gamePageUrl } from "../api.js";
+import { startGame, gamePageUrl, isDemo } from "../api.js";
 import { watchGameState } from "../live.js";
+import { drawWorld } from "../worldmap.js";
+import { avatar, colourMap } from "../players.js";
 import { GAME_TYPES, formatDate } from "../geo.js";
 
 await initPage();
+drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });
 const gameId = param("game");
 let qrShown = false;
 let current = null;
@@ -14,41 +17,35 @@ let current = null;
 watchGameState(gameId, async (state) => {
   const { game, players, me } = state;
   current = state;
-  if (game.status !== "lobby") {
+  if (game.status !== "lobby" || (game.type === "local_multiplayer" && !game.is_host)) {
     location.replace(gamePageUrl(game, { isHost: game.is_host, isPlayer: me.is_player }));
     return;
   }
-  if (game.type === "local_multiplayer" && !game.is_host) {
-    location.replace(gamePageUrl(game, { isHost: false }));
-    return;
-  }
-
   $("#loading").hidden = true;
   $("#lobby").hidden = false;
-  $("#players-title").textContent = "Players";
+
   const local = game.type === "local_multiplayer";
-  $("#host-note").hidden = !local;
-  $("#host-note").textContent = `Hosted by ${game.host_name} on this screen. Players join on their phones.`;
-
-  $("#players").replaceChildren(...(players.length ? players.map((player) => h("li", {},
-    h("span", {}, h("span", { class: "gb-name" }, player.name), h("br"),
-      h("span", { class: "gb-muted" }, `Joined ${formatDate(player.joined_at)}`)),
-    player.is_host ? h("span", { class: "gb-owner" }, "Owner") : null,
-  )) : [h("li", { class: "gb-muted" }, "No one has joined yet.")]));
-
-  $("#info-type").textContent = GAME_TYPES[game.type];
-  $("#info-map").textContent = game.map_name;
-  $("#info-rounds").textContent = game.round_count;
-  $("#info-players").textContent = players.length;
-
-  $("#room-code").textContent = game.code;
+  const code = game.code;
+  $("#room-code").replaceChildren(code.slice(0, 3), h("span", { class: "tail" }, code.slice(3)));
+  $("#game-meta").textContent = `${GAME_TYPES[game.type]} · ${game.map_name} · ${game.round_count} rounds`;
   if (!qrShown) {
     qrShown = true;
-    $("#qr").replaceChildren(await qrCode(joinUrl(game.code)));
+    $("#qr").replaceWith(await qrCode(joinUrl(code)));
   }
-  $("#join-help").textContent = local
-    ? "Scan the QR code to join on your phone, or go to gabarker.com/geobarkr and enter the code."
-    : "Friends can scan the QR code, or go to gabarker.com/geobarkr and enter the code.";
+  $("#join-help").textContent = isDemo
+    ? "Demo mode: bots join here by themselves. With the real backend, friends scan the QR code or enter the code at gabarker.com/geobarkr."
+    : local
+      ? "Players scan the QR code, or go to gabarker.com/geobarkr on their phone and enter the code."
+      : "Friends scan the QR code, or go to gabarker.com/geobarkr and enter the code.";
+
+  $("#host-note").hidden = !local;
+  $("#host-note").textContent = `${game.host_name} is hosting on this screen. Players guess on their phones.`;
+  $("#players-title").textContent = `${players.length} player${players.length === 1 ? "" : "s"}`;
+  const colours = colourMap(players, me.user_id);
+  $("#players").replaceChildren(...(players.length ? players.map((p) => h("div", { class: "gb-line" },
+    avatar(p, colours.get(p.user_id), 34),
+    h("div", { class: "grow" }, h("b", {}, p.name), h("span", {}, `Joined ${formatDate(p.joined_at)}`)),
+    p.is_host ? h("span", { class: "gb-tag" }, "Owner") : null)) : [h("p", { class: "gb-muted" }, "No one has joined yet.")]));
 
   const canStart = game.is_host && players.length > 1;
   $("#start-button").hidden = !game.is_host;

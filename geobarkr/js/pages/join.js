@@ -4,8 +4,10 @@
 import { initPage, $, busy, param, codeInput } from "../ui.js";
 import { joinGame, gamePageUrl } from "../api.js";
 import { watchGameState } from "../live.js";
+import { drawWorld } from "../worldmap.js";
 
 const { profile } = await initPage();
+drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });
 
 function askForCode(message) {
   $("#joining").hidden = true;
@@ -24,25 +26,21 @@ function waitInGame(gameId) {
     }
     $("#joining").hidden = true;
     $("#welcome").hidden = false;
-    $("#welcome-title").textContent = `Welcome ${profile?.display_name || ""}, you're in!`;
+    $("#welcome-title").textContent = `You're in, ${profile?.display_name || "player"}`;
     $("#round-count").textContent = `${game.round_count} round${game.round_count === 1 ? "" : "s"}`;
   }, (error) => askForCode(`${error.message}. Try the room code instead.`));
-}
-
-async function join(code, button) {
-  return busy(button, async () => {
-    const game = await joinGame(code);
-    history.replaceState(null, "", `/geobarkr/join/?game=${encodeURIComponent(game.id)}`);
-    $("#code-form").hidden = true;
-    $("#joining").hidden = false;
-    waitInGame(game.id);
-  });
 }
 
 const code = codeInput($("#code"));
 $("#code-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  join(code.value, $("#join-button"));
+  busy($("#join-button"), async () => {
+    const game = await joinGame(code.value);
+    history.replaceState(null, "", `/geobarkr/join/?game=${encodeURIComponent(game.id)}`);
+    $("#code-form").hidden = true;
+    $("#joining").hidden = false;
+    waitInGame(game.id);
+  });
 });
 
 if (param("game")) {

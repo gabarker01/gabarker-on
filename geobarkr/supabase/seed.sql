@@ -12,3 +12,16 @@ insert into public.locations (id, map_id, name, round_number, lat, lng, heading,
   ('3a71ec5f-935a-ba10-0fa1-7bfdfaba104b', 'eb30f2ba-939a-f610-0fa1-7bfdfaba1097', 'Sydney harbour', 4, -33.8524678, 151.2105238, 0, 0),
   ('69c2ac13-939a-ba10-0fa1-7bfdfaba100b', 'eb30f2ba-939a-f610-0fa1-7bfdfaba1097', 'CopaCobana', 5, -22.9682017, -43.1797941, 244.26, 0)
 on conflict (id) do nothing;
+
+-- A second map with five far-apart, well-covered Street View spots.
+insert into public.maps (id, name, active)
+values ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'World tour', true)
+on conflict (id) do nothing;
+
+insert into public.locations (id, map_id, name, round_number, lat, lng, heading, pitch) values
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a11', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Times Square, New York', 1, 40.7580, -73.9855, 30, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a12', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Shibuya, Tokyo', 2, 35.6595, 139.7005, 60, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a13', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'V&A Waterfront, Cape Town', 3, -33.9036, 18.4207, 200, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a14', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Laugavegur, Reykjavík', 4, 64.1455, -21.9300, 90, 0),
+  ('6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a15', '6e0b6a1e-5f53-4a8e-9a39-7d2f3c1b9a01', 'Avenida 9 de Julio, Buenos Aires', 5, -34.6037, -58.3816, 0, 0)
+on conflict (id) do nothing;

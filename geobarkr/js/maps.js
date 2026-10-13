@@ -1,28 +1,43 @@
-// Google Maps and Street View, set up as the ServiceNow widgets did.
+// Google Maps and Street View. The map uses GeoBarkr's dark style; pins are
+// players' avatars (photo or initials in their colour) drawn as HTML overlays,
+// and results draw each guess to the target as a great-circle (geodesic) line.
+// Without a key (GOOGLE_MAPS_KEY empty) the same functions come from
+// maps-keyless.js: Leaflet maps and Google's keyless Street View embed.
 import { GOOGLE_MAPS_KEY } from "./config.js";
-import { formatDistance, formatScore } from "./geo.js";
+import { avatar } from "./players.js";
 
-// The guess map (GeoBarkr Map widget): whole world, latitudes clamped to ±80.
+// Midnight: the map in the app's colours. Roads and labels stay readable;
+// businesses and transit are hidden so the map doesn't give places away.
+const DARK_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#1B2A47" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8FA3C7" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#0B1426" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0A1324" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4F6182" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#33476E" }] },
+  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#A9B9D6" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#1D2D4C" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2A3D63" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7F93B8" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#34507F" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+];
+
 const WORLD = {
-  center: { lat: 21.170226033316446, lng: -6.8097916260035705 },
+  center: { lat: 25, lng: 0 },
   zoom: 1,
   minZoom: 1,
-  restriction: { latLngBounds: { north: 80, south: -80, east: 180, west: -180 } },
+  restriction: { latLngBounds: { north: 85, south: -85, east: 180, west: -180 } },
+  styles: DARK_STYLE,
+  backgroundColor: "#0A1324",
   mapTypeControl: false,
   streetViewControl: false,
   fullscreenControl: false,
   clickableIcons: false,
-  // One finger drags the map: on a phone the map is the whole screen.
+  keyboardShortcuts: false,
+  // One finger drags the map: on a phone the map is the main thing.
   gestureHandling: "greedy",
-};
-
-// The green "target" pin from the ServiceNow results popups.
-const TARGET_PIN = {
-  path: "M-1.547 12l6.563-6.609-1.406-1.406-5.156 5.203-2.063-2.109-1.406 1.406zM0 0q2.906 0 4.945 2.039t2.039 4.945q0 1.453-0.727 3.328t-1.758 3.516-2.039 3.070-1.711 2.273l-0.75 0.797q-0.281-0.328-0.75-0.867t-1.688-2.156-2.133-3.141-1.664-3.445-0.75-3.375q0-2.906 2.039-4.945t4.945-2.039z",
-  fillColor: "green",
-  fillOpacity: 1,
-  strokeWeight: 0,
-  scale: 2,
 };
 
 let mapsPromise = null;
@@ -31,15 +46,13 @@ export function loadGoogleMaps() {
   if (!mapsPromise) {
     mapsPromise = new Promise((resolve, reject) => {
       if (!GOOGLE_MAPS_KEY) {
-        reject(new Error("The Google Maps key isn't set up yet (geobarkr/js/config.js)."));
+        reject(new Error("Street View and the map need the Google Maps key (geobarkr/js/config.js)"));
         return;
       }
-      window.gm_authFailure = () => {
-        document.dispatchEvent(new CustomEvent("geobarkr:maps-auth-failed"));
-      };
+      window.gm_authFailure = () => document.dispatchEvent(new CustomEvent("geobarkr:maps-auth-failed"));
       window.__geobarkrMapsReady = async () => {
         try {
-          await Promise.all(["maps", "streetView", "marker"].map((lib) => google.maps.importLibrary(lib)));
+          await Promise.all(["maps", "streetView", "geometry"].map((lib) => google.maps.importLibrary(lib).catch(() => null)));
           resolve(google.maps);
         } catch (error) {
           reject(error);
@@ -51,7 +64,7 @@ export function loadGoogleMaps() {
       script.async = true;
       script.onerror = () => {
         mapsPromise = null;
-        reject(new Error("Couldn't load Google Maps. Check your connection and try again."));
+        reject(new Error("Couldn't load Google Maps. Check your connection and try again"));
       };
       document.head.appendChild(script);
     });
@@ -59,26 +72,78 @@ export function loadGoogleMaps() {
   return mapsPromise;
 }
 
-// Tap (or click) to place your guess; tap again to move it.
-export async function createGuessMap(element, onPick) {
+// An HTML element pinned to a place on the map (bottom-centre at the point).
+function htmlMarker(maps, map, position, element, zIndex = 1) {
+  class Marker extends maps.OverlayView {
+    onAdd() {
+      element.style.position = "absolute";
+      element.style.zIndex = zIndex;
+      this.getPanes().overlayMouseTarget.appendChild(element);
+    }
+    draw() {
+      const p = this.getProjection()?.fromLatLngToDivPixel(new maps.LatLng(this.position));
+      if (p) {
+        element.style.left = `${p.x}px`;
+        element.style.top = `${p.y}px`;
+      }
+    }
+    onRemove() { element.remove(); }
+    move(next) { this.position = next; this.draw(); }
+  }
+  const marker = new Marker();
+  marker.position = position;
+  marker.setMap(map);
+  return marker;
+}
+
+// A player's pin: avatar in a ring of their colour, with a point at the spot.
+export function pinElement(player, colour, { me = false, label = null } = {}) {
+  const pin = document.createElement("div");
+  pin.className = `gb-pin${me ? " is-me" : ""}`;
+  pin.style.setProperty("--c", colour);
+  pin.append(avatar(player, colour, 30));
+  if (label) {
+    const tag = document.createElement("span");
+    tag.className = "gb-pin-label";
+    tag.textContent = label;
+    pin.append(tag);
+  }
+  return pin;
+}
+
+export function targetElement(place) {
+  const el = document.createElement("div");
+  el.className = "gb-target";
+  el.innerHTML = '<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="10" fill="none" stroke="#fff" stroke-width="2.4"/><circle cx="17" cy="17" r="4" fill="#fff"/><path d="M17 2v6M17 26v6M2 17h6M26 17h6" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  if (place) {
+    const label = document.createElement("span");
+    label.textContent = place;
+    el.append(label);
+  }
+  return el;
+}
+
+// Tap the map to place (or move) your pin.
+const keyless = () => import("./maps-keyless.js");
+
+export async function createGuessMap(element, me, onPick) {
+  if (!GOOGLE_MAPS_KEY) return (await keyless()).createGuessMap(element, me, onPick);
   const maps = await loadGoogleMaps();
   const map = new maps.Map(element, WORLD);
   let marker = null;
   let pick = null;
-
   map.addListener("click", (event) => {
     pick = { lat: event.latLng.lat(), lng: event.latLng.lng() };
-    if (marker) marker.setPosition(pick);
-    else marker = new maps.Marker({ position: pick, map, title: "My guess is here" });
+    if (marker) marker.move(pick);
+    else marker = htmlMarker(maps, map, pick, pinElement(me.player, me.colour, { me: true }), 10);
     onPick?.(pick);
   });
-
   return {
     map,
     getPick: () => pick,
     reset() {
       pick = null;
-      if (marker) marker.setMap(null);
+      marker?.setMap(null);
       marker = null;
       map.setCenter(WORLD.center);
       map.setZoom(WORLD.zoom);
@@ -86,10 +151,10 @@ export async function createGuessMap(element, onPick) {
   };
 }
 
-// Street View at the round's place (GeoBarkr Panorama widget): no movement
-// arrows, address, road names or zoom buttons, but you can still look around,
-// click along the road and pinch to zoom.
+// Street View at the round's place: no movement arrows, address, road names or
+// zoom buttons, but you can still look around, click along the road and pinch.
 export async function createPanorama(element) {
+  if (!GOOGLE_MAPS_KEY) return (await keyless()).createPanorama(element);
   const maps = await loadGoogleMaps();
   const panorama = new maps.StreetViewPanorama(element, {
     linksControl: false,
@@ -98,98 +163,67 @@ export async function createPanorama(element) {
     addressControl: false,
     zoomControl: false,
     showRoadLabels: false,
+    fullscreenControl: false,
+    motionTrackingControl: false,
     visible: false,
   });
   let start = null;
-
-  function goTo(target) {
+  const goTo = (target) => {
     panorama.setPosition({ lat: target.lat, lng: target.lng });
     panorama.setPov({ heading: target.heading || 0, pitch: target.pitch || 0 });
     panorama.setZoom(1);
     panorama.setVisible(true);
-  }
-
+  };
   return {
     panorama,
     show(target) {
       const key = `${target.lat},${target.lng},${target.heading},${target.pitch}`;
-      if (start && start.key === key) return;
+      if (start?.key === key) return;
       start = { ...target, key };
       goTo(start);
     },
-    // The home button: back to where the round started.
-    home() {
-      if (start) goTo(start);
-    },
-    hide() {
-      start = null;
-      panorama.setVisible(false);
-    },
+    home() { if (start) goTo(start); },
+    hide() { start = null; panorama.setVisible(false); },
   };
 }
 
-// Guesses, targets and the lines between them (results popups and pages).
+// Results: the target, every guess as an avatar pin, and great-circle lines.
 export async function createResultsMap(element) {
+  if (!GOOGLE_MAPS_KEY) return (await keyless()).createResultsMap(element);
   const maps = await loadGoogleMaps();
   const map = new maps.Map(element, { ...WORLD, zoom: 2 });
   let drawn = [];
-
-  function clear() {
-    for (const item of drawn) {
-      if (item.close) item.close();
-      if (item.setMap) item.setMap(null);
-    }
+  const clear = () => {
+    for (const item of drawn) item.setMap(null);
     drawn = [];
-  }
-
-  // targets: [{lat, lng}]; guesses: [{lat, lng, target: {lat, lng}, title, label?}]
+  };
+  // targets: [{ lat, lng, place }]; guesses: [{ lat, lng, target, player, colour, me }]
   function show({ targets = [], guesses = [] }) {
     clear();
     const bounds = new maps.LatLngBounds();
-    for (const target of targets) {
-      drawn.push(new maps.Marker({
-        position: target, map, title: "Target",
-        icon: { ...TARGET_PIN, anchor: new maps.Point(0, 20) },
-        zIndex: 10,
-      }));
-      bounds.extend(target);
-    }
     for (const guess of guesses) {
-      const marker = new maps.Marker({ position: guess, map, title: guess.title || "Guess" });
-      drawn.push(marker);
-      bounds.extend(guess);
       if (guess.target) {
         drawn.push(new maps.Polyline({
           path: [guess, guess.target], geodesic: true, map,
-          strokeColor: "#FF0000", strokeOpacity: 1, strokeWeight: 2,
+          strokeColor: guess.colour, strokeOpacity: 1, strokeWeight: guess.me ? 3 : 2.4, zIndex: guess.me ? 3 : 2,
         }));
       }
-      if (guess.label) {
-        const info = new maps.InfoWindow({ content: guess.label, headerDisabled: true, disableAutoPan: true });
-        info.open({ map, anchor: marker });
-        drawn.push(info);
-      }
+    }
+    for (const target of targets) {
+      drawn.push(htmlMarker(maps, map, target, targetElement(target.place), 5));
+      bounds.extend(target);
+    }
+    for (const guess of guesses) {
+      drawn.push(htmlMarker(maps, map, guess, pinElement(guess.player, guess.colour, { me: guess.me }), guess.me ? 12 : 11));
+      bounds.extend(guess);
     }
     const points = targets.length + guesses.length;
     if (points === 1) {
       map.setCenter(targets[0] || guesses[0]);
-      map.setZoom(4);
+      map.setZoom(5);
     } else if (points > 1) {
-      map.fitBounds(bounds, 48);
+      map.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
     }
   }
-
   return { map, show, clear };
-}
-
-// The label on a player's guess in the round results: name, km and points.
-export function guessLabel(name, distanceKm, score) {
-  const box = document.createElement("div");
-  box.className = "gb-map-label";
-  const strong = document.createElement("strong");
-  strong.textContent = name;
-  const line = document.createElement("div");
-  line.textContent = `${formatDistance(distanceKm)} km • ${formatScore(score)} pts`;
-  box.append(strong, line);
-  return box;
 }

@@ -3,49 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
-  <meta name="theme-color" content="#cc0000">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#0B1426">
   <title>GeoBarkr</title>
-  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
-  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
 </head>
-<body>
+<body class="has-band">
   <div id="gb-header"></div>
-  <main class="gb-page">
-    <h1 class="gb-visually-hidden">Start a game of GeoBarkr</h1>
-    <div class="gb-columns">
-      <form id="start-form" class="gb-section">
-        <fieldset class="gb-fingerpost">
-          <legend>Where are you heading?</legend>
-          <label class="gb-blade"><input type="radio" name="type" value="single_player" checked><span class="gb-blade-name">Single player</span><span class="gb-blade-text">Five rounds on your own</span></label>
-          <label class="gb-blade"><input type="radio" name="type" value="multiplayer"><span class="gb-blade-name">Multiplayer</span><span class="gb-blade-text">Everyone plays on their own screen</span></label>
-          <label class="gb-blade"><input type="radio" name="type" value="local_multiplayer"><span class="gb-blade-name">In person</span><span class="gb-blade-text">Street View on one big screen, guesses on phones</span></label>
-        </fieldset>
-        <label class="gb-field"><span>Map</span><select class="gb-select" name="map" id="map-select" required><option value="">Loading maps…</option></select></label>
-        <button class="gb-button gb-button-block" type="submit" id="start-button">Start game</button>
-      </form>
-      <div>
-        <form id="join-form" class="gb-section">
-          <h2>Join a game</h2>
-          <label class="gb-field"><span class="gb-muted">Type the room code from the host's screen, or scan their QR code.</span><input class="gb-input gb-code-input" name="code" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" aria-label="Room code" required></label>
-          <button class="gb-button gb-button-block" type="submit" id="join-button">Join game</button>
-        </form>
-        <section class="gb-section">
-          <h2>How to play</h2>
-          <ol class="gb-steps">
-            <li>Each game has 5 rounds.</li>
-            <li>Look around the Street View: move, pan and zoom to work out where you are.</li>
-            <li>Tap the map where you think you are, then press Guess.</li>
-            <li>The closer you are, the more points you get, up to 5,000 a round.</li>
-          </ol>
-        </section>
+  <main>
+    <div class="gb-band" id="band">
+      <div class="gb-band-caption" id="band-caption"></div>
+    </div>
+    <div class="gb-page">
+      <h1 class="gb-vh">Start a game of GeoBarkr</h1>
+      <div class="gb-label">New game</div>
+      <label class="gb-field"><span class="gb-vh">Map</span><select class="gb-select" id="map-select"><option value="">Loading maps…</option></select></label>
+      <div class="gb-list" id="modes">
+        <button class="gb-row" type="button" data-type="single_player">
+          <span class="gb-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.6 3.8-5.5 7-5.5s5.8 1.9 7 5.5"/></svg></span>
+          <span><b>Solo</b><span>Five rounds on your own</span></span><span class="chev" aria-hidden="true">›</span>
+        </button>
+        <button class="gb-row" type="button" data-type="multiplayer">
+          <span class="gb-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="9" r="3"/><circle cx="16.5" cy="9" r="3"/><path d="M3 19c.9-2.8 2.9-4.3 5.5-4.3S13.1 16.2 14 19M13 15.5c1-.6 2.1-.8 3.5-.8 2.6 0 4.6 1.5 5.5 4.3"/></svg></span>
+          <span><b>With friends online</b><span>Everyone on their own phone</span></span><span class="chev" aria-hidden="true">›</span>
+        </button>
+        <button class="gb-row" type="button" data-type="local_multiplayer">
+          <span class="gb-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg></span>
+          <span><b>Party on a big screen</b><span>Street View on the TV, guesses on phones</span></span><span class="chev" aria-hidden="true">›</span>
+        </button>
       </div>
+      <div class="gb-label">Join a game</div>
+      <form class="gb-inline" id="join-form">
+        <input class="gb-input gb-code" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Room code" aria-label="Room code" required>
+        <button class="gb-btn" type="submit" id="join-button">Join</button>
+      </form>
+      <div class="gb-label">How to play</div>
+      <p class="gb-muted" style="margin:0 2px">Look around the Street View, then tap the map where you think you are. The closer you are, the more points you get: up to 5,000 a round, five rounds a game.</p>
     </div>
   </main>
-  <script type="module" src="/geobarkr/js/pages/start.js?v=1"></script>
+  <script type="module" src="/geobarkr/js/pages/start.js?v=3"></script>
 </body>
 </html>

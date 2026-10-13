@@ -3,38 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
-  <meta name="theme-color" content="#cc0000">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#0B1426">
   <title>Join · GeoBarkr</title>
-  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
-  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
 </head>
-<body>
+<body class="has-band">
   <div id="gb-header"></div>
-  <main class="gb-page gb-page-narrow">
-    <p class="gb-loading" id="joining">Joining the game…</p>
-    <form class="gb-section" id="code-form" hidden>
-      <h1 class="gb-page-title">Join a game</h1>
-      <p id="code-error" hidden></p>
-      <label class="gb-field"><span class="gb-muted">Type the room code from the host's screen.</span><input class="gb-input gb-code-input" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" aria-label="Room code" required></label>
-      <button class="gb-button gb-button-block" type="submit" id="join-button">Join game</button>
-    </form>
-    <section class="gb-section" id="welcome" hidden>
-      <h1 class="gb-page-title" id="welcome-title"></h1>
-      <p class="gb-lede">The game starts when the host is ready. This page moves on by itself.</p>
-      <h2 style="font-size: 20px; margin: 24px 0 8px">How to play</h2>
-      <ol class="gb-steps">
-        <li>Each game has <span id="round-count">5 rounds</span>.</li>
-        <li>Look at the Street View on the big screen to work out where you are.</li>
-        <li>Tap the map on your phone where you think it is, then press Guess.</li>
-        <li>The closer you are, the more points you score.</li>
-      </ol>
-    </section>
+  <main>
+    <div class="gb-band short" id="band"></div>
+    <div class="gb-page">
+      <p class="gb-loading" id="joining">Joining the game…</p>
+      <form id="code-form" hidden>
+        <h1 class="gb-title">Join a game</h1>
+        <p class="gb-lede" id="code-error" hidden></p>
+        <div class="gb-inline">
+          <input class="gb-input gb-code" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Room code" aria-label="Room code" required>
+          <button class="gb-btn" type="submit" id="join-button">Join</button>
+        </div>
+      </form>
+      <section id="welcome" hidden>
+        <h1 class="gb-title" id="welcome-title"></h1>
+        <p class="gb-lede">The game starts when the host is ready. This page moves on by itself.</p>
+        <div class="gb-label">How to play</div>
+        <div class="gb-lines">
+          <div class="gb-line"><div class="grow"><b>Look at the big screen</b><span>The Street View is on the host's screen. Work out where it is.</span></div></div>
+          <div class="gb-line"><div class="grow"><b>Tap your map</b><span>Place your pin where you think it is, then press Guess.</span></div></div>
+          <div class="gb-line"><div class="grow"><b>Get closer, score more</b><span>Up to 5,000 points a round, <span id="round-count">5 rounds</span>.</span></div></div>
+        </div>
+      </section>
+    </div>
   </main>
-  <script type="module" src="/geobarkr/js/pages/join.js?v=1"></script>
+  <script type="module" src="/geobarkr/js/pages/join.js?v=3"></script>
 </body>
 </html>

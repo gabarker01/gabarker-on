@@ -2,7 +2,8 @@
 # Starts GeoBarkr locally against a throwaway Postgres running the real SQL,
 # with the Supabase stand-in in server.mjs. Not used by the live site.
 #   geobarkr/dev/start.sh            → http://localhost:8080/geobarkr/
-# Environment: POLL_MS (default 15000), GOOGLE_MAPS_KEY (default "dev").
+# Environment: POLL_MS (default 15000), GOOGLE_MAPS_KEY (default "dev"; set it
+# empty to use the keyless maps), DEMO=1 for demo mode (no Supabase).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

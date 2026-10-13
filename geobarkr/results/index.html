@@ -3,41 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="GeoBarkr: find where you are from Street View, then guess on the map.">
-  <meta name="theme-color" content="#cc0000">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#0B1426">
   <title>Results · GeoBarkr</title>
-  <link rel="icon" type="image/png" href="/geobarkr/assets/icon.png">
-  <link rel="apple-touch-icon" href="/geobarkr/assets/icon.png">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=1">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=3">
 </head>
-<body>
+<body class="has-band">
   <div id="gb-header"></div>
-  <main class="gb-page">
-    <h1 class="gb-page-title">Game results</h1>
-    <p class="gb-loading" id="loading">Loading the results…</p>
-    <div id="results-page" hidden>
-      <p class="gb-lede" id="summary"></p>
-      <p id="unfinished" hidden></p>
-      <section class="gb-section" id="table-section" hidden>
-        <h2>Leaderboard</h2>
-        <div class="gb-table-wrap"><table class="gb-table" id="multi-table"></table></div>
-      </section>
-      <div class="gb-columns" id="scorecard-section" hidden>
-        <section class="gb-section">
-          <h2 id="scorecard-title">Your scorecard</h2>
-          <div class="gb-results-map" id="results-map"></div>
+  <main>
+    <div class="gb-band" id="band"><div class="gb-band-caption" id="band-caption"></div></div>
+    <div class="gb-page wide">
+      <p class="gb-loading" id="loading">Loading the results…</p>
+      <div id="results-page" hidden>
+        <h1 class="gb-title">Game results</h1>
+        <p class="gb-lede" id="summary"></p>
+        <p id="unfinished" hidden></p>
+        <section class="gb-section" id="table-section" hidden>
+          <div class="gb-label">Standings</div>
+          <div class="gb-table-wrap"><table class="gb-table" id="standings"></table></div>
         </section>
-        <section class="gb-section">
-          <h2 class="gb-visually-hidden">Scores by round</h2>
+        <section class="gb-section" id="scorecard-section" hidden>
+          <div class="gb-label" id="scorecard-title">Your rounds</div>
           <div class="gb-table-wrap"><table class="gb-table" id="scorecard"></table></div>
         </section>
+        <div class="gb-inline" style="max-width:420px">
+          <a class="gb-btn" href="/geobarkr/">Play again</a>
+          <a class="gb-btn quiet" href="/geobarkr/games/" style="flex:none">My games</a>
+        </div>
       </div>
-      <p><a class="gb-button" href="/geobarkr/">Play again</a></p>
     </div>
   </main>
-  <script type="module" src="/geobarkr/js/pages/results.js?v=1"></script>
+  <script type="module" src="/geobarkr/js/pages/results.js?v=3"></script>
 </body>
 </html>
