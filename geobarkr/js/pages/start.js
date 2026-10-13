@@ -1,11 +1,11 @@
 // The start screen (ServiceNow: the "Start Game" record producer): the places
 // you've played on a world map, a Resume strip for a game in progress, then
 // choose how to play, pick a map and press Play, or join with a room code.
-import { initPage, $, h, busy, showError, codeInput, closeButton, pageReady, param, toast, sheetDialog } from "../ui.js?v=12";
-import { activeMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js?v=12";
-import { drawWorld } from "../worldmap.js?v=12";
-import { ME_COLOUR } from "../players.js?v=12";
-import { GAME_TYPES, formatScore } from "../geo.js?v=12";
+import { initPage, $, h, busy, showError, codeInput, closeButton, pageReady, param, toast, sheetDialog, kindIcon, KIND_NAMES } from "../ui.js?v=13";
+import { playableMaps, createGame, joinGame, myGames, gamePageUrl } from "../api.js?v=13";
+import { drawWorld } from "../worldmap.js?v=13";
+import { ME_COLOUR } from "../players.js?v=13";
+import { GAME_TYPES, formatScore } from "../geo.js?v=13";
 
 // Held until the map, your places and the map list are in, so nothing pops in.
 await initPage({ hold: true });
@@ -56,39 +56,58 @@ for (const button of document.querySelectorAll("#modes [data-type]")) {
 }
 
 // ---------- Map: a searchable list, your last map first ----------
+// Each map says whether it's Street View or photos, and who made it.
 const LAST_MAP = "geobarkr-last-map";
 const remembered = () => { try { return localStorage.getItem(LAST_MAP); } catch { return null; } };
 let maps = [];
 let mapId = null;
+let kindFilter = "all";
 const picker = $("#map-picker");
 const closePicker = sheetDialog(picker);
 $("#map-picker-close").replaceWith(closeButton(closePicker));
 
 function chooseMap(id) {
   mapId = id;
-  $("#map-name").textContent = maps.find((m) => m.id === id)?.name || "Choose a map";
+  const map = maps.find((m) => m.id === id);
+  $("#map-name").replaceChildren(...(map ? [kindIcon(map.kind), map.name] : ["Choose a map"]));
 }
+
+const byline = (m) => [
+  m.mine ? "Your map" : m.owner_name ? `By ${m.owner_name}` : null,
+  m.description || null,
+].filter(Boolean).join(" · ");
 
 function renderMaps() {
   const query = $("#map-search").value.trim().toLowerCase();
   const last = remembered();
   const shown = maps
-    .filter((m) => !query || m.name.toLowerCase().includes(query))
+    .filter((m) => kindFilter === "all" || (kindFilter === "mine" ? m.mine : m.kind === kindFilter))
+    .filter((m) => !query || [m.name, m.description, m.owner_name, KIND_NAMES[m.kind]].some((t) => String(t || "").toLowerCase().includes(query)))
     .sort((a, b) => (b.id === last) - (a.id === last) || a.name.localeCompare(b.name));
   $("#map-list").replaceChildren(...shown.map((m, i) => h("button", {
-    type: "button", role: "option", class: "gb-pick", "data-id": m.id, "data-name": m.name, "aria-selected": String(m.id === mapId),
+    type: "button", role: "option", class: "gb-pick", "data-id": m.id, "data-name": m.name, "data-kind": m.kind, "aria-selected": String(m.id === mapId),
     style: `--i:${Math.min(i, 12)}`,
     onclick: (event) => {
       chooseMap(m.id);
       for (const b of $("#map-list").children) b.setAttribute("aria-selected", String(b === event.currentTarget));
       setTimeout(closePicker, 120); // let the tick show first
     },
-  }, h("span", { class: "name" }, m.name), m.id === last ? h("span", { class: "gb-tag" }, "Last played") : null,
-    h("span", { class: "tick", "aria-hidden": "true" }, "✓"))));
+  }, kindIcon(m.kind),
+  h("span", { class: "name" }, h("b", {}, m.name), h("span", { class: "sub" }, [KIND_NAMES[m.kind], byline(m)].filter(Boolean).join(" · "))),
+  m.id === last ? h("span", { class: "gb-tag" }, "Last played") : null,
+  m.mine && !m.is_public ? h("span", { class: "gb-tag" }, "Private") : null,
+  h("span", { class: "tick", "aria-hidden": "true" }, "✓"))));
   $("#map-empty").hidden = shown.length > 0;
 }
 
 $("#map-search").addEventListener("input", renderMaps);
+for (const chip of document.querySelectorAll("#map-kinds button")) {
+  chip.addEventListener("click", () => {
+    kindFilter = chip.dataset.kind;
+    for (const c of document.querySelectorAll("#map-kinds button")) c.setAttribute("aria-pressed", String(c === chip));
+    renderMaps();
+  });
+}
 $("#map-button").addEventListener("click", () => {
   $("#map-search").value = "";
   renderMaps();
@@ -96,10 +115,14 @@ $("#map-button").addEventListener("click", () => {
 });
 
 try {
-  maps = await activeMaps();
+  maps = await playableMaps();
   if (maps.length) {
+    // ?map= (Play on a map you've made), else the map you played last.
+    const wanted = param("map");
     const last = remembered();
-    chooseMap(maps.some((m) => m.id === last) ? last : [...maps].sort((a, b) => a.name.localeCompare(b.name))[0].id);
+    chooseMap(maps.some((m) => m.id === wanted) ? wanted : maps.some((m) => m.id === last) ? last : [...maps].sort((a, b) => a.name.localeCompare(b.name))[0].id);
+    $("#map-kinds").hidden = !maps.some((m) => m.kind === "photo") && !maps.some((m) => m.mine);
+    $("#map-chip-mine").hidden = !maps.some((m) => m.mine);
     $("#map-button").disabled = false;
     renderMaps();
   } else {
@@ -112,10 +135,8 @@ try {
 
 await Promise.race([placesShown, new Promise((done) => setTimeout(done, 2500))]);
 pageReady();
-if (param("cancelled")) {
-  toast("That game was cancelled by its host.");
-  history.replaceState(null, "", "/geobarkr/");
-}
+if (param("cancelled")) toast("That game was cancelled by its host.");
+if (param("cancelled") || param("map")) history.replaceState(null, "", "/geobarkr/");
 
 $("#play-button").addEventListener("click", (event) => busy(event.currentTarget, async () => {
   if (!mapId) throw new Error("Choose a map first");

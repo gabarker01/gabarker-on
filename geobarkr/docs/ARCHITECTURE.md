@@ -112,8 +112,8 @@ erDiagram
 | Table | Main columns |
 |---|---|
 | `profiles` | `id` (= auth user), `display_name`, `role` (player / admin) |
-| `maps` | `name`, `active` |
-| `locations` | `map_id`, `name`, `round_number` (1–5, one per round), `lat`, `lng`, `heading`, `pitch` |
+| `maps` | `name`, `active`, `description`, `kind` (street_view / photo), `is_public`, `owner_id` (empty for admin maps) |
+| `locations` | `map_id`, `name`, `round_number` (1–5, one per round), `lat`, `lng`, `heading`, `pitch`, `photo_path` (photo maps) |
 | `games` | `code` (6-character room code), `type` (single_player / multiplayer / local_multiplayer), `status` (lobby / in_play / complete / cancelled), `map_id`, `map_name`, `host_id`, timestamps |
 | `game_players` | `game_id`, `user_id`, `total_score`, `total_distance_km` |
 | `rounds` | `game_id`, `round_number`, a copy of the location (so later edits don't change old games), `status` (ready / in_progress / results / complete), `started_at`, `ended_at` |
@@ -133,6 +133,17 @@ erDiagram
 | `get_results(game)` | host / players / admin | Scorecards, sorted by total score |
 | `my_games()` | signed in | Games you played or hosted, with your score and position |
 | `leaderboard(sort)` | signed in | All-time, completed games only: total points, best game, games played, average |
+| `playable_maps()` | signed in | Maps you can start a game on: admin maps, public player maps and your own, complete and switched on |
+| `my_stats()` | signed in | Your numbers for the profile page |
+| `my_maps()`, `get_my_map(map)` | owner | Your maps, and one with its places, for the map maker |
+| `create_my_map`, `update_my_map`, `delete_my_map` | owner | Make, change or delete your map (up to 30) |
+| `save_my_location`, `delete_my_location` | owner | Set or clear one of its five places; photo maps need a photo in your Storage folder |
+
+Photo rounds: `get_game_state` sends only the photo during the round and the
+place at the reveal. Photos are in the public Storage bucket `map-photos`
+under `<user id>/`; policies only let you upload to (at most 150) and delete
+from your own folder. The browser re-encodes photos before upload, which
+strips EXIF (including GPS).
 
 ## 6. Security (row-level security)
 

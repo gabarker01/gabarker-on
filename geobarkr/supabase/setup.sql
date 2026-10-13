@@ -32,6 +32,10 @@ begin
   if not exists (select 1 from pg_type where typname = 'round_status' and typnamespace = 'public'::regnamespace) then
     create type public.round_status as enum ('ready', 'in_progress', 'results', 'complete');
   end if;
+  -- What players look at in a round: Street View, or a still photo.
+  if not exists (select 1 from pg_type where typname = 'map_kind' and typnamespace = 'public'::regnamespace) then
+    create type public.map_kind as enum ('street_view', 'photo');
+  end if;
 end
 $$;
 
@@ -55,6 +59,20 @@ create table if not exists public.maps (
   created_at timestamptz not null default now()
 );
 
+-- Maps players make themselves (added after launch). Admin maps have no
+-- owner and are always public. A player's map is public (anyone can start a
+-- game on it) or private (only its owner can); either way it needs all five
+-- locations before it can be played.
+alter table public.maps
+  add column if not exists owner_id uuid references public.profiles (id) on delete cascade,
+  add column if not exists description text not null default '' check (char_length(description) <= 140),
+  add column if not exists kind public.map_kind not null default 'street_view',
+  add column if not exists is_public boolean not null default true,
+  -- Admins can block a player's map; its owner can't undo that.
+  add column if not exists blocked boolean not null default false;
+
+create index if not exists maps_owner_idx on public.maps (owner_id);
+
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
   map_id uuid not null references public.maps (id) on delete cascade,
@@ -68,6 +86,11 @@ create table if not exists public.locations (
   -- One location per round of a map (ServiceNow allowed duplicates, which broke the game).
   unique (map_id, round_number)
 );
+
+-- Photo maps: the photo in Storage (bucket map-photos), as
+-- "<owner id>/<file>.jpg". The location is the answer, so it's never in the file.
+alter table public.locations
+  add column if not exists photo_path text check (photo_path is null or photo_path ~ '^[0-9a-f-]{36}/[A-Za-z0-9_-]{1,64}\.(jpg|webp)$');
 
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
@@ -114,6 +137,9 @@ create table if not exists public.rounds (
   ended_at timestamptz,
   unique (game_id, round_number)
 );
+
+-- A photo round's photo (copied from the location, like the place).
+alter table public.rounds add column if not exists photo_path text;
 
 create table if not exists public.guesses (
   id uuid primary key default gen_random_uuid(),
@@ -319,12 +345,19 @@ declare
   v_map public.maps;
   v_game public.games;
 begin
-  select * into v_map from public.maps where id = p_map and active;
+  -- Active, and public or yours (a private map is only for its owner's games).
+  -- Locked so its photos can't be swapped out while the rounds copy them.
+  select * into v_map from public.maps
+  where id = p_map and active and not blocked and (owner_id is null or is_public or owner_id = v_uid)
+  for share;
   if not found then
     raise exception 'That map isn''t available';
   end if;
   if not exists (select 1 from public.locations where map_id = p_map) then
     raise exception 'That map has no locations yet';
+  end if;
+  if v_map.owner_id is not null and (select count(*) from public.locations where map_id = p_map) <> 5 then
+    raise exception 'That map needs all five locations first';
   end if;
 
   insert into public.games (code, type, status, map_id, map_name, host_id, started_at)
@@ -338,8 +371,9 @@ begin
 
   -- Rounds follow the locations' round numbers, renumbered 1, 2, 3… so a map
   -- with a gap still plays every location.
-  insert into public.rounds (game_id, round_number, location_id, location_name, lat, lng, heading, pitch)
-  select v_game.id, row_number() over (order by l.round_number), l.id, l.name, l.lat, l.lng, l.heading, l.pitch
+  insert into public.rounds (game_id, round_number, location_id, location_name, lat, lng, heading, pitch, photo_path)
+  select v_game.id, row_number() over (order by l.round_number), l.id, l.name, l.lat, l.lng, l.heading, l.pitch,
+         case when v_map.kind = 'photo' then l.photo_path end
   from public.locations l
   where l.map_id = p_map;
 
@@ -666,9 +700,14 @@ begin
       'number', v_round.round_number,
       'status', v_round.status,
       'started_at', v_round.started_at,
-      'target', case when v_show_target then jsonb_build_object(
-        'lat', v_round.lat, 'lng', v_round.lng, 'heading', v_round.heading, 'pitch', v_round.pitch
-      ) end,
+      -- A photo round only needs its photo until the reveal; the place waits.
+      'target', case
+        when not v_show_target then null
+        when v_round.photo_path is not null and not v_reveal then jsonb_build_object('photo_path', v_round.photo_path)
+        else jsonb_build_object(
+          'lat', v_round.lat, 'lng', v_round.lng, 'heading', v_round.heading, 'pitch', v_round.pitch,
+          'photo_path', v_round.photo_path)
+      end,
       -- The place's name only once the round is over.
       'place', case when v_reveal then v_round.location_name end
     ) end,
@@ -713,7 +752,7 @@ begin
     ),
     'rounds', (
       select coalesce(jsonb_agg(jsonb_build_object(
-        'number', r.round_number, 'lat', r.lat, 'lng', r.lng, 'name', r.location_name
+        'number', r.round_number, 'lat', r.lat, 'lng', r.lng, 'name', r.location_name, 'photo_path', r.photo_path
       ) order by r.round_number), '[]'::jsonb)
       from public.rounds r
       where r.game_id = p_game and r.status in ('results', 'complete')
@@ -812,14 +851,343 @@ as $$
   ) x;
 $$;
 
+-- ---------- Maps players make ----------
+
+-- Maps you can start a game on: active, public or yours, and complete (admin
+-- maps need at least one location; players' maps need all five).
+create or replace function public.playable_maps()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(row_to_json(x)::jsonb order by lower(x.name), x.id), '[]'::jsonb)
+  from (
+    select m.id, m.name, m.description, m.kind, m.is_public,
+           m.owner_id is not null and m.owner_id = auth.uid() as mine,
+           case when m.owner_id is not null then p.display_name end as owner_name,
+           c.rounds
+    from public.maps m
+    left join public.profiles p on p.id = m.owner_id
+    cross join lateral (select count(*) as rounds from public.locations l where l.map_id = m.id) c
+    where auth.uid() is not null
+      and m.active and not m.blocked
+      and (m.owner_id is null or m.is_public or m.owner_id = auth.uid())
+      and (case when m.owner_id is null then c.rounds >= 1 else c.rounds = 5 end)
+  ) x;
+$$;
+
+-- Your maps, newest first, for your profile.
+create or replace function public.my_maps()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(row_to_json(x)::jsonb order by x.created_at desc), '[]'::jsonb)
+  from (
+    select m.id, m.name, m.description, m.kind, m.is_public, m.active, m.blocked, m.created_at,
+           (select count(*) from public.locations l where l.map_id = m.id) as rounds,
+           (select l.photo_path from public.locations l
+            where l.map_id = m.id and l.photo_path is not null order by l.round_number limit 1) as cover_path,
+           (select coalesce(jsonb_agg(jsonb_build_object('lat', l.lat, 'lng', l.lng) order by l.round_number), '[]'::jsonb)
+            from public.locations l where l.map_id = m.id) as places,
+           (select count(*) from public.games g where g.map_id = m.id and g.status = 'complete') as plays
+    from public.maps m
+    where m.owner_id = auth.uid()
+  ) x;
+$$;
+
+-- One of your maps with its locations, for the map editor.
+create or replace function public.get_my_map(p_map uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_map public.maps;
+begin
+  select * into v_map from public.maps where id = p_map and owner_id = v_uid;
+  if not found then
+    raise exception 'Map not found';
+  end if;
+  return jsonb_build_object(
+    'id', v_map.id, 'name', v_map.name, 'description', v_map.description, 'kind', v_map.kind,
+    'is_public', v_map.is_public, 'active', v_map.active, 'blocked', v_map.blocked, 'created_at', v_map.created_at,
+    'plays', (select count(*) from public.games g where g.map_id = v_map.id and g.status = 'complete'),
+    'locations', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'round_number', l.round_number, 'name', l.name, 'lat', l.lat, 'lng', l.lng,
+        'heading', l.heading, 'pitch', l.pitch, 'photo_path', l.photo_path
+      ) order by l.round_number), '[]'::jsonb)
+      from public.locations l where l.map_id = v_map.id
+    )
+  );
+end;
+$$;
+
+-- Checks shared by creating and editing a map. Returns the trimmed name.
+create or replace function public.check_map_details(p_name text, p_description text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if char_length(trim(coalesce(p_name, ''))) not between 1 and 80 then
+    raise exception 'Give the map a name (up to 80 characters)';
+  end if;
+  if char_length(trim(coalesce(p_description, ''))) > 140 then
+    raise exception 'Keep the description to 140 characters';
+  end if;
+  return trim(p_name);
+end;
+$$;
+
+-- A new map of yours (no locations yet). Up to 30 each.
+create or replace function public.create_my_map(p_name text, p_description text, p_kind public.map_kind, p_public boolean)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_name text := public.check_map_details(p_name, p_description);
+  v_id uuid;
+begin
+  if p_kind is null then
+    raise exception 'Choose Street View or photos';
+  end if;
+  if (select count(*) from public.maps where owner_id = v_uid) >= 30 then
+    raise exception 'You can have up to 30 maps. Delete one to make another';
+  end if;
+  insert into public.maps (name, description, kind, is_public, active, owner_id)
+  values (v_name, trim(coalesce(p_description, '')), p_kind, coalesce(p_public, true), true, v_uid)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- Rename, describe, make public or private, switch on or off. The kind stays.
+create or replace function public.update_my_map(p_map uuid, p_name text, p_description text, p_public boolean, p_active boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_name text := public.check_map_details(p_name, p_description);
+begin
+  update public.maps
+  set name = v_name, description = trim(coalesce(p_description, '')),
+      is_public = coalesce(p_public, is_public), active = coalesce(p_active, active)
+  where id = p_map and owner_id = v_uid;
+  if not found then
+    raise exception 'Map not found';
+  end if;
+end;
+$$;
+
+-- A photo nobody needs any more: not on a location, and not in any game
+-- (games keep their rounds' photos). The caller then deletes the file.
+create or replace function public.photo_unused(p_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p_path is not null
+     and not exists (select 1 from public.locations where photo_path = p_path)
+     and not exists (select 1 from public.rounds where photo_path = p_path);
+$$;
+
+-- Set round p_round (1 to 5) of your map. Photo maps need a photo you
+-- uploaded; Street View maps never have one. Returns the photo it replaced,
+-- if that can now be deleted: { "removed_photo": path | null }.
+create or replace function public.save_my_location(
+  p_map uuid, p_round integer, p_name text,
+  p_lat double precision, p_lng double precision,
+  p_heading double precision, p_pitch double precision, p_photo_path text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_map public.maps;
+  v_old text;
+begin
+  select * into v_map from public.maps where id = p_map and owner_id = v_uid for update;
+  if not found then
+    raise exception 'Map not found';
+  end if;
+  if p_round is null or p_round not between 1 and 5 then
+    raise exception 'Maps have five rounds';
+  end if;
+  if char_length(trim(coalesce(p_name, ''))) not between 1 and 80 then
+    raise exception 'Give the place a name (up to 80 characters)';
+  end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then
+    raise exception 'That isn''t a place on the map';
+  end if;
+  if v_map.kind = 'photo' then
+    if p_photo_path is null or p_photo_path !~ ('^' || v_uid::text || '/[A-Za-z0-9_-]{1,64}\.(jpg|webp)$') then
+      raise exception 'Add a photo for this round';
+    end if;
+  elsif p_photo_path is not null then
+    raise exception 'Street View maps don''t have photos';
+  end if;
+
+  select photo_path into v_old from public.locations where map_id = p_map and round_number = p_round;
+  insert into public.locations (map_id, round_number, name, lat, lng, heading, pitch, photo_path)
+  values (
+    p_map, p_round, trim(p_name), p_lat, p_lng,
+    ((coalesce(p_heading, 0)::numeric % 360 + 360) % 360)::double precision,
+    greatest(-90, least(90, coalesce(p_pitch, 0))),
+    p_photo_path
+  )
+  on conflict (map_id, round_number) do update
+  set name = excluded.name, lat = excluded.lat, lng = excluded.lng, heading = excluded.heading,
+      pitch = excluded.pitch, photo_path = excluded.photo_path;
+
+  return jsonb_build_object('removed_photo',
+    case when v_old is distinct from p_photo_path and public.photo_unused(v_old) then v_old end);
+end;
+$$;
+
+-- Clear a round of your map. Returns { "removed_photo": path | null }.
+create or replace function public.delete_my_location(p_map uuid, p_round integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_old text;
+begin
+  perform 1 from public.maps where id = p_map and owner_id = v_uid for update;
+  if not found then
+    raise exception 'Map not found';
+  end if;
+  delete from public.locations where map_id = p_map and round_number = p_round returning photo_path into v_old;
+  return jsonb_build_object('removed_photo', case when public.photo_unused(v_old) then v_old end);
+end;
+$$;
+
+-- Delete one of your maps. Games already played on it keep their rounds.
+-- Returns { "removed_photos": [paths that can now be deleted] }.
+create or replace function public.delete_my_map(p_map uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_paths text[];
+begin
+  perform 1 from public.maps where id = p_map and owner_id = v_uid for update;
+  if not found then
+    raise exception 'Map not found';
+  end if;
+  select coalesce(array_agg(photo_path), '{}') into v_paths
+  from public.locations where map_id = p_map and photo_path is not null;
+  delete from public.maps where id = p_map;
+  return jsonb_build_object('removed_photos', (
+    select coalesce(jsonb_agg(p), '[]'::jsonb) from unnest(v_paths) p where public.photo_unused(p)
+  ));
+end;
+$$;
+
+-- Storage: a player may upload photos into their own folder of map-photos,
+-- up to 150 at a time (the storage policies in 003 call this). Photos kept
+-- only because finished games show them don't count.
+create or replace function public.can_upload_photo(p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is not null
+     and p_name ~ ('^' || auth.uid()::text || '/[A-Za-z0-9_-]{1,64}\.(jpg|webp)$')
+     and (select count(*) from storage.objects o
+          where o.bucket_id = 'map-photos' and o.name like auth.uid()::text || '/%'
+            and not exists (select 1 from public.rounds r where r.photo_path = o.name)) < 150;
+$$;
+
+-- ---------- Profile ----------
+
+-- Your numbers over finished games, for your profile.
+create or replace function public.my_stats()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with mine as (
+    select gp.id, gp.total_score, g.type,
+           (select count(*) from public.game_players o where o.game_id = gp.game_id) as players,
+           (select 1 + count(*) from public.game_players o where o.game_id = gp.game_id and o.total_score > gp.total_score) as place
+    from public.game_players gp
+    join public.games g on g.id = gp.game_id and g.status = 'complete'
+    where gp.user_id = auth.uid()
+  ),
+  my_guesses as (
+    select g.distance_km, g.score, g.time_ms, r.location_name
+    from public.guesses g
+    join mine m on m.id = g.player_id
+    join public.rounds r on r.id = g.round_id
+  ),
+  totals as (
+    select gp.user_id, sum(gp.total_score) as total
+    from public.game_players gp join public.games g on g.id = gp.game_id and g.status = 'complete'
+    group by gp.user_id
+  )
+  select jsonb_build_object(
+    'games', (select count(*) from mine),
+    'solo_games', (select count(*) from mine where type = 'single_player'),
+    'group_games', (select count(*) from mine where type <> 'single_player'),
+    'wins', (select count(*) from mine where players > 1 and place = 1),
+    'total_score', (select coalesce(sum(total_score), 0) from mine),
+    'best_game', (select coalesce(max(total_score), 0) from mine),
+    'average_game', (select round(avg(total_score)) from mine),
+    'rounds', (select count(*) from my_guesses),
+    'perfect_rounds', (select count(*) from my_guesses where score = 5000),
+    'average_km', (select avg(distance_km) from my_guesses),
+    'closest_km', (select min(distance_km) from my_guesses),
+    'closest_place', (select location_name from my_guesses order by distance_km, time_ms limit 1),
+    'average_time_ms', (select round(avg(time_ms)) from my_guesses),
+    'fastest_ms', (select min(time_ms) from my_guesses),
+    'rank', case when exists (select 1 from mine) then
+      1 + (select count(*) from totals where total > (select sum(total_score) from mine)) end,
+    'players', (select count(*) from totals),
+    'maps_made', (select count(*) from public.maps where owner_id = auth.uid())
+  )
+  where auth.uid() is not null;
+$$;
+
 -- GeoBarkr 003: who can see and change what (row-level security). Safe to re-run.
 --
 -- Roles (ServiceNow x_geobarkr.user → player, ServiceNow admin → admin):
 --   signed out   nothing at all
---   player       read own profile and rename themselves; read active maps;
---                read games they host or play in, and those games' players;
---                read their own guesses; everything else through the game
---                functions in 002
+--   player       read own profile and rename themselves; read active public
+--                maps and their own maps (with their locations); read games
+--                they host or play in, and those games' players; read their
+--                own guesses; upload photos to their own folder of the
+--                map-photos bucket; everything else (including making maps)
+--                through the functions in 002
 --   admin        read everything; create, edit and delete maps and locations
 --
 -- Nobody, admin included, writes games, players, rounds or guesses directly:
@@ -860,7 +1228,7 @@ create policy "rename yourself" on public.profiles
 drop policy if exists "players see active maps" on public.maps;
 create policy "players see active maps" on public.maps
   for select to authenticated
-  using (active or (select public.is_admin()));
+  using ((active and not blocked and (owner_id is null or is_public)) or owner_id = (select auth.uid()) or (select public.is_admin()));
 
 drop policy if exists "admins manage maps" on public.maps;
 create policy "admins manage maps" on public.maps
@@ -868,7 +1236,12 @@ create policy "admins manage maps" on public.maps
   using ((select public.is_admin()))
   with check ((select public.is_admin()));
 
--- Locations are the answers: admins only.
+-- Locations are the answers: admins, and the owner of a player's map.
+drop policy if exists "owners see their locations" on public.locations;
+create policy "owners see their locations" on public.locations
+  for select to authenticated
+  using (exists (select 1 from public.maps m where m.id = map_id and m.owner_id = (select auth.uid())));
+
 drop policy if exists "admins manage locations" on public.locations;
 create policy "admins manage locations" on public.locations
   for all to authenticated
@@ -920,8 +1293,45 @@ grant execute on function
   public.get_game_state(uuid),
   public.get_results(uuid),
   public.my_games(),
-  public.leaderboard(text, integer)
+  public.leaderboard(text, integer),
+  public.playable_maps(),
+  public.my_maps(),
+  public.get_my_map(uuid),
+  public.create_my_map(text, text, public.map_kind, boolean),
+  public.update_my_map(uuid, text, text, boolean, boolean),
+  public.save_my_location(uuid, integer, text, double precision, double precision, double precision, double precision, text),
+  public.delete_my_location(uuid, integer),
+  public.delete_my_map(uuid),
+  public.can_upload_photo(text),
+  public.photo_unused(text),
+  public.my_stats()
 to authenticated;
+
+-- ---------- Storage: photos for photo maps ----------
+
+-- Public to read (a round's photo is shown to everyone in the game; file
+-- names are random), JPEG or WebP up to 5 MB. The browser re-encodes photos
+-- before uploading, which also strips their location data.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('map-photos', 'map-photos', true, 5242880, array['image/jpeg', 'image/webp'])
+on conflict (id) do update
+set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "geobarkr players upload map photos" on storage.objects;
+create policy "geobarkr players upload map photos" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'map-photos' and public.can_upload_photo(name));
+
+drop policy if exists "geobarkr players see their map photos" on storage.objects;
+create policy "geobarkr players see their map photos" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'map-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- Only photos no map or game uses any more.
+drop policy if exists "geobarkr players delete their map photos" on storage.objects;
+create policy "geobarkr players delete their map photos" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'map-photos' and (storage.foldername(name))[1] = (select auth.uid())::text and public.photo_unused(name));
 
 -- ---------- Realtime ----------
 

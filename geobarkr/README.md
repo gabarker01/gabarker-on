@@ -44,7 +44,10 @@ games stay behind in the browser and don't move across.
   - Every game action is a database function (`supabase/migrations/002_functions.sql`)
     that checks who's asking and works out distances and scores itself.
   - Row-level security (`003_security.sql`) means players only see their own
-    games and guesses, never the answers, and only admins can change maps.
+    games and guesses, never the answers. Admins manage the built-in maps;
+    players make and edit only their own maps.
+  - Photos for photo maps live in Supabase Storage (bucket `map-photos`,
+    created by `setup.sql`); each player can only upload to their own folder.
   - Each game has a private live channel; screens also re-check every 15
     seconds in case a phone was asleep.
 - **Google Maps JavaScript API** for Street View and the map, with a key that
@@ -55,7 +58,7 @@ games stay behind in the browser and don't move across.
 ```
 geobarkr/
   index.html, signin/, play/, lobby/, join/, host/, party/, results/,
-  games/, leaderboard/, admin/        one folder per page
+  games/, leaderboard/, profile/, map/, admin/   one folder per page
   js/config.js                        the three public settings (steps 6 and 8)
   js/  css/  assets/  vendor/         code, styles, sound, libraries
   supabase/setup.sql                  the whole database, to paste in (step 2)
@@ -112,13 +115,15 @@ Everything here can be done on a phone. Do the steps in order.
 
 ### Google Maps
 
-7. **Turn on the API.** Google Cloud (same `GeoBarkr` project) → **APIs &
-   Services → Library → Maps JavaScript API → Enable**. Billing must be set
+7. **Turn on the APIs.** Google Cloud (same `GeoBarkr` project) → **APIs &
+   Services → Library → Maps JavaScript API → Enable**, then the same for
+   **Geocoding API**. Billing must be set
    up; Google gives a free monthly allowance.
 8. **Create a restricted key.** **APIs & Services → Credentials → Create
    credentials → API key** → open it:
    - Application restrictions: **Websites** → add `https://gabarker.com/geobarkr/*`
-   - API restrictions: **Restrict key → Maps JavaScript API**
+   - API restrictions: **Restrict key →** tick **Maps JavaScript API** and
+     **Geocoding API** (the map maker's place search and place names)
    - **Save**, then paste the key into `GOOGLE_MAPS_KEY` in [`js/config.js`](js/config.js).
 9. **Cap the cost.** **APIs & Services → Maps JavaScript API → Quotas &
    system limits**: set daily limits (for example 500 map loads and 500
@@ -141,6 +146,15 @@ Everything here can be done on a phone. Do the steps in order.
     with the QR code.
 
 ## Managing maps
+
+**Anyone** can make maps: tap your picture → **Create map**. Choose Street
+View or Photos, name it, say who can play it (anyone, or just you), then set
+its five places. Street View places: search or tap the map, then walk and
+turn in the live preview. Photo places: choose a photo; if it was taken with
+location on, the pin and a name like "Mayfair, London, UK" fill in (iPhones
+only include the location if it's switched on under **Options** when you
+choose the photo). A map can be played once it has all five places and is
+switched on. Up to 30 maps and 150 photos each.
 
 **Admin** (menu, admins only): add a map, add one location per round (1 to
 5) by pasting a Google Maps Street View link from a computer or typing the

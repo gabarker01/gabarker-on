@@ -10,6 +10,10 @@
 //                             /realtime/v1 Phoenix websocket; private
 //                                          broadcast channels fed from
 //                                          realtime.messages
+//                             /storage/v1  uploads (checked against the
+//                                          storage.objects policies), public
+//                                          downloads and deletes; files kept
+//                                          in a temporary folder
 //
 // Usage: geobarkr/dev/start.sh (sets up Postgres, then runs this).
 // Needs the npm packages pg and ws (start.sh installs them outside the repo).
@@ -18,6 +22,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import os from "node:os";
 
 // pg and ws are installed outside the repo by start.sh (GEOBARKR_DEPS).
 const require = createRequire(path.join(process.env.GEOBARKR_DEPS || process.cwd(), "noop.js"));
@@ -215,6 +220,52 @@ async function rest(req, res, url, body, claims) {
   return send(res, req.method === "POST" ? 201 : 200, result.rows);
 }
 
+// ---------- Storage (map photos) ----------
+
+const STORAGE_DIR = process.env.STORAGE_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "geobarkr-storage-"));
+const storedFile = (bucket, name) => {
+  const file = path.join(STORAGE_DIR, bucket, name);
+  if (!file.startsWith(path.join(STORAGE_DIR, bucket) + path.sep)) throw Object.assign(new Error("Bad path"), { status: 400 });
+  return file;
+};
+
+async function storage(req, res, url, raw, claims) {
+  const route = url.pathname.replace("/storage/v1/object/", "");
+  if (req.method === "GET" && route.startsWith("public/")) {
+    const [, bucket, ...rest] = route.split("/");
+    const name = decodeURIComponent(rest.join("/"));
+    const { rows } = await pool.query("select b.public from storage.buckets b join storage.objects o on o.bucket_id = b.id where b.id = $1 and o.name = $2", [bucket, name]);
+    if (!rows[0]?.public || !fs.existsSync(storedFile(bucket, name))) return send(res, 404, { message: "Object not found" });
+    res.writeHead(200, { "Content-Type": "image/jpeg", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+    return fs.createReadStream(storedFile(bucket, name)).pipe(res);
+  }
+  if (!claims) return send(res, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
+  const [bucket, ...rest] = route.split("/");
+  if (req.method === "POST") {
+    const name = decodeURIComponent(rest.join("/"));
+    const { rows: [limits] } = await pool.query("select file_size_limit, allowed_mime_types from storage.buckets where id = $1", [bucket]);
+    const type = String(req.headers["content-type"] || "").split(";")[0];
+    if (!limits) return send(res, 404, { message: "Bucket not found" });
+    if (limits.allowed_mime_types && !limits.allowed_mime_types.includes(type)) return send(res, 415, { message: `mime type ${type} is not supported` });
+    if (limits.file_size_limit && raw.length > limits.file_size_limit) return send(res, 413, { message: "The object exceeded the maximum allowed size" });
+    try {
+      await asRole(claims, (c) => c.query("insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)", [bucket, name, claims.sub]));
+    } catch (error) {
+      return send(res, 400, { statusCode: "403", error: "Unauthorized", message: error.message });
+    }
+    fs.mkdirSync(path.dirname(storedFile(bucket, name)), { recursive: true });
+    fs.writeFileSync(storedFile(bucket, name), raw);
+    return send(res, 200, { Key: `${bucket}/${name}`, Id: crypto.randomUUID() });
+  }
+  if (req.method === "DELETE") {
+    const names = JSON.parse(raw.toString() || "{}").prefixes || [];
+    const { rows } = await asRole(claims, (c) => c.query("delete from storage.objects where bucket_id = $1 and name = any($2) returning name", [bucket, names]));
+    for (const row of rows) fs.rmSync(storedFile(bucket, row.name), { force: true });
+    return send(res, 200, rows.map((row) => ({ name: row.name, bucket_id: bucket })));
+  }
+  return send(res, 405, { message: "Method not allowed" });
+}
+
 // ---------- HTTP ----------
 
 function send(res, status, json) {
@@ -222,25 +273,36 @@ function send(res, status, json) {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Expose-Headers": "*",
   });
   res.end(json === undefined ? "" : JSON.stringify(json));
 }
 
-function readBody(req) {
+function readRaw(req) {
   return new Promise((resolve) => {
-    let data = "";
-    req.on("data", (chunk) => { data += chunk; });
-    req.on("end", () => {
-      try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); }
-    });
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
   });
+}
+async function readBody(req) {
+  const data = (await readRaw(req)).toString();
+  try { return data ? JSON.parse(data) : {}; } catch { return {}; }
 }
 
 const api = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204);
   const url = new URL(req.url, API_URL);
+  if (url.pathname.startsWith("/storage/v1/object/")) {
+    const raw = await readRaw(req);
+    try {
+      const claims = verify((req.headers.authorization || "").replace(/^Bearer /i, ""));
+      return await storage(req, res, url, raw, claims?.role === "authenticated" ? claims : null);
+    } catch (error) {
+      return send(res, error.status || 400, { message: error.message });
+    }
+  }
   const body = await readBody(req);
   try {
     if (url.pathname.startsWith("/auth/v1")) return await auth(req, res, url, body);

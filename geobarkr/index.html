@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=12">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=13">
 </head>
 <body class="has-band is-home">
   <div id="gb-header"></div>
@@ -44,9 +44,17 @@
   <dialog class="gb-help gb-picker" id="map-picker" aria-labelledby="map-picker-title">
     <div class="gb-help-head"><h2 id="map-picker-title">Choose a map</h2><span id="map-picker-close"></span></div>
     <input class="gb-search" id="map-search" type="search" placeholder="Search maps" aria-label="Search maps" autocomplete="off" enterkeyhint="search">
+    <div class="gb-chips" id="map-kinds" role="group" aria-label="Show" hidden>
+      <button type="button" data-kind="all" aria-pressed="true">All</button>
+      <button type="button" data-kind="street_view" aria-pressed="false">Street View</button>
+      <button type="button" data-kind="photo" aria-pressed="false">Photos</button>
+      <button type="button" data-kind="mine" aria-pressed="false" id="map-chip-mine" hidden>Yours</button>
+    </div>
     <div class="gb-picklist" id="map-list" role="listbox" aria-labelledby="map-picker-title"></div>
     <p class="gb-muted" id="map-empty" hidden>No maps match that.</p>
+    <a class="gb-picker-make" href="/geobarkr/map/">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Make your own map</a>
   </dialog>
-  <script type="module" src="/geobarkr/js/pages/start.js?v=12"></script>
+  <script type="module" src="/geobarkr/js/pages/start.js?v=13"></script>
 </body>
 </html>

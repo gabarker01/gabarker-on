@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=12">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=13">
 </head>
 <body>
   <header class="gb-header">
@@ -32,6 +32,11 @@
     <ul>
       <li>The games you create or join: the game type, the map, the room code, who played and when.</li>
       <li>Each guess: where you put your pin, the distance from the real place, your score and how long you took.</li>
+    </ul>
+    <h3>Maps you make</h3>
+    <ul>
+      <li>The map's name, description and settings, and its five places: where each one is, its name and, for Street View maps, the starting view.</li>
+      <li>For photo maps, the photos you upload. Your browser reads where a photo was taken (if the photo says) to place it on the map for you, then makes a smaller copy without any of the photo's hidden details (location, camera, date) and uploads only that copy. Photos are stored with a random file name that anyone with the link can open, so don't upload anything private.</li>
     </ul>
     <h3>On your device</h3>
     <p>Your browser keeps you signed in using its local storage. GeoBarkr uses no advertising or tracking cookies and no analytics.</p>
@@ -66,7 +71,8 @@
     <ul>
       <li><strong>Players in a game with you:</strong> your display name and profile photo, and once each round ends, your guess, distance and score for that game.</li>
       <li><strong>Signed-in players:</strong> your display name, profile photo, total points and best game on the all-time leaderboard.</li>
-      <li><strong>Only you:</strong> your email address and your list of games.</li>
+      <li><strong>Anyone signed in:</strong> the name and description of your public maps, and that you made them. Players see a map's photos or Street View during a game on it, and its places once each round ends.</li>
+      <li><strong>Only you:</strong> your email address, your list of games, your private maps, and where your maps' places are before they're played.</li>
       <li>I can see all of the above to run and fix the game.</li>
     </ul>
 
@@ -76,14 +82,14 @@
     <h2>Services involved</h2>
     <ul>
       <li><strong>Supabase:</strong> database, sign-in and live game updates. Data may be stored outside the UK, with standard safeguards.</li>
-      <li><strong>Google Maps and Street View:</strong> the map and Street View are loaded from Google in your browser, so Google receives your IP address and how you use the map, under the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</li>
+      <li><strong>Google Maps and Street View:</strong> the map and Street View are loaded from Google in your browser, so Google receives your IP address and how you use the map, under the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>. When you make a map, the place names you search for, and the places you choose, are sent to Google to find them and name them.</li>
       <li><strong>Google sign-in:</strong> only if you choose to sign in with Google.</li>
       <li><strong>GitHub Pages:</strong> hosts the website.</li>
       <li><strong>Google Fonts:</strong> your browser loads the font from Google, so it receives your IP address as part of a normal web request.</li>
     </ul>
 
     <h2>How long it's kept</h2>
-    <p>Account and game data is kept until you ask for your account to be deleted, and is then deleted within 30 days. Deleting your account removes your profile and your guesses, and games you created are deleted along with everyone's results in them. Data on your device stays until you sign out or clear your browser's storage.</p>
+    <p>Account and game data is kept until you ask for your account to be deleted, and is then deleted within 30 days. Deleting your account removes your profile and your guesses, and games you created are deleted along with everyone's results in them, as are maps you made. Deleting a map yourself removes it and any photos no finished game still shows. Data on your device stays until you sign out or clear your browser's storage.</p>
 
     <h2>Your rights</h2>
     <p>You can ask to see, correct or delete your data, or object to how it's used. To delete your account and everything linked to it, email <a href="mailto:info@bearings.quest">info@bearings.quest</a> from your account's email address; I'll do it within 30 days. If you're unhappy with how your data is handled you can complain to the Information Commissioner's Office (<a href="https://ico.org.uk">ico.org.uk</a>).</p>

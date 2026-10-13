@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { withGps } from "../tests/exif-fixture.mjs";
 
 const require = createRequire(process.env.PLAYWRIGHT_MODULE || import.meta.url);
 const { chromium } = require("playwright");
@@ -382,6 +383,66 @@ await step("admin: add a map and a location from a Street View link, see games",
   await solo.page.waitForSelector("#map-button:not([disabled])");
   assert.ok(!(await solo.page.textContent("#map-list")).includes("Test Map"));
   await admin.context.close();
+});
+
+await step("player maps: a private photo map uploads its photos, only its owner can start it, and it plays", async () => {
+  const { page } = solo;
+  const jpeg = Buffer.from(await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 900; c.height = 1200;
+    const g = c.getContext("2d");
+    g.fillStyle = "#3D7A5A"; g.fillRect(0, 0, 900, 1200);
+    g.fillStyle = "#E9D7A8"; g.fillRect(100, 300, 700, 600);
+    return c.toDataURL("image/jpeg", 0.9).split(",")[1];
+  }), "base64");
+  const photo = Buffer.from(withGps(jpeg, 38.7139, -9.1394));
+  await page.goto(`${BASE}/geobarkr/profile/`);
+  await page.waitForSelector("#stats .gb-stat");
+  assert.equal(await page.textContent("#stats .gb-stat:first-child b"), "1", "solo player has one finished game");
+  await page.click("#create-map");
+  await page.click("[data-kind=photo]");
+  await page.fill("#new-form input[name=name]", `Secret ${stamp}`);
+  await page.click('#new-visibility [data-public="false"]');
+  await page.click("#create-button");
+  for (let place = 1; place <= 5; place++) {
+    if (place > 1) await page.click(`#slots .gb-slot:nth-child(${place})`);
+    await page.waitForFunction(() => document.querySelector("#editor")?.open);
+    await page.setInputFiles("#photo-input", { name: "p.jpg", mimeType: "image/jpeg", buffer: photo });
+    await page.waitForFunction(() => !document.querySelector("#editor-save").disabled);
+    await page.click("#editor-save");
+    await page.waitForFunction(() => !document.querySelector("#editor").open, null, { timeout: 15000 });
+  }
+  await page.waitForSelector("#ready.is-ready");
+  // The photo is in Storage, without its location data.
+  const src = await page.getAttribute("#slots .gb-slot:first-child img", "src");
+  assert.match(src, /\/storage\/v1\/object\/public\/map-photos\//);
+  const stored = Buffer.from(await (await page.request.get(src)).body());
+  assert.ok(stored.length > 1000, "photo downloads");
+  assert.equal(stored.includes(Buffer.from("Exif\0\0")), false, "uploaded photo has no EXIF");
+  // Someone else can't see or start it.
+  await guest.page.goto(`${BASE}/geobarkr/`);
+  await guest.page.waitForSelector("#map-button:not([disabled])");
+  assert.ok(!(await guest.page.textContent("#map-list")).includes(`Secret ${stamp}`), "private map hidden from others");
+  // Its owner plays it: a photo round.
+  await page.click("#ready a.gb-btn");
+  await page.waitForFunction((n) => document.querySelector("#map-name")?.textContent === n, `Secret ${stamp}`);
+  await page.click("#modes [data-type=single_player]");
+  await page.click("#play-button");
+  await page.waitForURL(/\/play\//);
+  await page.waitForSelector(".gb-photo.is-loaded");
+  await shot(solo, "play-photo-supabase");
+  await tapMap(page, 0.47, 0.28);
+  await page.click("#guess");
+  await page.waitForSelector("#results:not([hidden])");
+  assert.match(await page.textContent("#results-place"), /Mayfair|Lisbon|\w/);
+  // Deleting the map keeps the game.
+  await page.goto(`${BASE}/geobarkr/profile/`);
+  await page.click("#maps .gb-card .gb-card-body");
+  await page.waitForSelector("#delete-map");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.click("#delete-map");
+  await page.waitForURL(/\/profile\//);
+  await page.waitForSelector("#maps-empty:not([hidden])");
 });
 
 await browser.close();

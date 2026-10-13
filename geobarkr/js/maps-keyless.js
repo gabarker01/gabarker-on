@@ -2,9 +2,9 @@
 // the guess and results maps use Leaflet with CARTO's dark OpenStreetMap
 // tiles, and Street View is Google's keyless embed in an iframe. maps.js
 // switches to this file while GOOGLE_MAPS_KEY in config.js is empty.
-import { loadScript } from "./load.js?v=12";
-import { greatCircle } from "./geo.js?v=12";
-import { pinElement, targetElement, dropIn } from "./maps.js?v=12";
+import { loadScript } from "./load.js?v=13";
+import { greatCircle } from "./geo.js?v=13";
+import { pinElement, targetElement, dropIn, placePinElement } from "./maps.js?v=13";
 
 const WORLD = { center: [25, 0], zoom: 1 };
 let leafletPromise = null;
@@ -139,5 +139,49 @@ export async function createPanorama(element) {
     home() { if (start) goTo(start); },
     hide() { start = null; frame?.remove(); frame = null; },
     onHeading() { return false; }, // the embed doesn't report where you're looking
+  };
+}
+
+// Making maps without a key: the map works; Street View is the embed, which
+// can't report where you've walked, so the map sets the place.
+export async function createPickMap(element, onPick) {
+  const { L, map } = await newMap(element, 2);
+  let marker = null;
+  let point = null;
+  map.on("click", (event) => {
+    const at = event.latlng.wrap();
+    onPick?.({ lat: at.lat, lng: at.lng });
+  });
+  return {
+    map,
+    get: () => point,
+    clear() {
+      point = null;
+      marker?.remove();
+      marker = null;
+    },
+    set(next, { zoom = null, pan = true } = {}) {
+      point = next;
+      if (marker) marker.setLatLng([next.lat, next.lng]);
+      else marker = htmlMarker(L, map, [next.lat, next.lng], placePinElement(), 10);
+      if (zoom != null) map.setView([next.lat, next.lng], zoom, { animate: false });
+      else if (pan) map.panTo([next.lat, next.lng]);
+    },
+  };
+}
+
+export async function createExplorePanorama(element, onChange) {
+  const pano = await createPanorama(element);
+  let current = null;
+  return {
+    panorama: null,
+    get: () => current,
+    async goTo(point, { heading = 0, pitch = 0 } = {}) {
+      current = { lat: point.lat, lng: point.lng, heading: heading || 0, pitch };
+      pano.hide();
+      pano.show(current);
+      onChange?.(current);
+      return current;
+    },
   };
 }

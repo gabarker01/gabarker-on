@@ -1,7 +1,7 @@
 // Page set-up (sign-in check + header) and small DOM helpers.
-import { isDemo, getSession, getProfile, signOut } from "./api.js?v=12";
-import { loadScript } from "./load.js?v=12";
-import { avatar, ME_COLOUR } from "./players.js?v=12";
+import { isDemo, getSession, getProfile, signOut } from "./api.js?v=13";
+import { loadScript } from "./load.js?v=13";
+import { avatar, ME_COLOUR } from "./players.js?v=13";
 
 // h("p", { class: "x", onclick }, "text", child…) → element. Strings become text, never HTML.
 export function h(tag, attrs = {}, ...children) {
@@ -25,7 +25,7 @@ export const $ = (selector, root = document) => root.querySelector(selector);
 // Safari ignores user-scalable=no, so stop its pinch-zoom on the page itself;
 // maps and Street View keep their own pinch.
 document.addEventListener("gesturestart", (event) => {
-  if (!event.target.closest?.(".gb-pano, .gb-map, .gb-results-map, .gm-style, .leaflet-container")) event.preventDefault();
+  if (!event.target.closest?.(".gb-pano, .gb-map, .gb-results-map, .gm-style, .leaflet-container, .gb-photo")) event.preventDefault();
 }, { passive: false });
 
 // After a list re-renders, rows (data-key) that weren't there last time get
@@ -127,7 +127,7 @@ function openHelp() {
         h("h2", { id: "gb-help-title" }, "How to play"),
         closeButton(() => closeHelp())),
       h("ol", { class: "gb-help-steps" },
-        h("li", {}, h("b", {}, "Look around. "), "You're dropped somewhere in Street View. Drag to turn, pinch to zoom, and tap the road to move. Look for signs, languages, which side people drive on, plants and the landscape."),
+        h("li", {}, h("b", {}, "Look around. "), "You're dropped somewhere in Street View. Drag to turn, pinch to zoom, and tap the road to move. Look for signs, languages, which side people drive on, plants and the landscape. On photo maps you get a photo instead: pinch, double-tap or scroll to zoom in."),
         h("li", {}, h("b", {}, "Guess. "), "Tap the map bubble in the corner to open the map, then tap where you think you are. Tap again to move your pin. Press Guess when you're happy."),
         h("li", {}, h("b", {}, "Score. "), "The closer you are, the more points: up to 5,000 a round, with full marks within 10 metres. Five rounds make a game."),
         h("li", {}, h("b", {}, "Time. "), "How long you take is shown in the results so you can compare, but only distance counts towards points.")),
@@ -139,6 +139,8 @@ function openHelp() {
         h("li", {}, h("b", {}, "Solo: "), "five rounds on your own."),
         h("li", {}, h("b", {}, "With friends: "), "everyone plays on their own phone; share the room code or link. Scores are revealed together when a round ends."),
         h("li", {}, h("b", {}, "Party: "), "Street View on a TV or laptop for the room, guesses on phones. The host can end a round when everyone's ready.")),
+      h("h3", {}, "Make your own map"),
+      h("p", { class: "gb-help-make" }, "Tap your picture, then Create map: five places in Street View or your own photos, for anyone or just you."),
       h("p", { class: "gb-help-foot" }, h("a", { href: "/geobarkr/about/" }, "More about GeoBarkr")));
     closeHelp = sheetDialog(helpDialog);
     document.body.append(helpDialog);
@@ -150,40 +152,31 @@ export function helpButton() {
   return h("button", { type: "button", class: "gb-help-btn", "aria-label": "How to play", onclick: openHelp }, "?");
 }
 
+// The header: GeoBarkr, the pages (inline on wide screens), How to play and
+// your picture, which opens your profile (stats, your maps, sign out).
 function header(profile) {
   const links = [["/geobarkr/", "Play"], ["/geobarkr/games/", "My games"], ["/geobarkr/leaderboard/", "Leaderboard"]];
   if (profile?.role === "admin") links.push(["/geobarkr/admin/", "Admin"]);
-  const menu = h("nav", { class: "gb-menu", id: "gb-menu", "aria-label": "GeoBarkr" },
-    links.map(([href, label]) => h("a", { href, "aria-current": location.pathname === href ? "page" : false }, label)),
-    h("button", { type: "button", class: "gb-menu-signout", onclick: async () => { await signOut(); location.href = "/geobarkr/signin/"; } }, "Sign out"),
-  );
+  const nav = h("nav", { class: "gb-menu", "aria-label": "GeoBarkr" },
+    links.map(([href, label]) => h("a", { href, "aria-current": location.pathname === href ? "page" : false }, label)));
   const me = { name: profile?.display_name || "Me", avatar_url: profile?.avatar_url };
-  const setOpen = (open) => {
-    toggle.setAttribute("aria-expanded", String(open));
-    menu.classList.toggle("is-open", open);
-  };
-  const toggle = h("button", {
-    type: "button", class: "gb-me", "aria-expanded": "false", "aria-controls": "gb-menu", "aria-label": `Menu for ${me.name}`,
-    onclick: () => setOpen(toggle.getAttribute("aria-expanded") !== "true"),
-  }, avatar(me, ME_COLOUR, 32));
-  document.addEventListener("click", (event) => {
-    if (!menu.contains(event.target) && !toggle.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && menu.classList.contains("is-open")) {
-      setOpen(false);
-      toggle.focus();
-    }
-  });
+  const onProfile = location.pathname === "/geobarkr/profile/";
   const bar = h("header", { class: "gb-header" },
     h("a", { class: "gb-brand", href: "/geobarkr/" }, logoMark(), "GeoBarkr"),
-    h("div", { class: "gb-header-right" }, menu, helpButton(), toggle),
+    h("div", { class: "gb-header-right" }, nav, helpButton(),
+      h("a", { class: "gb-me", href: "/geobarkr/profile/", "aria-label": `Your profile, ${me.name}`, "aria-current": onProfile ? "page" : false },
+        avatar(me, ME_COLOUR, 32))),
   );
   // The bar floats over the page; it gains its frosted backing once content scrolls under it.
   const onScroll = () => bar.classList.toggle("is-scrolled", window.scrollY > 4);
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
   return bar;
+}
+
+export async function signOutAndLeave() {
+  await signOut();
+  location.href = "/geobarkr/signin/";
 }
 
 // Every page: signed in? then the header (and a note in demo mode).
@@ -244,3 +237,28 @@ export async function qrCode(text) {
 }
 
 export const joinUrl = (code) => `${location.origin}/geobarkr/join/?code=${encodeURIComponent(code)}`;
+
+// What a map shows: Street View or photos, as a small icon and a word.
+const KIND_ICONS = {
+  street_view: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4"/><path d="M8.5 11.5c0-1.4 1.1-2.5 2.5-2.5h2c1.4 0 2.5 1.1 2.5 2.5V15h-2l-.6 6h-1.8l-.6-6h-2z"/><path d="M5 17.5c-1.3.5-2 1.1-2 1.7C3 20.8 7 22 12 22s9-1.2 9-2.8c0-.6-.7-1.2-2-1.7"/></svg>',
+  photo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8.5 8.5"/></svg>',
+};
+export const KIND_NAMES = { street_view: "Street View", photo: "Photos" };
+export function kindIcon(kind) {
+  const span = h("span", { class: `gb-kind is-${kind === "photo" ? "photo" : "sv"}`, title: KIND_NAMES[kind] || KIND_NAMES.street_view });
+  span.innerHTML = KIND_ICONS[kind] || KIND_ICONS.street_view;
+  return span;
+}
+export function kindTag(kind) {
+  const tag = kindIcon(kind);
+  tag.classList.add("with-label");
+  tag.append(KIND_NAMES[kind] || KIND_NAMES.street_view);
+  return tag;
+}
+
+// A chevron for rows that open something.
+export function chevron() {
+  const span = h("span", { class: "gb-chev", "aria-hidden": "true" });
+  span.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+  return span;
+}

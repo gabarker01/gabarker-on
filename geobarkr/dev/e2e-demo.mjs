@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { withGps } from "../tests/exif-fixture.mjs";
 
 const require = createRequire(process.env.PLAYWRIGHT_MODULE || import.meta.url);
 const { chromium } = require("playwright");
@@ -190,6 +191,134 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     await me.page.goto(`${BASE}/geobarkr/admin/`);
     await me.page.waitForSelector("#maps .gb-line");
     await shot(me, "admin", true);
+  });
+
+  await step(`${label}: profile from your picture, with your numbers`, async () => {
+    await me.page.goto(`${BASE}/geobarkr/`);
+    await me.page.click(".gb-header .gb-me");
+    await me.page.waitForURL(/\/profile\//);
+    await me.page.waitForSelector("#stats .gb-stat");
+    assert.equal(await me.page.locator("#stats .gb-stat").count(), 8);
+    assert.equal(await me.page.textContent("#stats .gb-stat:first-child b"), "2", "two finished games");
+    assert.equal(await me.page.isVisible("#maps-empty"), true, "no maps yet");
+    await me.page.waitForTimeout(900);
+    await shot(me, "profile", true);
+  });
+
+  await step(`${label}: make a Street View map`, async () => {
+    await me.page.click("#create-map");
+    await me.page.waitForSelector("#new:not([hidden])");
+    await me.page.fill("#new-form input[name=name]", "Corners");
+    await me.page.fill("#new-description", "Five street corners");
+    await shot(me, "map-new");
+    await me.page.click("#create-button");
+    for (let place = 1; place <= 5; place++) {
+      if (place > 1) await me.page.click(`#slots .gb-slot:nth-child(${place})`);
+      await me.page.waitForFunction(() => document.querySelector("#editor")?.open);
+      await me.page.waitForTimeout(450);
+      if (place === 1 && !KEYLESS) {
+        await me.page.fill("#search", "Tokyo");
+        await me.page.press("#search", "Enter");
+        await me.page.waitForFunction(() => document.querySelector("#place-name").value === "Shibuya, Tokyo, Japan");
+      } else {
+        const box = await me.page.locator("#editor-map").boundingBox();
+        await me.page.mouse.click(box.x + box.width * (0.15 + place * 0.13), box.y + box.height * 0.42);
+      }
+      await me.page.waitForFunction(() => !document.querySelector("#editor-save").disabled);
+      if (place === 1) { await me.page.waitForTimeout(400); await shot(me, "map-editor-streetview"); }
+      await me.page.click("#editor-save");
+      await me.page.waitForFunction(() => !document.querySelector("#editor").open);
+    }
+    await me.page.waitForSelector("#ready.is-ready");
+    assert.equal(await me.page.locator("#slots .gb-slot:not(.is-empty)").count(), 5);
+    await me.page.waitForTimeout(500);
+    await shot(me, "map-ready", true);
+  });
+
+  await step(`${label}: make a private photo map; the place comes from the photo`, async () => {
+    // A landscape JPEG from the browser, then GPS tags for Mayfair added to it.
+    const jpeg = Buffer.from(await me.page.evaluate(() => {
+      const c = document.createElement("canvas");
+      c.width = 1200; c.height = 700;
+      const g = c.getContext("2d");
+      const sky = g.createLinearGradient(0, 0, 0, 700);
+      sky.addColorStop(0, "#4A7BC8"); sky.addColorStop(1, "#F2B263");
+      g.fillStyle = sky; g.fillRect(0, 0, 1200, 700);
+      g.fillStyle = "#1D2333";
+      for (let x = 0; x < 1200; x += 90) g.fillRect(x, 420 - (x % 270) / 2, 60, 300);
+      return c.toDataURL("image/jpeg", 0.9).split(",")[1];
+    }), "base64");
+    const withPlace = Buffer.from(withGps(jpeg, 51.5098, -0.1478));
+    await me.page.goto(`${BASE}/geobarkr/map/`);
+    await me.page.click("[data-kind=photo]");
+    await me.page.fill("#new-form input[name=name]", "Snaps");
+    await me.page.click('#new-visibility [data-public="false"]');
+    await me.page.click("#create-button");
+    for (let place = 1; place <= 5; place++) {
+      if (place > 1) await me.page.click(`#slots .gb-slot:nth-child(${place})`);
+      await me.page.waitForFunction(() => document.querySelector("#editor")?.open);
+      await me.page.waitForTimeout(400);
+      const located = place !== 2;
+      await me.page.setInputFiles("#photo-input", { name: `snap${place}.jpg`, mimeType: "image/jpeg", buffer: located ? withPlace : jpeg });
+      if (located) {
+        await me.page.waitForFunction(() => /where the photo was taken/.test(document.querySelector("#editor-status").textContent));
+        if (!KEYLESS) await me.page.waitForFunction(() => document.querySelector("#place-name").value === "Mayfair, London, UK");
+      } else {
+        await me.page.waitForFunction(() => /doesn't say where/.test(document.querySelector("#editor-status").textContent));
+        assert.equal(await me.page.isDisabled("#editor-save"), true, "needs a place first");
+        const box = await me.page.locator("#editor-map").boundingBox();
+        await me.page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.6);
+      }
+      await me.page.waitForFunction(() => !document.querySelector("#editor-save").disabled);
+      if (place === 1) { await me.page.waitForTimeout(700); await shot(me, "map-editor-photo"); }
+      await me.page.click("#editor-save");
+      await me.page.waitForFunction(() => !document.querySelector("#editor").open);
+    }
+    await me.page.waitForSelector("#ready.is-ready");
+    assert.match(await me.page.textContent("#ready"), /Only you/);
+    await shot(me, "map-photo-ready", true);
+  });
+
+  await step(`${label}: maps show their kind in the picker; play a photo round`, async () => {
+    await me.page.goto(`${BASE}/geobarkr/profile/`);
+    await me.page.waitForSelector("#maps .gb-card");
+    assert.equal(await me.page.locator("#maps .gb-card").count(), 2);
+    await me.page.click("#maps .gb-card:has-text('Snaps') .gb-card-body");
+    await me.page.waitForURL(/\/map\/\?id=/);
+    await me.page.click("#ready a.gb-btn");
+    await me.page.waitForFunction(() => document.querySelector("#map-name")?.textContent === "Snaps");
+    await me.page.click("#map-button");
+    await me.page.waitForSelector("#map-list .gb-pick[data-kind=photo]");
+    await me.page.click("#map-kinds [data-kind=photo]");
+    assert.equal(await me.page.locator("#map-list .gb-pick").count(), 1, "filter to photo maps");
+    await me.page.waitForTimeout(500);
+    await shot(me, "picker-kinds");
+    await me.page.click('#map-list .gb-pick[data-name="Snaps"]');
+    await me.page.click("#modes [data-type=single_player]");
+    await me.page.click("#play-button");
+    await me.page.waitForURL(/\/play\//);
+    await me.page.waitForSelector(".gb-sv.is-photo .gb-photo.is-loaded");
+    await me.page.waitForTimeout(700);
+    await shot(me, "play-photo");
+    // Zoom in (double tap / double click), then back with the recentre button.
+    const photo = await me.page.locator(".gb-photo").boundingBox();
+    if (me.size === "phone") {
+      await me.page.touchscreen.tap(photo.x + photo.width / 2, photo.y + photo.height / 2);
+      await me.page.waitForTimeout(60);
+      await me.page.touchscreen.tap(photo.x + photo.width / 2, photo.y + photo.height / 2);
+    } else {
+      await me.page.mouse.move(photo.x + photo.width / 2, photo.y + photo.height / 2);
+      await me.page.mouse.wheel(0, -500);
+    }
+    await me.page.waitForSelector(".gb-photo.is-zoomed");
+    await me.page.waitForTimeout(600);
+    await shot(me, "play-photo-zoomed");
+    await me.page.click("#home");
+    await me.page.waitForFunction(() => !document.querySelector(".gb-photo").classList.contains("is-zoomed"));
+    await tapMap(me.page, 0.49, 0.25);
+    await me.page.click("#guess");
+    await me.page.waitForSelector("#results:not([hidden])");
+    assert.match(await me.page.textContent("#results-place"), /Mayfair|London|\w/);
   });
 
   await me.context.close();

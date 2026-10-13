@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="GeoBarkr: look around a Street View, then guess where in the world you are.">
+  <meta name="theme-color" content="#F3F5F7">
+  <title>Profile · GeoBarkr</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B1426'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.8'/%3E%3Cellipse cx='16' cy='16' rx='4.4' ry='10.5' fill='none' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Cpath d='M5.5 16h21' stroke='%23E6EEFA' stroke-width='1.3' opacity='.6'/%3E%3Ccircle cx='20.5' cy='11.5' r='3.4' fill='%23FF8A5B' stroke='%230B1426' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/geobarkr/css/geobarkr.css?v=13">
+</head>
+<body class="has-band">
+  <div id="gb-header"></div>
+  <main class="gb-profile">
+    <div class="gb-band short" id="band"></div>
+    <div class="gb-page">
+      <section class="gb-profile-head">
+        <span id="me-avatar"></span>
+        <div class="who">
+          <h1 id="me-name">Your profile</h1>
+          <p id="me-sub"></p>
+        </div>
+      </section>
+
+      <div class="gb-stats" id="stats" aria-label="Your numbers"></div>
+
+      <section class="gb-section">
+        <div class="gb-section-head">
+          <h2>Your maps</h2>
+          <a class="gb-btn small gb-create" href="/geobarkr/map/" id="create-map">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Create map</a>
+        </div>
+        <div class="gb-cards" id="maps"></div>
+        <a class="gb-empty-card" id="maps-empty" href="/geobarkr/map/" hidden>
+          <b>Make your own map</b>
+          <span>Five places, in Street View or your own photos. Keep it to yourself or let anyone play it.</span>
+        </a>
+      </section>
+
+      <section class="gb-section">
+        <div class="gb-group" id="links">
+          <button class="gb-group-row" type="button" id="name-row"><span>Name</span><b id="name-value"></b></button>
+          <a class="gb-group-row" href="/geobarkr/games/"><span>My games</span><b id="games-value"></b></a>
+          <a class="gb-group-row" href="/geobarkr/leaderboard/"><span>Leaderboard</span><b id="rank-value"></b></a>
+          <a class="gb-group-row" href="/geobarkr/admin/" id="admin-row" hidden><span>Admin</span><b></b></a>
+          <a class="gb-group-row" href="/geobarkr/about/"><span>About GeoBarkr</span><b></b></a>
+        </div>
+        <button class="gb-btn quiet block gb-signout" type="button" id="sign-out">Sign out</button>
+      </section>
+      <p class="gb-colophon"><a href="mailto:info@bearings.quest">info@bearings.quest</a> · <a href="/geobarkr/privacy/">Privacy</a> · <a href="/geobarkr/termsofservice/">Terms</a></p>
+    </div>
+  </main>
+  <dialog class="gb-help" id="name-sheet" aria-labelledby="name-title">
+    <div class="gb-help-head"><h2 id="name-title">Your name</h2><span id="name-close"></span></div>
+    <form id="name-form">
+      <input class="gb-input" id="name" maxlength="40" autocomplete="nickname" required aria-label="Your name">
+      <p class="gb-muted" style="font-size:0.875rem;margin:8px 2px 14px">Other players see this in lobbies, results and the leaderboard.</p>
+      <button class="gb-btn block" type="submit" id="name-button">Save</button>
+    </form>
+  </dialog>
+  <script type="module" src="/geobarkr/js/pages/profile.js?v=13"></script>
+</body>
+</html>

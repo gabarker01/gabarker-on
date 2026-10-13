@@ -97,10 +97,12 @@ export function velocityTracker() {
       samples.push({ y, t });
       samples = samples.filter((s) => t - s.t < 100);
     },
-    velocity() {
-      if (samples.length < 2) return 0;
-      const a = samples[0];
-      const b = samples[samples.length - 1];
+    // Only the last 100 ms count: held still before letting go means no flick.
+    velocity(now = performance.now()) {
+      const recent = samples.filter((s) => now - s.t < 100);
+      if (recent.length < 2) return 0;
+      const a = recent[0];
+      const b = recent[recent.length - 1];
       return b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0;
     },
     reset() { samples = []; },

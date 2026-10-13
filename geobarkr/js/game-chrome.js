@@ -1,6 +1,34 @@
 // The bar above Street View: home link, round number with progress, your total.
-import { $, logoMark, helpButton } from "./ui.js?v=12";
-import { formatScore } from "./geo.js?v=12";
+import { $, logoMark, helpButton } from "./ui.js?v=13";
+import { formatScore } from "./geo.js?v=13";
+import { photoUrl } from "./api.js?v=13";
+import { createPhotoView } from "./photo.js?v=13";
+
+// What the round shows: Street View, or (on photo maps) the round's photo.
+// show(target) picks one; home() goes back to the start view or zoom.
+export function setupStage(panoPromise, container) {
+  const photo = createPhotoView(container);
+  let showing = null;
+  return {
+    show(target) {
+      if (target.photo_path) {
+        showing = "photo";
+        container.classList.add("is-photo");
+        panoPromise.then((pano) => pano.hide()).catch(() => {});
+        photo.show({ photo_url: photoUrl(target.photo_path) });
+      } else {
+        showing = "pano";
+        container.classList.remove("is-photo");
+        photo.hide();
+        panoPromise.then((pano) => pano.show(target)).catch(() => {});
+      }
+    },
+    home() {
+      if (showing === "photo") photo.home();
+      else panoPromise.then((pano) => pano.home()).catch(() => {});
+    },
+  };
+}
 
 export function setupTopbar() {
   $("#home-link").append(logoMark(22));

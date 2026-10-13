@@ -1,6 +1,6 @@
 // The Supabase client (only loaded when a project is configured).
-import { SUPABASE_URL, SUPABASE_KEY } from "./config.js?v=12";
-import { loadScript } from "./load.js?v=12";
+import { SUPABASE_URL, SUPABASE_KEY } from "./config.js?v=13";
+import { loadScript } from "./load.js?v=13";
 
 const LIBRARY = "/geobarkr/vendor/supabase-2.117.1.js";
 

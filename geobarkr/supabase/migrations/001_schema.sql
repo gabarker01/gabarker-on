@@ -28,6 +28,10 @@ begin
   if not exists (select 1 from pg_type where typname = 'round_status' and typnamespace = 'public'::regnamespace) then
     create type public.round_status as enum ('ready', 'in_progress', 'results', 'complete');
   end if;
+  -- What players look at in a round: Street View, or a still photo.
+  if not exists (select 1 from pg_type where typname = 'map_kind' and typnamespace = 'public'::regnamespace) then
+    create type public.map_kind as enum ('street_view', 'photo');
+  end if;
 end
 $$;
 
@@ -51,6 +55,20 @@ create table if not exists public.maps (
   created_at timestamptz not null default now()
 );
 
+-- Maps players make themselves (added after launch). Admin maps have no
+-- owner and are always public. A player's map is public (anyone can start a
+-- game on it) or private (only its owner can); either way it needs all five
+-- locations before it can be played.
+alter table public.maps
+  add column if not exists owner_id uuid references public.profiles (id) on delete cascade,
+  add column if not exists description text not null default '' check (char_length(description) <= 140),
+  add column if not exists kind public.map_kind not null default 'street_view',
+  add column if not exists is_public boolean not null default true,
+  -- Admins can block a player's map; its owner can't undo that.
+  add column if not exists blocked boolean not null default false;
+
+create index if not exists maps_owner_idx on public.maps (owner_id);
+
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
   map_id uuid not null references public.maps (id) on delete cascade,
@@ -64,6 +82,11 @@ create table if not exists public.locations (
   -- One location per round of a map (ServiceNow allowed duplicates, which broke the game).
   unique (map_id, round_number)
 );
+
+-- Photo maps: the photo in Storage (bucket map-photos), as
+-- "<owner id>/<file>.jpg". The location is the answer, so it's never in the file.
+alter table public.locations
+  add column if not exists photo_path text check (photo_path is null or photo_path ~ '^[0-9a-f-]{36}/[A-Za-z0-9_-]{1,64}\.(jpg|webp)$');
 
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
@@ -110,6 +133,9 @@ create table if not exists public.rounds (
   ended_at timestamptz,
   unique (game_id, round_number)
 );
+
+-- A photo round's photo (copied from the location, like the place).
+alter table public.rounds add column if not exists photo_path text;
 
 create table if not exists public.guesses (
   id uuid primary key default gen_random_uuid(),

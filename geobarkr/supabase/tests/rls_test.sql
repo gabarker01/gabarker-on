@@ -278,4 +278,96 @@ select test.eq(public.leaderboard() #>> '{0,name}', 'Bobby', 'leaderboard ranks 
 select test.eq((public.leaderboard() #>> '{0,games}')::int, 1, 'only completed games count');
 reset role;
 
+-- ---------- Maps players make ----------
+
+select from (select test.act_as(test.id('bob'))) s;
+insert into test.ids select 'bob_sv', public.create_my_map('Bob''s streets', 'Five corners', 'street_view', true);
+insert into test.ids select 'bob_photo', public.create_my_map('Bob''s holidays', '', 'photo', false);
+select test.eq((public.my_maps() #>> '{0,name}'), 'Bob''s holidays', 'my maps, newest first');
+select test.eq((public.get_my_map(test.id('bob_sv')) ->> 'active')::boolean, true, 'new maps are active');
+select test.expect_error($$select public.create_my_map('', '', 'photo', true)$$, 'name');
+select test.expect_error($$select public.create_my_map('x', repeat('y', 141), 'photo', true)$$, '140');
+select test.expect_error($$select public.create_game('single_player', test.id('bob_sv'))$$, 'no locations');
+select from generate_series(1, 4) n, lateral (select public.save_my_location(test.id('bob_sv'), n, 'Spot ' || n, 10 + n, 20 + n, 370, 5, null)) s;
+select test.eq((select heading from public.locations where map_id = test.id('bob_sv') and round_number = 1), 10::double precision, 'heading kept within 0-360');
+select test.expect_error($$select public.create_game('single_player', test.id('bob_sv'))$$, 'all five');
+select test.eq((select count(*) from jsonb_array_elements(public.playable_maps()) m where m ->> 'id' = test.id('bob_sv')::text), 0::bigint, 'an unfinished map is not playable');
+select from (select public.save_my_location(test.id('bob_sv'), 5, 'Spot 5', 15, 25, 0, 0, null)) s;
+select test.expect_error($$select public.save_my_location(test.id('bob_sv'), 6, 'x', 0, 0, 0, 0, null)$$, 'five rounds');
+select test.expect_error($$select public.save_my_location(test.id('bob_sv'), 1, 'x', 0, 0, 0, 0, test.id('bob')::text || '/a.jpg')$$, 'don''t have photos');
+select test.expect_error($$select public.save_my_location(test.id('bob_photo'), 1, 'x', 0, 0, 0, 0, null)$$, 'Add a photo');
+select test.expect_error($$select public.save_my_location(test.id('bob_photo'), 1, 'x', 0, 0, 0, 0, test.id('carol')::text || '/a.jpg')$$, 'Add a photo');
+select from generate_series(1, 5) n, lateral (select public.save_my_location(test.id('bob_photo'), n, 'Beach ' || n, -30 + n, 150 + n, 0, 0, test.id('bob')::text || '/p' || n || '.jpg')) s;
+select test.eq(public.save_my_location(test.id('bob_photo'), 5, 'Beach 5', -25, 155, 0, 0, test.id('bob')::text || '/p5b.jpg') ->> 'removed_photo', test.id('bob')::text || '/p5.jpg', 'replaced photo can be deleted');
+select test.eq((select count(*) from public.locations), 10::bigint, 'owner reads only their own maps'' locations');
+select test.eq((select count(*) from jsonb_array_elements(public.playable_maps())), 4::bigint, 'owner can play their public and private maps');
+select test.eq((select m ->> 'kind' from jsonb_array_elements(public.playable_maps()) m where (m ->> 'mine')::boolean and m ->> 'kind' = 'photo'), 'photo', 'playable maps say which are photos');
+insert into test.ids select 'photo_game', (public.create_game('single_player', test.id('bob_photo')) ->> 'id')::uuid;
+select test.eq(public.get_game_state(test.id('photo_game')) #>> '{round,target,photo_path}', test.id('bob')::text || '/p1.jpg', 'photo round shows its photo');
+select test.eq(public.get_game_state(test.id('photo_game')) #>> '{round,target,lat}', null, 'photo round hides the place until the reveal');
+select from (select public.submit_guess(test.id('photo_game'), -29, 151)) s;
+select test.eq((public.get_game_state(test.id('photo_game')) #>> '{round,target,lat}')::numeric, -29::numeric, 'place shown at the reveal');
+select test.eq(public.delete_my_location(test.id('bob_photo'), 1) ->> 'removed_photo', null, 'a photo used in a game is kept');
+reset role;
+
+select from (select test.act_as(test.id('carol'))) s;
+select test.eq((select count(*) from jsonb_array_elements(public.playable_maps())), 3::bigint, 'others see public maps, not private ones');
+select test.eq((select m ->> 'owner_name' from jsonb_array_elements(public.playable_maps()) m where m ->> 'id' = test.id('bob_sv')::text), 'Bobby', 'player maps show who made them');
+select test.expect_error($$select public.create_game('single_player', test.id('bob_photo'))$$, 'isn''t available');
+select test.expect_error($$select public.get_my_map(test.id('bob_sv'))$$, 'not found');
+select test.expect_error($$select public.update_my_map(test.id('bob_sv'), 'Mine now', '', true, true)$$, 'not found');
+select test.expect_error($$select public.save_my_location(test.id('bob_sv'), 1, 'x', 0, 0, 0, 0, null)$$, 'not found');
+select test.expect_error($$select public.delete_my_map(test.id('bob_sv'))$$, 'not found');
+select test.eq((select count(*) from public.locations), 0::bigint, 'others can''t read a player''s locations');
+select test.eq((select count(*) from public.maps where id = test.id('bob_photo')), 0::bigint, 'others can''t see a private map');
+select test.expect_error($$insert into public.maps (name, owner_id) values ('Sneaky', test.id('carol'))$$, 'row-level security');
+-- Joining the owner's game on a private map is fine: only starting one is limited.
+insert into test.ids select 'sv_game', (public.create_game('multiplayer', test.id('bob_sv')) ->> 'id')::uuid;
+select test.eq(public.get_game_state(test.id('sv_game')) #>> '{game,map_name}', 'Bob''s streets', 'others can start games on a public player map');
+-- Storage: own folder only.
+select test.eq(public.can_upload_photo(test.id('carol')::text || '/abc.jpg'), true, 'upload into your own folder');
+select test.eq(public.can_upload_photo(test.id('bob')::text || '/abc.jpg'), false, 'not into someone else''s');
+select test.eq(public.can_upload_photo(test.id('carol')::text || '/../x.jpg'), false, 'no odd names');
+insert into storage.objects (bucket_id, name) values ('map-photos', test.id('carol')::text || '/one.jpg');
+select test.expect_error($$insert into storage.objects (bucket_id, name) values ('map-photos', test.id('bob')::text || '/two.jpg')$$, 'row-level security');
+select test.eq((select count(*) from storage.objects), 1::bigint, 'see only your own photos');
+reset role;
+
+select from (select test.act_as(test.id('bob'))) s;
+select from (select public.update_my_map(test.id('bob_sv'), 'Bob''s streets', 'Five corners', false, true)) s;
+select test.eq(public.get_my_map(test.id('bob_sv')) ->> 'is_public', 'false', 'make a map private');
+select from (select public.update_my_map(test.id('bob_sv'), 'Bob''s streets', '', true, false)) s;
+select test.eq((select count(*) from jsonb_array_elements(public.playable_maps()) m where m ->> 'id' = test.id('bob_sv')::text), 0::bigint, 'switched-off maps aren''t playable');
+select test.eq((public.my_stats() ->> 'games')::int, 1, 'stats count finished games');
+select test.eq((public.my_stats() ->> 'rounds')::int, 5, 'stats count rounds');
+select test.eq((public.my_stats() ->> 'maps_made')::int, 2, 'stats count maps made');
+select test.eq((public.my_stats() ->> 'rank')::int, 1, 'stats know your rank');
+select test.eq(jsonb_array_length(public.delete_my_map(test.id('bob_photo')) -> 'removed_photos'), 0, 'photos used in games are kept when a map is deleted');
+insert into test.ids select 'bob_photo2', public.create_my_map('Spare', '', 'photo', true);
+select from (select public.save_my_location(test.id('bob_photo2'), 2, 'Hill', 1, 1, 0, 0, test.id('bob')::text || '/hill.jpg')) s;
+select test.eq(public.delete_my_map(test.id('bob_photo2')) #>> '{removed_photos,0}', test.id('bob')::text || '/hill.jpg', 'deleting a map frees its unused photos');
+select test.eq((select count(*) from public.games where id = test.id('photo_game')), 1::bigint, 'games on a deleted map stay');
+-- Storage: photos games still show can't be deleted; unused ones can.
+insert into storage.objects (bucket_id, name) values ('map-photos', test.id('bob')::text || '/p1.jpg'), ('map-photos', test.id('bob')::text || '/spare.jpg');
+delete from storage.objects where name = test.id('bob')::text || '/p1.jpg';
+select test.eq((select count(*) from storage.objects where name = test.id('bob')::text || '/p1.jpg'), 1::bigint, 'a photo a game shows can''t be deleted');
+delete from storage.objects where name = test.id('bob')::text || '/spare.jpg';
+select test.eq((select count(*) from storage.objects where name = test.id('bob')::text || '/spare.jpg'), 0::bigint, 'an unused photo can be deleted');
+reset role;
+
+-- An admin blocks a player's map; its owner can't switch it back on.
+select from (select test.act_as(test.id('admin'))) s;
+update public.maps set blocked = true where id = test.id('bob_sv');
+reset role;
+select from (select test.act_as(test.id('bob'))) s;
+select from (select public.update_my_map(test.id('bob_sv'), 'Bob''s streets', '', true, true)) s;
+update public.maps set blocked = false where id = test.id('bob_sv'); -- row-level security: changes nothing
+select test.eq((select count(*) from jsonb_array_elements(public.playable_maps()) m where m ->> 'id' = test.id('bob_sv')::text), 0::bigint, 'a blocked map stays off');
+select test.eq((public.get_my_map(test.id('bob_sv')) ->> 'blocked')::boolean, true, 'its owner is told it''s blocked');
+reset role;
+select from (select test.act_as(null)) s;
+select test.expect_error('select public.playable_maps()', 'permission denied');
+select test.expect_error($$select public.create_my_map('x', '', 'photo', true)$$, 'permission denied');
+reset role;
+
 \echo 'All GeoBarkr SQL tests passed.'

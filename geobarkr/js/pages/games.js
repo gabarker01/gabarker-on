@@ -1,10 +1,10 @@
 // My games: every place you've been dropped on one map, then each game with a
 // small map of its places and your guesses. Also your display name.
-import { initPage, $, h, busy, toast, showError } from "../ui.js?v=12";
-import { myGames, renameMe, gamePageUrl } from "../api.js?v=12";
-import { drawWorld } from "../worldmap.js?v=12";
-import { ME_COLOUR } from "../players.js?v=12";
-import { GAME_TYPES, formatDate, formatScore, ordinal } from "../geo.js?v=12";
+import { initPage, $, h, busy, toast, showError } from "../ui.js?v=13";
+import { myGames, renameMe, gamePageUrl } from "../api.js?v=13";
+import { drawWorld } from "../worldmap.js?v=13";
+import { ME_COLOUR } from "../players.js?v=13";
+import { GAME_TYPES, formatDate, formatScore, ordinal } from "../geo.js?v=13";
 
 const { profile } = await initPage();
 
