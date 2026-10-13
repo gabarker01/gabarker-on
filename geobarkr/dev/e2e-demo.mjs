@@ -129,6 +129,9 @@ for (const [label, viewport] of [["phone", { width: 390, height: 844 }], ["deskt
     // Round 2: end it before the bots guess.
     await me.page.click("#continue");
     await me.page.waitForFunction(() => document.querySelector("#round-label")?.textContent === "Round 2");
+    assert.equal(await me.page.isHidden("#end-round"), true, "End round only after the host has guessed");
+    await tapMap(me.page, ...SPOTS[1]);
+    await me.page.click("#guess");
     await me.page.click("#end-round");
     await me.page.waitForSelector("#results:not([hidden])");
     await me.page.click("#continue");

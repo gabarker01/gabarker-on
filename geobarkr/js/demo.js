@@ -2,7 +2,7 @@
 // database functions (geobarkr/supabase/migrations/002_functions.sql), kept in
 // this browser's storage, with bot players so online and party games can be
 // tried on one device. Nothing leaves the device; nobody else can join.
-import { haversineKm, roundDistance, scoreForDistance } from "./geo.js";
+import { haversineKm, roundDistance, scoreForDistance } from "./geo.js?v=11";
 
 const DB_KEY = "geobarkr-demo-v1";
 const ME_KEY = "geobarkr-demo-me";
@@ -250,9 +250,20 @@ export async function joinGame(code) {
     const game = db.games.find((g) => g.code === String(code).trim().toUpperCase());
     if (!game || game.type === "single_player") fail("No game with that code. In demo mode, games only exist on this device");
     if (isMember(db, game, uid)) return { id: game.id, type: game.type, status: game.status };
+    if (game.status === "cancelled") fail("That game was cancelled");
     if (game.status !== "lobby") fail("That game has already started");
     db.players.push({ id: uuid(), game_id: game.id, user_id: uid, joined_at: iso(), total_score: 0, total_distance_km: 0 });
     return { id: game.id, type: game.type, status: game.status };
+  });
+}
+
+export async function cancelGame(gameId) {
+  const uid = requireMe();
+  change((db) => {
+    const game = gameOf(db, gameId);
+    if (!game || game.host_id !== uid) fail("Only the host can cancel the game");
+    if (game.status !== "lobby") fail("The game has already started");
+    game.status = "cancelled";
   });
 }
 
@@ -389,7 +400,7 @@ export async function myGames() {
   return db.games
     .map((g) => {
       const me = playersOf(db, g.id).find((p) => p.user_id === uid);
-      if (g.host_id !== uid && !me) return null;
+      if ((g.host_id !== uid && !me) || g.status === "cancelled") return null;
       const all = playersOf(db, g.id);
       return {
         id: g.id, code: g.code, type: g.type, status: g.status, map_name: g.map_name, created_at: g.created_at,

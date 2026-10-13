@@ -245,6 +245,9 @@ begin
     return jsonb_build_object('id', v_game.id, 'type', v_game.type, 'status', v_game.status);
   end if;
 
+  if v_game.status = 'cancelled' then
+    raise exception 'That game was cancelled';
+  end if;
   if v_game.status <> 'lobby' then
     raise exception 'That game has already started';
   end if;
@@ -281,6 +284,30 @@ begin
   update public.rounds set status = 'in_progress', started_at = now()
   where game_id = p_game and round_number = 1;
   perform public.notify_game(p_game, 'started');
+end;
+$$;
+
+-- The host calls off a game that hasn't started yet; everyone in the lobby
+-- is told live and sent back to the start.
+create or replace function public.cancel_game(p_game uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := public.require_user();
+  v_game public.games;
+begin
+  select * into v_game from public.games where id = p_game for update;
+  if not found or v_game.host_id <> v_uid then
+    raise exception 'Only the host can cancel the game';
+  end if;
+  if v_game.status <> 'lobby' then
+    raise exception 'The game has already started';
+  end if;
+  update public.games set status = 'cancelled' where id = p_game;
+  perform public.notify_game(p_game, 'cancelled');
 end;
 $$;
 
@@ -615,7 +642,7 @@ as $$
             where r.game_id = g.id and r.status in ('results', 'complete')) as places
     from public.games g
     left join public.game_players me on me.game_id = g.id and me.user_id = auth.uid()
-    where g.host_id = auth.uid() or me.id is not null
+    where (g.host_id = auth.uid() or me.id is not null) and g.status <> 'cancelled'
     order by g.created_at desc
     limit 200
   ) x;

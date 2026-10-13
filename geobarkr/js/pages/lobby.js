@@ -1,12 +1,12 @@
 // The lobby (ServiceNow: "GeoBarkr Lobby players"): the room code and QR code,
 // who's joined, and the owner's Start button. Everyone moves on to the game
 // as soon as the owner starts it.
-import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew, toast, showError } from "../ui.js";
-import { startGame, gamePageUrl, isDemo } from "../api.js";
-import { watchGameState } from "../live.js";
-import { drawWorld } from "../worldmap.js";
-import { avatar, colourMap } from "../players.js";
-import { GAME_TYPES, formatDate } from "../geo.js";
+import { initPage, $, h, busy, param, qrCode, joinUrl, pageError, markNew, toast, showError } from "../ui.js?v=11";
+import { startGame, cancelGame, gamePageUrl, isDemo } from "../api.js?v=11";
+import { watchGameState } from "../live.js?v=11";
+import { drawWorld } from "../worldmap.js?v=11";
+import { avatar, colourMap } from "../players.js?v=11";
+import { GAME_TYPES, formatDate } from "../geo.js?v=11";
 
 await initPage();
 drawWorld($("#band"), { view: { lat: 25, lng: 10, zoom: 0.05 } });
@@ -17,6 +17,10 @@ let current = null;
 watchGameState(gameId, async (state) => {
   const { game, players, me } = state;
   current = state;
+  if (game.status === "cancelled") {
+    location.replace(game.is_host ? "/geobarkr/" : "/geobarkr/?cancelled=1");
+    return;
+  }
   if (game.status !== "lobby" || (game.type === "local_multiplayer" && !game.is_host)) {
     location.replace(gamePageUrl(game, { isHost: game.is_host, isPlayer: me.is_player }));
     return;
@@ -51,6 +55,7 @@ watchGameState(gameId, async (state) => {
 
   const canStart = game.is_host && players.length > 1;
   $("#start-button").hidden = !game.is_host;
+  $("#cancel-button").hidden = !game.is_host;
   $("#start-button").disabled = !canStart;
   $("#waiting-note").textContent = game.is_host
     ? (canStart ? "" : "You can start once at least 2 players have joined.")
@@ -84,4 +89,14 @@ $("#share-button").addEventListener("click", async () => {
   } catch {
     toast(url);
   }
+});
+
+// The owner can call the game off before it starts; everyone else in the
+// lobby is sent back to the start with a note.
+$("#cancel-button").addEventListener("click", (event) => {
+  if (!confirm("Cancel this game? Everyone in the lobby will be sent back to the start.")) return;
+  busy(event.currentTarget, async () => {
+    await cancelGame(gameId);
+    location.replace("/geobarkr/");
+  });
 });
