@@ -26,7 +26,7 @@ watchGameState(gameId, async (state) => {
 
   const local = game.type === "local_multiplayer";
   const code = game.code;
-  $("#room-code").replaceChildren(code.slice(0, 3), h("span", { class: "tail" }, code.slice(3)));
+  $("#room-code").textContent = code;
   $("#game-meta").textContent = `${GAME_TYPES[game.type]} · ${game.map_name} · ${game.round_count} rounds`;
   if (!qrShown) {
     qrShown = true;
