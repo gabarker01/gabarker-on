@@ -232,7 +232,21 @@
     const shortDay = (k) => fromKey(k).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
     const longDay = (k) => fromKey(k).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
     const gameNumber = (k) => Math.round((fromKey(k) - fromKey("2026-09-24")) / 86400000) + 1;
-    const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    // "Today" is always the UK date (Europe/London, so it follows BST/GMT),
+    // whoever is looking and from wherever: players ahead of the UK starting
+    // the next day's game don't move it on.
+    const ukToday = () => {
+      try {
+        const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+        const get = (type) => parts.find((x) => x.type === type).value;
+        return `${get("year")}-${get("month")}-${get("day")}`;
+      } catch (e) {
+        return dayKey(new Date());
+      }
+    };
+    // The newest day in the data: can be the UK's tomorrow (games already
+    // played there in time zones ahead).
+    const latestDay = () => summary.reduce((m, r) => (r.game_date > m ? r.game_date : m), ukToday());
     const el = (name, attrs = {}, parent) => {
       const node = document.createElementNS(SVGNS, name);
       for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
@@ -247,7 +261,7 @@
     let range = 1; // opens on Today
     let rangeAll = false;
     // All time: every day since No. 1 (24 September 2026).
-    const daysSinceLaunch = () => gameNumber(localToday());
+    const daysSinceLaunch = () => gameNumber(ukToday());
     let days = [];         // [{ key, number, players, signedIn, noAccount, average, best, countries: Map }]
     let mapIndex = -1;     // the day on the map (index into days)
     let playing = null;
@@ -298,16 +312,15 @@
 
     function buildDays() { days = dayList(range); }
 
-    // The last `count` days up to the latest, with gaps filled in.
-    function dayList(count) {
+    // The last `count` days up to endKey (the UK's today unless given), with gaps filled in.
+    function dayList(count, endKey = ukToday()) {
       const byDate = new Map(summary.map((r) => [r.game_date, r]));
       const perDay = new Map();
       for (const r of countries) {
         if (!perDay.has(r.game_date)) perDay.set(r.game_date, new Map());
         perDay.get(r.game_date).set(r.country, r.players);
       }
-      const latest = summary.reduce((m, r) => (r.game_date > m ? r.game_date : m), localToday());
-      const end = fromKey(latest);
+      const end = fromKey(endKey);
       const list = [];
       for (let i = count - 1; i >= 0; i--) {
         const d = new Date(end);
@@ -589,7 +602,11 @@
       const body = $("rows");
       body.replaceChildren();
       // Today: every day so far (the rest of the page is about today).
-      const source = range === 1 ? dayList(daysSinceLaunch()) : days;
+      // Plus any day after the UK's today that's already being played.
+      const ahead = gameNumber(latestDay()) - gameNumber(ukToday());
+      const source = range === 1
+        ? dayList(daysSinceLaunch() + ahead, latestDay())
+        : [...days, ...dayList(ahead, latestDay())];
       $("table-title").textContent = range === 1 ? "Every day" : `Every day · last ${rangeAll ? "all time" : `${range} days`}`;
       const played = source.filter((d) => d.players > 0).reverse();
       const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; };
