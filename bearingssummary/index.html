@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="dark">
-  <title>Bearings daily summary</title>
+  <title>Bearings game summary</title>
   <!-- Daily totals from Bearings' database, for anyone with the link: players,
        scores and countries per day, never who. The data comes from
        public_daily_summary and public_daily_countries (bearings repo,
@@ -93,6 +93,10 @@
     .top .bar { grid-column: 1 / -1; height: 6px; border-radius: 0 3px 3px 0; background: var(--accent); transition: width 600ms ease; }
     .top-empty { display: block !important; font-size: 0.85rem; color: var(--ink-soft); }
 
+    .card[hidden], .tile[hidden], .map-controls[hidden] { display: none; }
+    .score-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .score-pair .tile-label { display: flex; align-items: center; gap: 8px; }
+    .score-big { margin: 0; font-size: 2.6rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
@@ -116,13 +120,13 @@
 <body>
   <main id="app">
     <p class="wordmark">bearings.</p>
-    <h1>Daily summary</h1>
+    <h1>Game Summary</h1>
     <p class="meta"><span id="updated">Loading…</span><span>· refreshes every 3 hours</span><button id="refresh" class="chip" type="button">Refresh now</button></p>
 
     <div class="filters" role="group" aria-label="Date range">
-      <button type="button" data-days="1" aria-pressed="false">Today</button>
+      <button type="button" data-days="1" aria-pressed="true">Today</button>
       <button type="button" data-days="7" aria-pressed="false">Last 7 days</button>
-      <button type="button" data-days="30" aria-pressed="true">Last 30 days</button>
+      <button type="button" data-days="30" aria-pressed="false">Last 30 days</button>
       <button type="button" data-days="90" aria-pressed="false">Last 90 days</button>
       <button type="button" data-days="all" aria-pressed="false">All time</button>
     </div>
@@ -130,11 +134,11 @@
     <div class="tiles">
       <div class="tile"><p class="tile-label">Games played</p><p id="t-games" class="tile-value">–</p><p id="t-games-sub" class="tile-sub"></p></div>
       <div class="tile"><p id="t-perday-label" class="tile-label">Per day</p><p id="t-perday" class="tile-value">–</p><p id="t-perday-sub" class="tile-sub"></p></div>
-      <div class="tile"><p class="tile-label">Best score</p><p id="t-best" class="tile-value">–</p><p id="t-best-sub" class="tile-sub"></p></div>
+      <div id="best-tile" class="tile"><p class="tile-label">Best score</p><p id="t-best" class="tile-value">–</p><p id="t-best-sub" class="tile-sub"></p></div>
       <div class="tile"><p class="tile-label">Countries</p><p id="t-countries" class="tile-value">–</p><p id="t-countries-sub" class="tile-sub"></p></div>
     </div>
 
-    <section class="card">
+    <section id="players-card" class="card">
       <div class="card-head">
         <div><h2>Players each day</h2><p class="card-note">Tap a day to show it on the map.</p></div>
         <ul class="legend">
@@ -147,12 +151,12 @@
 
     <section class="card map-card">
       <div class="card-head">
-        <div><h2>Where people played</h2><p class="card-note">Brighter means more players that day. Slide through the days, or press play.</p></div>
+        <div><h2>Where people played</h2><p id="map-note" class="card-note">Brighter means more players that day. Slide through the days, or press play.</p></div>
       </div>
       <div class="map-layout">
         <div>
           <svg id="map" class="map" viewBox="0 0 960 500" role="img" aria-label="World map of players by country for the chosen day"></svg>
-          <div class="map-controls">
+          <div id="map-controls" class="map-controls">
             <button id="play" class="play" type="button" aria-label="Play through the days">▶</button>
             <input id="day" type="range" min="0" max="0" value="0" aria-label="Day">
           </div>
@@ -170,7 +174,16 @@
       </div>
     </section>
 
-    <section class="card">
+    <!-- Today: just the two scores -->
+    <section id="today-scores" class="card" hidden>
+      <div class="card-head"><div><h2>Today's scores</h2><p class="card-note">Out of 1,000.</p></div></div>
+      <div class="score-pair">
+        <div><p class="tile-label"><span class="key-line" style="background: var(--best)"></span> Top score</p><p id="today-top" class="score-big">–</p></div>
+        <div><p class="tile-label"><span class="key-line" style="background: var(--average)"></span> Average score</p><p id="today-average" class="score-big">–</p></div>
+      </div>
+    </section>
+
+    <section id="scores-card" class="card">
       <div class="card-head">
         <div><h2>Scores each day</h2><p class="card-note">Out of 1,000.</p></div>
         <ul class="legend">
@@ -182,7 +195,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Every day</h2></div>
+      <div class="card-head"><h2 id="table-title">Every day</h2></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Day</th><th>Players</th><th>Signed in</th><th>No account</th><th>Countries</th><th>Average</th><th>Best</th></tr></thead>
@@ -231,7 +244,7 @@
     let countries = [];    // public_daily_countries rows
     let countriesOk = true;
     let world = null;      // { w, h, sphere, countries: [{ c, n, d }] }
-    let range = 30;
+    let range = 1; // opens on Today
     let rangeAll = false;
     // All time: every day since No. 1 (24 September 2026).
     const daysSinceLaunch = () => gameNumber(localToday());
@@ -283,7 +296,10 @@
       return response.json();
     }
 
-    function buildDays() {
+    function buildDays() { days = dayList(range); }
+
+    // The last `count` days up to the latest, with gaps filled in.
+    function dayList(count) {
       const byDate = new Map(summary.map((r) => [r.game_date, r]));
       const perDay = new Map();
       for (const r of countries) {
@@ -292,13 +308,13 @@
       }
       const latest = summary.reduce((m, r) => (r.game_date > m ? r.game_date : m), localToday());
       const end = fromKey(latest);
-      days = [];
-      for (let i = range - 1; i >= 0; i--) {
+      const list = [];
+      for (let i = count - 1; i >= 0; i--) {
         const d = new Date(end);
         d.setUTCDate(d.getUTCDate() - i);
         const key = dayKey(d);
         const r = byDate.get(key);
-        days.push({
+        list.push({
           key,
           number: r ? r.game_number : gameNumber(key),
           players: r ? r.players : 0,
@@ -309,6 +325,7 @@
           countries: perDay.get(key) || new Map(),
         });
       }
+      return list;
     }
 
     // ---------- Tiles ----------
@@ -571,7 +588,10 @@
     function renderTable() {
       const body = $("rows");
       body.replaceChildren();
-      const played = days.filter((d) => d.players > 0).reverse();
+      // Today: every day so far (the rest of the page is about today).
+      const source = range === 1 ? dayList(daysSinceLaunch()) : days;
+      $("table-title").textContent = range === 1 ? "Every day" : `Every day · last ${rangeAll ? "all time" : `${range} days`}`;
+      const played = source.filter((d) => d.players > 0).reverse();
       const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; };
       if (!played.length) {
         const tr = document.createElement("tr");
@@ -589,6 +609,18 @@
 
     function renderAll() {
       buildDays();
+      const today = range === 1;
+      // Today: no per-day chart or day slider; two scores instead of a chart.
+      $("players-card").hidden = today;
+      $("scores-card").hidden = today;
+      $("today-scores").hidden = !today;
+      $("map-controls").hidden = today;
+      $("best-tile").hidden = today;
+      $("map-note").textContent = today ? "Brighter means more players today." : "Brighter means more players that day. Slide through the days, or press play.";
+      if (today) {
+        $("today-top").textContent = num(days[0].best);
+        $("today-average").textContent = num(days[0].average);
+      }
       renderTiles();
       renderScores();
       renderTable();
