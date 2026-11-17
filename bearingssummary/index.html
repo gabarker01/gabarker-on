@@ -246,6 +246,9 @@
     };
     // The newest day in the data: can be the UK's tomorrow (games already
     // played there in time zones ahead).
+    // The last finished day (the UK's yesterday): the longer ranges end here,
+    // so a day still being played doesn't pull their numbers down.
+    const ukYesterday = () => { const d = fromKey(ukToday()); d.setUTCDate(d.getUTCDate() - 1); return dayKey(d); };
     const latestDay = () => summary.reduce((m, r) => (r.game_date > m ? r.game_date : m), ukToday());
     const el = (name, attrs = {}, parent) => {
       const node = document.createElementNS(SVGNS, name);
@@ -310,7 +313,7 @@
       return response.json();
     }
 
-    function buildDays() { days = dayList(range); }
+    function buildDays() { days = range === 1 ? dayList(1) : dayList(range, ukYesterday()); }
 
     // The last `count` days up to endKey (the UK's today unless given), with gaps filled in.
     function dayList(count, endKey = ukToday()) {
@@ -346,7 +349,7 @@
       const played = days.filter((d) => d.players > 0);
       const games = played.reduce((a, d) => a + d.players, 0);
       $("t-games").textContent = num(games);
-      $("t-games-sub").textContent = rangeAll ? "since 24 Sep 2026" : range === 1 ? "today" : `last ${range} days`;
+      $("t-games-sub").textContent = rangeAll ? "24 Sep 2026 to yesterday" : range === 1 ? "today so far" : `last ${range} full days`;
       const busiest = played.reduce((m, d) => (!m || d.players > m.players ? d : m), null);
       if (range === 1) {
         // One day: who was signed in, rather than an average of one.
@@ -602,10 +605,11 @@
       const body = $("rows");
       body.replaceChildren();
       // Today: every day so far (the rest of the page is about today).
-      // Plus any day after the UK's today that's already being played.
-      const ahead = gameNumber(latestDay()) - gameNumber(ukToday());
+      // Plus the days after the range: today (still being played) and any
+      // day after it that's already started in time zones ahead of the UK.
+      const ahead = gameNumber(latestDay()) - gameNumber(ukYesterday());
       const source = range === 1
-        ? dayList(daysSinceLaunch() + ahead, latestDay())
+        ? dayList(daysSinceLaunch() + ahead - 1, latestDay())
         : [...days, ...dayList(ahead, latestDay())];
       $("table-title").textContent = range === 1 ? "Every day" : `Every day · last ${rangeAll ? "all time" : `${range} days`}`;
       const played = source.filter((d) => d.players > 0).reverse();
@@ -681,7 +685,7 @@
     document.querySelectorAll(".filters button").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".filters button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       rangeAll = b.dataset.days === "all";
-      range = rangeAll ? daysSinceLaunch() : Number(b.dataset.days);
+      range = rangeAll ? Math.max(1, daysSinceLaunch() - 1) : Number(b.dataset.days);
       stopPlay();
       mapIndex = -1;
       renderAll();
