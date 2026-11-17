@@ -6,155 +6,642 @@
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="dark">
   <title>Bearings daily summary</title>
-  <!-- Daily totals from Bearings' database (public_daily_summary in the
-       bearings repo's supabase/public-summary.sql): players, average and
-       best per day, no names. Fetched when the page opens and every 3 hours. -->
+  <!-- Daily totals from Bearings' database, for anyone with the link: players,
+       scores and countries per day, never who. The data comes from
+       public_daily_summary and public_daily_countries (bearings repo,
+       supabase/public-summary.sql), fetched when the page opens and every 3
+       hours. world.json: Natural Earth 1:50m countries (world-atlas),
+       projected (Natural Earth) to SVG paths, keyed by ISO country code. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
   <style>
     :root {
-      --paper: #0b0d12;
-      --panel: #11141b;
+      --page: #0b0d12;
+      --surface: #11141b;
       --ink: #f1ece2;
       --ink-soft: #a7abb3;
-      --ink-faint: #71767f;
+      --ink-muted: #898781;
       --hairline: rgba(241, 236, 226, 0.1);
+      --grid: #2c2c2a;
+      --axis: #383835;
       --accent: #d9b26a;
+      /* Series (validated on --surface, dark): players chart, then scores chart */
+      --signed-in: #3987e5;
+      --no-account: #d95926;
+      --average: #199e70;
+      --best: #c98500;
+      /* The map card is paper: land darkens with players (blue ramp) */
+      --paper: #f4efe6;
+      --paper-ink: #0b0b0b;
+      --paper-soft: #52514e;
+      --ocean: #e9e3d6;
+      --land: #d3cdbf;
       --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      --mono: "Geist Mono", ui-monospace, Menlo, monospace;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      padding: 32px 16px 48px;
-      font-family: var(--sans);
-      color: var(--ink);
-      background: var(--paper);
-    }
-    main { max-width: 760px; margin: 0 auto; }
-    .wordmark { margin: 0; font-size: 1.6rem; font-weight: 600; letter-spacing: -0.04em; color: var(--accent); }
-    h1 { margin: 6px 0 4px; font-size: 2rem; font-weight: 600; letter-spacing: -0.03em; }
-    .meta { margin: 0 0 24px; font-size: 0.85rem; color: var(--ink-soft); }
-    .meta button {
-      margin-left: 6px; padding: 2px 10px; font: inherit; font-size: 0.8rem; color: var(--ink);
-      background: none; border: 1px solid var(--hairline); border-radius: 999px; cursor: pointer;
-    }
-    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 24px; }
-    .tile { padding: 14px 16px; background: var(--panel); border: 1px solid var(--hairline); border-radius: 16px; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; padding: 28px 16px 56px; font-family: var(--sans); color: var(--ink); background: var(--page); }
+    main { max-width: 1040px; margin: 0 auto; }
+    .wordmark { margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.04em; color: var(--accent); }
+    h1 { margin: 4px 0 4px; font-size: 2rem; font-weight: 600; letter-spacing: -0.03em; }
+    .meta { margin: 0 0 20px; font-size: 0.85rem; color: var(--ink-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .chip { padding: 4px 12px; font-size: 0.8rem; background: none; border: 1px solid var(--hairline); border-radius: 999px; }
+    .chip:hover { background: rgba(241, 236, 226, 0.06); }
+
+    /* Filter row: one row, above everything it scopes */
+    .filters { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 18px; border: 1px solid var(--hairline); border-radius: 999px; }
+    .filters button { padding: 7px 14px; font-size: 0.85rem; color: var(--ink-soft); background: none; border: none; border-radius: 999px; }
+    .filters button[aria-pressed="true"] { color: var(--page); background: var(--ink); font-weight: 500; }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; transition: opacity 200ms ease; }
+    .tile { padding: 14px 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; }
     .tile-label { margin: 0 0 6px; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
-    .tile-value { margin: 0; font-family: var(--mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 16px; background: var(--panel); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { padding: 10px 14px; text-align: right; white-space: nowrap; }
+    .tile-value { margin: 0; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .tile-sub { margin: 4px 0 0; font-size: 0.78rem; color: var(--ink-muted); }
+
+    .card { margin-bottom: 14px; padding: 18px 18px 14px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 18px; transition: opacity 200ms ease; }
+    .is-loading .card, .is-loading .tiles { opacity: 0.55; }
+    .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 8px; }
+    .card h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+    .card-note { margin: 2px 0 0; font-size: 0.8rem; color: var(--ink-muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 0.8rem; color: var(--ink-soft); }
+    .legend li { display: inline-flex; align-items: center; gap: 6px; }
+    .key-rect { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+    .key-line { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+    svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+    .chart text { font-family: var(--sans); font-size: 11px; fill: var(--ink-muted); }
+    .chart .direct { font-size: 11px; fill: var(--ink-soft); }
+
+    /* The map card is paper */
+    .map-card { background: var(--paper); color: var(--paper-ink); border-color: transparent; }
+    .map-card .card-note, .map-card .legend { color: var(--paper-soft); }
+    .map-layout { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(220px, 1fr); gap: 18px; align-items: start; }
+    @media (max-width: 760px) { .map-layout { grid-template-columns: 1fr; } }
+    svg.map { display: block; width: 100%; height: auto; }
+    .map .country { fill: var(--land); stroke: var(--paper); stroke-width: 0.5; transition: fill 900ms ease; }
+    .map .country:hover { stroke: var(--paper-ink); stroke-width: 1; }
+    .map-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+    .play { flex: none; width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--paper-ink); color: var(--paper); font-size: 0.85rem; }
+    input[type="range"] { flex: 1; min-width: 0; accent-color: #256abf; }
+    .day-label { margin: 0; font-size: 0.95rem; font-weight: 600; }
+    .day-sub { margin: 2px 0 0; font-size: 0.8rem; color: var(--paper-soft); }
+    .scale { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.75rem; color: var(--paper-soft); }
+    .scale-bar { flex: 1; max-width: 220px; height: 10px; border-radius: 3px; }
+    .scale-none { width: 14px; height: 10px; border-radius: 2px; background: var(--land); }
+    .top-title { margin: 16px 0 8px; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper-soft); }
+    .top { margin: 0; padding: 0; list-style: none; }
+    .top li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; margin-bottom: 9px; font-size: 0.85rem; }
+    .top .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .top .count { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .top .bar { grid-column: 1 / -1; height: 6px; border-radius: 0 3px 3px 0; background: #256abf; transition: width 600ms ease; }
+    .top-empty { display: block !important; font-size: 0.85rem; color: var(--paper-soft); }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
     th:first-child, td:first-child { text-align: left; }
     th { font-size: 0.7rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--hairline); }
-    td { font-family: var(--mono); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--hairline); }
-    td:first-child { font-family: var(--sans); }
+    td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--hairline); }
     tr:last-child td { border-bottom: none; }
-    .no { color: var(--ink-faint); }
-    .status { padding: 20px; text-align: center; color: var(--ink-soft); }
-    .note { margin-top: 16px; font-size: 0.8rem; color: var(--ink-faint); }
+    .no { color: var(--ink-muted); }
+    .status { padding: 18px; text-align: center; color: var(--ink-soft); }
+    .note { margin-top: 14px; font-size: 0.8rem; color: var(--ink-muted); }
+
+    /* One tooltip for everything: values lead, labels follow */
+    .tip { position: fixed; z-index: 10; left: 0; top: 0; pointer-events: none; min-width: 150px; padding: 10px 12px; font-size: 0.8rem; color: var(--ink); background: #1d212b; border: 1px solid var(--hairline); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); opacity: 0; transition: opacity 120ms ease; }
+    .tip.is-on { opacity: 1; }
+    .tip-title { margin: 0 0 6px; color: var(--ink-soft); }
+    .tip-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+    .tip-row strong { min-width: 2.5em; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+    .tip-row span { color: var(--ink-soft); }
   </style>
 </head>
 <body>
-  <main>
+  <main id="app">
     <p class="wordmark">bearings.</p>
     <h1>Daily summary</h1>
-    <p class="meta"><span id="updated">Loading…</span> · refreshes every 3 hours <button id="refresh" type="button">Refresh now</button></p>
+    <p class="meta"><span id="updated">Loading…</span><span>· refreshes every 3 hours</span><button id="refresh" class="chip" type="button">Refresh now</button></p>
+
+    <div class="filters" role="group" aria-label="Date range">
+      <button type="button" data-days="7" aria-pressed="false">Last 7 days</button>
+      <button type="button" data-days="30" aria-pressed="true">Last 30 days</button>
+      <button type="button" data-days="90" aria-pressed="false">Last 90 days</button>
+    </div>
 
     <div class="tiles">
-      <div class="tile"><p class="tile-label">Latest day</p><p id="t-today" class="tile-value">–</p></div>
-      <div class="tile"><p class="tile-label">Last 7 days</p><p id="t-week" class="tile-value">–</p></div>
-      <div class="tile"><p class="tile-label">Last 90 days</p><p id="t-all" class="tile-value">–</p></div>
-      <div class="tile"><p class="tile-label">Best (90 days)</p><p id="t-best" class="tile-value">–</p></div>
+      <div class="tile"><p class="tile-label">Games played</p><p id="t-games" class="tile-value">–</p><p id="t-games-sub" class="tile-sub"></p></div>
+      <div class="tile"><p class="tile-label">Per day</p><p id="t-perday" class="tile-value">–</p><p id="t-perday-sub" class="tile-sub"></p></div>
+      <div class="tile"><p class="tile-label">Best score</p><p id="t-best" class="tile-value">–</p><p id="t-best-sub" class="tile-sub"></p></div>
+      <div class="tile"><p class="tile-label">Countries</p><p id="t-countries" class="tile-value">–</p><p id="t-countries-sub" class="tile-sub"></p></div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Day</th><th>Players</th><th>Signed in</th><th>No account</th><th>Average</th><th>Best</th></tr>
-        </thead>
-        <tbody id="rows"><tr><td colspan="6" class="status">Loading…</td></tr></tbody>
-      </table>
-    </div>
-    <p class="note">Games played each day on Bearings (and TapMap before it), by each player's own date. Totals only: no names or personal details.</p>
+    <section class="card">
+      <div class="card-head">
+        <div><h2>Players each day</h2><p class="card-note">Tap a day to show it on the map.</p></div>
+        <ul class="legend">
+          <li><span class="key-rect" style="background: var(--signed-in)"></span>Signed in</li>
+          <li><span class="key-rect" style="background: var(--no-account)"></span>No account</li>
+        </ul>
+      </div>
+      <svg id="players-chart" class="chart" viewBox="0 0 720 240" role="img" aria-label="Players each day, signed in and without an account"></svg>
+    </section>
+
+    <section class="card map-card">
+      <div class="card-head">
+        <div><h2>Where people played</h2><p class="card-note">Darker means more players that day. Slide through the days, or press play.</p></div>
+      </div>
+      <div class="map-layout">
+        <div>
+          <svg id="map" class="map" viewBox="0 0 960 500" role="img" aria-label="World map of players by country for the chosen day"></svg>
+          <div class="map-controls">
+            <button id="play" class="play" type="button" aria-label="Play through the days">▶</button>
+            <input id="day" type="range" min="0" max="0" value="0" aria-label="Day">
+          </div>
+          <div class="scale" aria-hidden="true">
+            <span class="scale-none"></span><span>None</span>
+            <span>1</span><span id="scale-bar" class="scale-bar"></span><span id="scale-max">–</span><span>players</span>
+          </div>
+        </div>
+        <div>
+          <p id="day-label" class="day-label">–</p>
+          <p id="day-sub" class="day-sub"></p>
+          <p class="top-title">Top countries</p>
+          <ol id="top" class="top"></ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div><h2>Scores each day</h2><p class="card-note">Out of 1,000.</p></div>
+        <ul class="legend">
+          <li><span class="key-line" style="background: var(--average)"></span>Average</li>
+          <li><span class="key-line" style="background: var(--best)"></span>Best</li>
+        </ul>
+      </div>
+      <svg id="scores-chart" class="chart" viewBox="0 0 720 220" role="img" aria-label="Average and best score each day"></svg>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Every day</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Day</th><th>Players</th><th>Signed in</th><th>No account</th><th>Countries</th><th>Average</th><th>Best</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="7" class="status">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="note">Games played each day on Bearings (and TapMap before it), by each player's own date. Countries come from each game's connection; games without one count as unknown. Totals only: no names or personal details.</p>
   </main>
 
+  <div id="tip" class="tip" role="status" aria-live="polite"></div>
+
   <script>
-    (() => {
-      const SUPABASE_URL = "https://qmgwlvjvwwrlcuupsttb.supabase.co";
-      const SUPABASE_KEY = "sb_publishable_5z6nUJz6Si0NjEOAJUDiwA_ztDlxixv";
-      const EVERY = 3 * 60 * 60 * 1000;
-      let last = 0; // when the numbers were last fetched
-      const $ = (id) => document.getElementById(id);
-      const num = (n) => (Number.isFinite(n) ? n.toLocaleString("en-GB") : "–");
-      const day = (key) => new Date(`${key}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  (() => {
+    const SUPABASE_URL = "https://qmgwlvjvwwrlcuupsttb.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_5z6nUJz6Si0NjEOAJUDiwA_ztDlxixv";
+    const EVERY = 3 * 60 * 60 * 1000;
+    const SVGNS = "http://www.w3.org/2000/svg";
+    // Sequential blue, light → dark (more players = darker)
+    const RAMP = ["#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
 
-      function cell(text, className) {
-        const td = document.createElement("td");
-        td.textContent = text;
-        if (className) td.className = className;
-        return td;
-      }
-
-      function render(rows) {
-        const body = $("rows");
-        body.replaceChildren();
-        if (!rows.length) {
-          const tr = document.createElement("tr");
-          tr.append(Object.assign(cell("No games yet.", "status"), { colSpan: 6 }));
-          body.append(tr);
-        }
-        for (const r of rows) {
-          const tr = document.createElement("tr");
-          const first = cell(`${day(r.game_date)} `);
-          first.append(Object.assign(document.createElement("span"), { className: "no", textContent: `No. ${r.game_number}` }));
-          tr.append(first, cell(num(r.players)), cell(num(r.signed_in_players)), cell(num(r.players_without_account)), cell(num(r.average)), cell(num(r.best)));
-          body.append(tr);
-        }
-        const sum = (list) => list.reduce((a, r) => a + (r.players || 0), 0);
-        $("t-today").textContent = rows.length ? num(rows[0].players) : "0";
-        $("t-week").textContent = num(sum(rows.slice(0, 7)));
-        $("t-all").textContent = num(sum(rows));
-        $("t-best").textContent = rows.length ? num(Math.max(...rows.map((r) => r.best || 0))) : "–";
-      }
-
-      async function load() {
-        last = Date.now();
-        $("updated").textContent = "Updating…";
-        try {
-          const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/public_daily_summary`, {
-            method: "POST",
-            headers: { apikey: SUPABASE_KEY, "content-type": "application/json" },
-            body: JSON.stringify({ days: 90 }),
-          });
-          if (!response.ok) throw new Error(`The database answered ${response.status}`);
-          const rows = await response.json();
-          render(Array.isArray(rows) ? rows : []);
-          $("updated").textContent = `Updated ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
-        } catch (error) {
-          console.error(error);
-          $("updated").textContent = "Couldn't load the latest numbers";
-          const body = $("rows");
-          if (!body.querySelector("td:not(.status)")) {
-            body.replaceChildren();
-            const tr = document.createElement("tr");
-            tr.append(Object.assign(cell("Couldn't load the summary. Has public-summary.sql been run in Supabase?", "status"), { colSpan: 6 }));
-            body.append(tr);
-          }
-        }
-      }
-
-      $("refresh").addEventListener("click", load);
-      load();
-      setInterval(load, EVERY);
-      // Back to the tab after a while (timers pause in the background): catch up.
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && Date.now() - last > EVERY) load();
-      });
+    const $ = (id) => document.getElementById(id);
+    const num = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString("en-GB") : "–");
+    const regionName = (() => {
+      let names = null;
+      try { names = new Intl.DisplayNames(["en"], { type: "region" }); } catch (e) {}
+      return (code, fallback) => { try { return (names && names.of(code)) || fallback || code; } catch (e) { return fallback || code; } };
     })();
+    const dayKey = (d) => d.toISOString().slice(0, 10);
+    const fromKey = (k) => new Date(`${k}T12:00:00Z`);
+    const shortDay = (k) => fromKey(k).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+    const longDay = (k) => fromKey(k).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+    const gameNumber = (k) => Math.round((fromKey(k) - fromKey("2026-09-24")) / 86400000) + 1;
+    const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    const el = (name, attrs = {}, parent) => {
+      const node = document.createElementNS(SVGNS, name);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+      if (parent) parent.append(node);
+      return node;
+    };
+
+    let summary = [];      // public_daily_summary rows
+    let countries = [];    // public_daily_countries rows
+    let countriesOk = true;
+    let world = null;      // { w, h, sphere, countries: [{ c, n, d }] }
+    let range = 30;
+    let days = [];         // [{ key, number, players, signedIn, noAccount, average, best, countries: Map }]
+    let mapIndex = -1;     // the day on the map (index into days)
+    let playing = null;
+    let last = 0;
+
+    // ---------- Tooltip ----------
+    const tip = $("tip");
+    function showTip(event, title, rows) {
+      tip.replaceChildren();
+      const t = document.createElement("p");
+      t.className = "tip-title";
+      t.textContent = title;
+      tip.append(t);
+      for (const r of rows) {
+        const row = document.createElement("div");
+        row.className = "tip-row";
+        if (r.color) {
+          const key = document.createElement("i");
+          key.className = "key-line";
+          key.style.background = r.color;
+          row.append(key);
+        }
+        const v = document.createElement("strong");
+        v.textContent = r.value;
+        const l = document.createElement("span");
+        l.textContent = r.label;
+        row.append(v, l);
+        tip.append(row);
+      }
+      const x = Math.min(event.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+      const y = Math.min(event.clientY + 14, window.innerHeight - tip.offsetHeight - 8);
+      tip.style.left = `${Math.max(8, x)}px`;
+      tip.style.top = `${Math.max(8, y)}px`;
+      tip.classList.add("is-on");
+    }
+    const hideTip = () => tip.classList.remove("is-on");
+
+    // ---------- Data ----------
+    async function rpc(name, body) {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw Object.assign(new Error(`${name}: ${response.status}`), { status: response.status });
+      return response.json();
+    }
+
+    function buildDays() {
+      const byDate = new Map(summary.map((r) => [r.game_date, r]));
+      const perDay = new Map();
+      for (const r of countries) {
+        if (!perDay.has(r.game_date)) perDay.set(r.game_date, new Map());
+        perDay.get(r.game_date).set(r.country, r.players);
+      }
+      const latest = summary.reduce((m, r) => (r.game_date > m ? r.game_date : m), localToday());
+      const end = fromKey(latest);
+      days = [];
+      for (let i = range - 1; i >= 0; i--) {
+        const d = new Date(end);
+        d.setUTCDate(d.getUTCDate() - i);
+        const key = dayKey(d);
+        const r = byDate.get(key);
+        days.push({
+          key,
+          number: r ? r.game_number : gameNumber(key),
+          players: r ? r.players : 0,
+          signedIn: r ? r.signed_in_players : 0,
+          noAccount: r ? r.players_without_account : 0,
+          average: r ? r.average : null,
+          best: r ? r.best : null,
+          countries: perDay.get(key) || new Map(),
+        });
+      }
+    }
+
+    // ---------- Tiles ----------
+    function renderTiles() {
+      const played = days.filter((d) => d.players > 0);
+      const games = played.reduce((a, d) => a + d.players, 0);
+      $("t-games").textContent = num(games);
+      $("t-games-sub").textContent = `last ${range} days`;
+      $("t-perday").textContent = num(games / range);
+      const busiest = played.reduce((m, d) => (!m || d.players > m.players ? d : m), null);
+      $("t-perday-sub").textContent = busiest ? `busiest: ${num(busiest.players)} on ${shortDay(busiest.key)}` : "";
+      const best = played.reduce((m, d) => (!m || d.best > m.best ? d : m), null);
+      $("t-best").textContent = best ? num(best.best) : "–";
+      $("t-best-sub").textContent = best ? `on ${shortDay(best.key)}, No. ${best.number}` : "";
+      const seen = new Set();
+      days.forEach((d) => d.countries.forEach((_, c) => seen.add(c)));
+      $("t-countries").textContent = countriesOk ? num(seen.size) : "–";
+      $("t-countries-sub").textContent = countriesOk ? "played from" : "needs public-summary.sql";
+    }
+
+    // ---------- Axis helpers ----------
+    const niceMax = (v) => {
+      if (v <= 4) return 4;
+      const p = 10 ** Math.floor(Math.log10(v));
+      for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+      return 10 * p;
+    };
+    function axes(svg, box, max, ticks) {
+      for (let i = 0; i <= ticks; i++) {
+        const v = (max / ticks) * i;
+        const y = box.y + box.h - (v / max) * box.h;
+        el("line", { x1: box.x, x2: box.x + box.w, y1: y, y2: y, stroke: i === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, svg);
+        const t = el("text", { x: box.x - 8, y: y + 4, "text-anchor": "end" }, svg);
+        t.textContent = num(v);
+      }
+      const n = days.length;
+      const step = box.w / n;
+      const labelAt = n <= 7 ? days.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
+      for (const i of labelAt) {
+        const t = el("text", { x: box.x + step * (i + 0.5), y: box.y + box.h + 18, "text-anchor": "middle" }, svg);
+        t.textContent = shortDay(days[i].key);
+      }
+      return step;
+    }
+    // A bar with its top corners rounded (the data end); square at the baseline.
+    const topRounded = (x, y, w, h, r) => {
+      r = Math.min(r, w / 2, h);
+      return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+    };
+
+    // Charts are drawn at the width they're shown at, so text stays readable
+    // on a phone (rather than shrinking a desktop-sized drawing).
+    const chartWidth = (svg) => Math.max(300, Math.min(720, Math.round(svg.parentElement.clientWidth - 36) || 720));
+
+    // ---------- Players chart (stacked bars) ----------
+    function renderPlayers() {
+      const svg = $("players-chart");
+      svg.replaceChildren();
+      const W = chartWidth(svg);
+      const H = W < 500 ? 200 : 240;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const box = { x: 40, y: 10, w: W - 46, h: H - 44 };
+      const max = niceMax(Math.max(1, ...days.map((d) => d.players)));
+      const step = axes(svg, box, max, 4);
+      const barW = Math.max(2, Math.min(28, step * 0.68));
+      const scale = (v) => (v / max) * box.h;
+      days.forEach((d, i) => {
+        const x = box.x + step * i + (step - barW) / 2;
+        const g = el("g", {}, svg);
+        if (i === mapIndex) el("rect", { x: box.x + step * i, y: box.y, width: step, height: box.h, fill: "rgba(241,236,226,0.08)", rx: 3 }, g);
+        const hIn = scale(d.signedIn);
+        const hNo = scale(d.noAccount);
+        const gap = hIn > 0 && hNo > 0 ? 2 : 0;
+        const base = box.y + box.h;
+        if (hIn > 0) {
+          if (hNo > 0) el("rect", { x, y: base - hIn, width: barW, height: hIn, fill: "var(--signed-in)" }, g);
+          else el("path", { d: topRounded(x, base - hIn, barW, hIn, 4), fill: "var(--signed-in)" }, g);
+        }
+        if (hNo > 0) el("path", { d: topRounded(x, base - hIn - gap - hNo, barW, hNo, 4), fill: "var(--no-account)" }, g);
+        // The whole column is the hit target
+        const hit = el("rect", { x: box.x + step * i, y: box.y, width: step, height: box.h, fill: "transparent", style: "cursor:pointer" }, g);
+        hit.addEventListener("pointermove", (e) => showTip(e, `${longDay(d.key)} · No. ${d.number}`, [
+          { value: num(d.players), label: "players" },
+          { value: num(d.signedIn), label: "signed in", color: "var(--signed-in)" },
+          { value: num(d.noAccount), label: "no account", color: "var(--no-account)" },
+        ]));
+        hit.addEventListener("pointerleave", hideTip);
+        hit.addEventListener("click", () => { stopPlay(); setMapDay(i); });
+      });
+    }
+
+    // ---------- Scores chart (lines) ----------
+    function renderScores() {
+      const svg = $("scores-chart");
+      svg.replaceChildren();
+      const W = chartWidth(svg);
+      const H = W < 500 ? 190 : 220;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const box = { x: 40, y: 10, w: W - 104, h: H - 44 };
+      const step = axes(svg, box, 1000, 4);
+      const xAt = (i) => box.x + step * (i + 0.5);
+      const yAt = (v) => box.y + box.h - (v / 1000) * box.h;
+      const series = [["average", "var(--average)", "Average"], ["best", "var(--best)", "Best"]];
+      for (const [field, color, name] of series) {
+        let d = "";
+        let pen = false;
+        days.forEach((day, i) => {
+          if (day[field] == null) { pen = false; return; }
+          d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(day[field]).toFixed(1)}`;
+          pen = true;
+        });
+        if (d) el("path", { d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+        if (days.length <= 31) days.forEach((day, i) => {
+          if (day[field] != null) el("circle", { cx: xAt(i), cy: yAt(day[field]), r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
+        });
+        // Direct label after the last point
+        const lastDay = [...days].reverse().find((day) => day[field] != null);
+        if (lastDay) {
+          const i = days.indexOf(lastDay);
+          const t = el("text", { x: xAt(i) + 9, y: yAt(lastDay[field]) + 4, class: "direct" }, svg);
+          t.textContent = name;
+        }
+      }
+      // Crosshair: snaps to the nearest day; one readout for both lines
+      const cross = el("line", { x1: 0, x2: 0, y1: box.y, y2: box.y + box.h, stroke: "var(--ink-muted)", "stroke-width": 1, visibility: "hidden" }, svg);
+      const hit = el("rect", { x: box.x, y: box.y, width: box.w, height: box.h, fill: "transparent" }, svg);
+      hit.addEventListener("pointermove", (e) => {
+        const r = svg.getBoundingClientRect();
+        const vx = ((e.clientX - r.left) / r.width) * W;
+        const i = Math.max(0, Math.min(days.length - 1, Math.floor((vx - box.x) / step)));
+        const day = days[i];
+        cross.setAttribute("x1", xAt(i));
+        cross.setAttribute("x2", xAt(i));
+        cross.setAttribute("visibility", "visible");
+        showTip(e, `${longDay(day.key)} · No. ${day.number}`, day.players ? [
+          { value: num(day.average), label: "average", color: "var(--average)" },
+          { value: num(day.best), label: "best", color: "var(--best)" },
+        ] : [{ value: "–", label: "no games" }]);
+      });
+      hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+    }
+
+    // ---------- Map ----------
+    let mapPaths = null; // country code -> [path]
+    let mapMax = 1;
+    const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+    function rampColor(t) {
+      const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+      const i = Math.floor(x);
+      const a = hexToRgb(RAMP[i]);
+      const b = hexToRgb(RAMP[Math.min(RAMP.length - 1, i + 1)]);
+      const f = x - i;
+      return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(",")})`;
+    }
+    // One scale for the whole range (log, so one busy country doesn't wash out
+    // the rest), so a country's shade means the same on every day.
+    const colorFor = (players) => (players > 0 ? rampColor(mapMax > 1 ? Math.log(1 + players) / Math.log(1 + mapMax) : 0.5) : "");
+
+    function drawMap() {
+      const svg = $("map");
+      svg.setAttribute("viewBox", `0 0 ${world.w} ${world.h}`);
+      svg.replaceChildren();
+      el("path", { d: world.sphere, fill: "var(--ocean)" }, svg);
+      mapPaths = new Map();
+      for (const c of world.countries) {
+        const p = el("path", { d: c.d, class: "country" }, svg);
+        p.addEventListener("pointermove", (e) => {
+          const day = days[mapIndex];
+          const n = (day && day.countries.get(c.c)) || 0;
+          showTip(e, c.c ? regionName(c.c, c.n) : c.n, [{ value: num(n), label: n === 1 ? "player" : "players" }]);
+        });
+        p.addEventListener("pointerleave", hideTip);
+        if (!mapPaths.has(c.c)) mapPaths.set(c.c, []);
+        mapPaths.get(c.c).push(p);
+      }
+    }
+
+    function setMapDay(i) {
+      if (!days.length) return;
+      mapIndex = Math.max(0, Math.min(days.length - 1, i));
+      $("day").value = String(mapIndex);
+      const day = days[mapIndex];
+      if (mapPaths) {
+        for (const [code, paths] of mapPaths) {
+          const fill = colorFor(day.countries.get(code) || 0);
+          for (const p of paths) p.style.fill = fill;
+        }
+      }
+      const mapped = [...day.countries.values()].reduce((a, n) => a + n, 0);
+      $("day-label").textContent = `${longDay(day.key)} · No. ${day.number}`;
+      const parts = [`${num(day.players)} player${day.players === 1 ? "" : "s"}`];
+      if (countriesOk) parts.push(`${num(day.countries.size)} countr${day.countries.size === 1 ? "y" : "ies"}`);
+      if (countriesOk && day.players > mapped) parts.push(`${num(day.players - mapped)} unknown`);
+      $("day-sub").textContent = parts.join(" · ");
+      // Top countries that day
+      const list = $("top");
+      list.replaceChildren();
+      const top = [...day.countries.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const topMax = top.length ? top[0][1] : 1;
+      const empty = (text) => { const li = document.createElement("li"); li.className = "top-empty"; li.textContent = text; list.append(li); };
+      if (!countriesOk) empty("Countries need the public_daily_countries function (public-summary.sql).");
+      else if (!top.length) empty(day.players ? "No country recorded for these games." : "Nobody played this day.");
+      for (const [code, n] of top) {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = regionName(code);
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = num(n);
+        const bar = document.createElement("span");
+        bar.className = "bar";
+        bar.style.width = `${Math.max(4, (n / topMax) * 100)}%`;
+        li.append(name, count, bar);
+        list.append(li);
+      }
+      renderPlayers(); // moves the highlighted day
+    }
+
+    function renderMapFrame() {
+      mapMax = Math.max(1, ...days.flatMap((d) => [...d.countries.values()]));
+      $("scale-max").textContent = num(mapMax);
+      $("scale-bar").style.background = `linear-gradient(90deg, ${[0, 0.25, 0.5, 0.75, 1].map((t) => rampColor(t)).join(", ")})`;
+      $("day").max = String(days.length - 1);
+      if (mapIndex < 0 || mapIndex >= days.length) mapIndex = days.length - 1;
+      setMapDay(mapIndex);
+    }
+
+    // Play: step through the days; the colours fade between them (CSS).
+    function stopPlay() {
+      if (playing) clearInterval(playing);
+      playing = null;
+      $("play").textContent = "▶";
+      $("play").setAttribute("aria-label", "Play through the days");
+    }
+    $("play").addEventListener("click", () => {
+      if (playing) return stopPlay();
+      if (mapIndex >= days.length - 1) setMapDay(0);
+      $("play").textContent = "❚❚";
+      $("play").setAttribute("aria-label", "Pause");
+      playing = setInterval(() => {
+        if (mapIndex >= days.length - 1) return stopPlay();
+        setMapDay(mapIndex + 1);
+      }, 1100);
+    });
+    $("day").addEventListener("input", (e) => { stopPlay(); setMapDay(Number(e.target.value)); });
+
+    // ---------- Table ----------
+    function renderTable() {
+      const body = $("rows");
+      body.replaceChildren();
+      const played = days.filter((d) => d.players > 0).reverse();
+      const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; };
+      if (!played.length) {
+        const tr = document.createElement("tr");
+        tr.append(Object.assign(cell("No games in this range.", "status"), { colSpan: 7 }));
+        body.append(tr);
+      }
+      for (const d of played) {
+        const tr = document.createElement("tr");
+        const first = cell(`${longDay(d.key)} `);
+        first.append(Object.assign(document.createElement("span"), { className: "no", textContent: `No. ${d.number}` }));
+        tr.append(first, cell(num(d.players)), cell(num(d.signedIn)), cell(num(d.noAccount)), cell(countriesOk ? num(d.countries.size) : "–"), cell(num(d.average)), cell(num(d.best)));
+        body.append(tr);
+      }
+    }
+
+    function renderAll() {
+      buildDays();
+      renderTiles();
+      renderScores();
+      renderTable();
+      if (world) renderMapFrame(); else renderPlayers();
+    }
+
+    // ---------- Loading ----------
+    async function load() {
+      last = Date.now();
+      $("app").classList.add("is-loading");
+      $("updated").textContent = "Updating…";
+      try {
+        const [s, c] = await Promise.all([
+          rpc("public_daily_summary", { days: 90 }),
+          rpc("public_daily_countries", { days: 90 }).catch((error) => { console.warn(error); return null; }),
+        ]);
+        summary = Array.isArray(s) ? s : [];
+        countriesOk = Array.isArray(c);
+        countries = countriesOk ? c : [];
+        renderAll();
+        $("updated").textContent = `Updated ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+      } catch (error) {
+        console.error(error);
+        $("updated").textContent = "Couldn't load the latest numbers";
+        if (!summary.length) {
+          const body = $("rows");
+          body.replaceChildren();
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 7;
+          td.className = "status";
+          td.textContent = "Couldn't load the summary. Has public-summary.sql been run in Supabase?";
+          tr.append(td);
+          body.append(tr);
+        }
+      } finally {
+        $("app").classList.remove("is-loading");
+      }
+    }
+
+    document.querySelectorAll(".filters button").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll(".filters button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      range = Number(b.dataset.days);
+      stopPlay();
+      mapIndex = -1;
+      renderAll();
+    }));
+    $("refresh").addEventListener("click", load);
+    let resizing = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizing);
+      resizing = setTimeout(() => { renderPlayers(); renderScores(); }, 150);
+    });
+
+    fetch("world.json").then((r) => r.json()).then((w) => {
+      world = w;
+      drawMap();
+      if (days.length) renderMapFrame();
+    }).catch((error) => console.warn("Map outlines didn't load:", error));
+    renderAll();
+    load();
+    setInterval(load, EVERY);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && Date.now() - last > EVERY) load();
+    });
+  })();
   </script>
 </body>
 </html>
